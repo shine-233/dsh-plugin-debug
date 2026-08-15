@@ -1,0 +1,13 @@
+# Copy the following entry into the Profile's cordis.patch.yml only after
+# reviewing the rules. The shipped bundle is allow-by-default and disabled;
+# this example turns on an approval gate for dangerous shell calls and MCP.
+- id: dsh-plugin-debug
+  config:
+    toolPolicy:
+      enabled: true
+      defaultDecision: allow
+      protectDangerousShell: true
+      rules:
+        - tool: 'mcp_*'
+          decision: ask
+          reason: 'External MCP calls require approval.'

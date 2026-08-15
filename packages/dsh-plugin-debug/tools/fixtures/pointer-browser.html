@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>DSH pointer provenance browser fixture</title>
+  <style>
+    body { margin: 0; min-height: 100vh; font: 16px sans-serif; background: #f4f6f8; }
+    #fixture-target { position: absolute; left: 20px; top: 20px; width: 260px; height: 120px; padding: 20px; background: white; }
+  </style>
+</head>
+<body>
+  <main id="fixture-target" data-dsh-plugin="fixture-plugin" data-dsh-module="FixturePanel" data-slot="shell.overlay">
+    Browser pointer target
+  </main>
+  <script>
+    window.__dshHandoff = { value: null }
+    window.__ModuleLoader__ = { load(value) { window.__dshHandoff.value = value } }
+  </script>
+  <script src="/lib/client.js"></script>
+  <script>
+    (() => {
+      const state = [true, null]
+      let hookIndex = 0
+      let effectInstalled = false
+      let pointerEventCount = 0
+      const handoff = window.__dshHandoff
+      document.addEventListener('dsh-plugin-debug:pointer', () => { pointerEventCount += 1 })
+      localStorage.setItem('dsh-plugin-debug.enabled', '1')
+
+      const react = {
+        createElement(type, props, ...children) { return { type, props: props || {}, children } },
+        useEffect(callback) {
+          if (!effectInstalled) {
+            effectInstalled = true
+            callback()
+          }
+        },
+        useState(initial) {
+          const index = hookIndex++
+          if (state[index] === undefined) state[index] = typeof initial === 'function' ? initial() : initial
+          return [state[index], value => { state[index] = typeof value === 'function' ? value(state[index]) : value }]
+        },
+      }
+
+      const context = {
+        effect(callback) { callback() },
+        locale: { register() {}, bind() { return key => key } },
+        slots: { inject(name, callback) { callback() }, register() { return {} } },
+      }
+
+      function renderOverlay(module) {
+        hookIndex = 0
+        return module.ProvenanceOverlay({ t: key => key })
+      }
+
+      function collectText(value, output = []) {
+        if (typeof value === 'string') output.push(value)
+        if (value && typeof value === 'object') {
+          for (const child of value.children || []) collectText(child, output)
+        }
+        return output
+      }
+
+      window.__dshPointerE2E = { ready: false, error: null }
+      try {
+        const module = handoff.value.factory(() => react)
+        module.apply(context)
+        renderOverlay(module)
+        window.__dshPointerE2E.ready = true
+        window.__dshPointerE2E.renderOverlay = () => renderOverlay(module)
+        window.__dshPointerE2E.collectText = collectText
+        window.__dshPointerE2E.getState = () => ({
+          bridge: module.getBridgeSnapshot(),
+          current: module.getCurrentPointerInfo(),
+          pointerEventCount,
+          overlayText: collectText(renderOverlay(module)).join(' | '),
+          target: document.getElementById('fixture-target').getBoundingClientRect().toJSON(),
+        })
+      } catch (error) {
+        window.__dshPointerE2E.error = String(error && error.stack || error)
+      }
+    })()
+  </script>
+</body>
+</html>

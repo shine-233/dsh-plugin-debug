@@ -1,0 +1,9 @@
+{
+  "name": "dsh-plugin-debug-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pinned runtime used by the combined DSH Debug Plugin",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6"
+  }
+}

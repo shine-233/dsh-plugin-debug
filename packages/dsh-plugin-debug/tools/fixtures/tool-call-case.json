@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "name": "danger-full-access bash failure fixture",
+  "assertions": [
+    {
+      "kind": "equals",
+      "path": "toolCallStats.callCount",
+      "expected": 1
+    },
+    {
+      "kind": "equals",
+      "path": "toolCallStats.errorResultCount",
+      "expected": 1
+    },
+    {
+      "kind": "contains",
+      "path": "toolCalls[*].name",
+      "expected": "bash"
+    },
+    {
+      "kind": "equals",
+      "path": "toolCalls[0].sandboxPermissionObserved",
+      "expected": "danger-full-access"
+    },
+    {
+      "kind": "eventSequence",
+      "expected": [
+        "request/context",
+        "tool/call",
+        "tool/result",
+        "turn/end"
+      ]
+    }
+  ]
+}

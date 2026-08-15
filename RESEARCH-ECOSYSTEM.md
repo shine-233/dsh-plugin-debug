@@ -1,0 +1,85 @@
+# DSH Debug Ecosystem Research
+
+研究日期：2026-08-16（中国标准时间）
+
+这份记录说明本项目为什么吸收某些能力、拒绝某些能力，以及检索结果
+的边界。它不是“扫描 GitHub 全部插件”的声明，也不是第三方代码的复制
+清单。本轮使用 GitHub 的公开只读 API 和公开仓库页面核对名称、README、
+文件树、许可证线索和实现形状；没有上传本机源码、Session、Cookie、日志、
+Tool 参数或诊断文件。
+
+## 检索边界
+
+本轮的实际目标是寻找和 DSH Debug Plugin 直接相关的 doctor、health、trace、
+recovery、plugin manager、bisect 和 observability 方案。查询结果经过人工
+筛选，不把搜索结果数量当成生态完整性证明。没有把没有明确许可证的代码复制
+进本项目，也没有把任何第三方仓库加入运行时依赖。
+
+本轮只对下面已经选定的仓库读取 GitHub 公共 API 元数据，并查看公开 README
+和文件树；没有做全站关键词扫描、克隆仓库或下载源码：
+
+```powershell
+$repos = @(
+  'zoahdev/dsh-plugin-doctor', 'chenw2759-wq/dsh-plugin-healthcheck',
+  'gordonlu/dsh-context-lens', 'wellorbetter/dsh-plugin-window-stats',
+  'PangYiMing/dsh-bisect-debug', 'linyp/dsh-plugin-langfuse',
+  'LX2000WASD/dsh-web-plugin-manager', 'awesome-dsh-plugin/awesome-dsh-plugin'
+)
+foreach ($repo in $repos) { gh api "repos/$repo" }
+```
+
+下面的许可证是 GitHub API 在 2026-08-16 返回的 `license.spdx_id` 观察值，
+不是法律意见，也不是对第三方代码的再许可。正式发布前仍需读取每个仓库的
+`LICENSE` 全文、版本和作者声明；本包不复制这些仓库的源码。
+
+## 核对过的公开项目
+
+| 项目 | SPDX 元数据 | 观察到的能力 | 本项目的吸收或拒绝决定 |
+| --- | --- | --- | --- |
+| [zoahdev/dsh-plugin-doctor](https://github.com/zoahdev/dsh-plugin-doctor) | MIT | manifest/patch/entry/files 检查、fresh-profile 安装、BOM、大文件、入口副作用、环境检查、JSON CI 报告 | 吸收分层 doctor、fresh-profile 验证和可机器读取报告；本项目仍以离线、只读、边界明确为默认 |
+| [chenw2759-wq/dsh-plugin-healthcheck](https://github.com/chenw2759-wq/dsh-plugin-healthcheck) | MIT | L0 静态检查、L1 composition、L2 isolated boot、恶意代码扫描、safe repair/rollback | 吸收分层健康门和安全修复方向；不自动改 Profile，不自动处理核心包，无法归因时 fail-closed |
+| [gordonlu/dsh-context-lens](https://github.com/gordonlu/dsh-context-lens) | MIT | metadata-only context profiling、tool schema fingerprint、cache delta、replay consistency | 吸收 metadata-only trace/profile 和 change-first 诊断；拒绝持久化原始请求、Tool 参数和结果正文 |
+| [wellorbetter/dsh-plugin-window-stats](https://github.com/wellorbetter/dsh-plugin-window-stats) | MIT | session overview、token/context pressure、成本估算、本地只读分析 | 吸收资源压力和窗口统计的只读形状；当前不宣称可从没有 Session ID 的真实实例读取 Tool Call |
+| [PangYiMing/dsh-bisect-debug](https://github.com/PangYiMing/dsh-bisect-debug) | MIT | 代码、边界和 Git commit 二分定位 | 记录为后续增强候选；当前包已有 incident/trace evidence，但没有把任意 Git 工作树变更自动回退 |
+| [linyp/dsh-plugin-langfuse](https://github.com/linyp/dsh-plugin-langfuse) | MIT | OpenTelemetry/Langfuse 外部导出 | 拒绝：会扩大网络出口，并可能泄漏原始内容；当前包只做本地 metadata-only evidence |
+| [LX2000WASD/dsh-web-plugin-manager](https://github.com/LX2000WASD/dsh-web-plugin-manager) | MIT | 运行时启停、依赖/冲突/健康检查 | 吸收只读 inventory 和明确第三方隔离；拒绝把本项目变成 marketplace 或任意运行时管理器 |
+| [awesome-dsh-plugin/awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | CC0-1.0 | 生态索引和插件发现 | 仅作为发布前人工审查入口，不作为运行时依赖 |
+| [jorinyang/dsh-doctor](https://github.com/jorinyang/dsh-doctor) | MIT（包内账本已核对） | 环境/端口/Profile/HTTP/disk 检查，safe/deps/full 修复 scope，LIFO journal，Web 不可用时的 CLI | 吸收只读 doctor、独立 Host 入口和 receipt 思路；拒绝 full process cleanup、shell 拼接和宽泛 repair |
+| [lire1131/dsh-undo-plugin](https://github.com/lire1131/dsh-undo-plugin) | 本轮未重新核对 | 配置快照、undo/redo、离线 CLI/GUI、启动异常横幅 | 已有 snapshot/restore、Crash Guard 和页面通知；不复制其 GUI 或包加载方式 |
+| [PerryLink/dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind) | 本轮未重新核对 | 变更前 checkpoint、三阶段事务、配额、恢复日志、Session fork | 吸收 checkpoint/receipt 的安全形状；真实 durable rewind 事件未在 DSH rc.6 验证，因此不伪造该能力 |
+| [BiBoyang/dsh-eval-harness](https://github.com/BiBoyang/dsh-eval-harness) | 本轮未重新核对 | 隔离 workspace/session、JSONL trace、baseline PASS/WARN/FAIL 门禁 | 已有脱敏 Trace/Eval/baseline；zstd 解码和真实 headless LLM 回归仍标为未完成 |
+
+## 已经进入单包的能力
+
+- provenance、pointer evidence、client/Host diagnostics 和 plugin inventory；
+- plugin health、context doctor、security audit、resource pressure；
+- incident capture、correlation、trace/eval/profile/autopsy 和 baseline；
+- workspace/Profile snapshot、known-good checkpoint、recovery；
+- constrained self-repair、receipt、pre-image/post-image hash 和 rollback conflict fail-closed；
+- one-click launcher、Supervisor、Crash Guard、启动冲突隔离和 Workbench；
+- 启动后页面通知，以及只在 Host 明确声明 `no-tools` planner 时创建隔离诊断会话。
+
+## 明确不引入的边界
+
+本项目不恢复 `dsh-plugin-store`，不创建新的 marketplace，不后台上传遥测，
+不把普通 `session.create` 误称为 no-tools Session，不自动禁用 DSH 核心包，
+不执行任意模型生成的 command/script/path/url，不做无限重启，不清理任意进程，
+不把真实 Profile、日志、凭据、Cookie、Tool 参数、结果正文或完整路径写进诊断
+Session。无法明确归因、缺少 evidence、目标是核心包或 receipt 发生冲突时，
+操作保持 `UNAVAILABLE`、`FAIL` 或 `ROLLBACK_CONFLICT`。
+
+## 后续候选能力
+
+1. 在 DSH 官方提供稳定 no-tools planner 和 durable rewind 事件后，再增加对应的
+   capability probe 和独立回归测试。
+2. 增加可选的 code/commit bisect，但必须使用用户明确指定的工作树和恢复点，
+   默认只生成候选区间，不自动 reset 或删除文件。
+3. 在 fresh Profile 流程稳定后增加 composition 与 isolated-boot 两级发布门，
+   并把结果写入 JSON，而不是把“静态通过”说成生产运行通过。
+4. 只有用户明确开启、并且存在脱敏 schema 和本地留存策略时，才考虑外部
+   OpenTelemetry 导出；默认保持关闭。
+
+## 许可证和归属
+
+第三方项目的名称和链接仅用于研究引用；本项目没有复制它们的源码。发布前
+仍应逐个确认第三方仓库的许可证和版本信息，不能仅凭 README 推断许可证。

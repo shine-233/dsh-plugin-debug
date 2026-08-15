@@ -1,0 +1,47 @@
+{
+  "source": "fixture-incomplete-page",
+  "sessionId": "fixture-session-page-1",
+  "hasMore": true,
+  "events": [
+    {
+      "event": {
+        "seq": 10,
+        "type": "tool/call",
+        "data": {
+          "turn": 2,
+          "step": 1,
+          "name": "bash",
+          "callId": "pending-call-1",
+          "arguments": {
+            "command": "redacted",
+            "sandbox_permissions": "danger-full-access"
+          }
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 11,
+        "type": "tool/code-dispatch",
+        "data": {
+          "turn": 2,
+          "step": 1,
+          "name": "bash",
+          "isError": true
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 12,
+        "type": "turn/end",
+        "data": {
+          "turn": 2,
+          "reason": {
+            "kind": "error"
+          }
+        }
+      }
+    }
+  ]
+}

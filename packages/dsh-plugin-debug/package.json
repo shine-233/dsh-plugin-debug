@@ -1,0 +1,104 @@
+{
+  "name": "dsh-plugin-debug",
+  "version": "0.4.0",
+  "description": "A single, safe DeepSeek Harness debug plugin for provenance, health, diagnostics, recovery, trace inspection, and constrained self-repair",
+  "author": "shine-233",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shine-233/dsh-plugin-debug.git",
+    "directory": "packages/dsh-plugin-debug"
+  },
+  "bugs": {
+    "url": "https://github.com/shine-233/dsh-plugin-debug/issues"
+  },
+  "homepage": "https://github.com/shine-233/dsh-plugin-debug#readme",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./repository-check": {
+      "default": "./lib/repository-check.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "bundle-manifest.json",
+    "cordis.patch.yml",
+    "tool-policy.patch.example.yml",
+    "tools",
+    "Start-DSH-Debug.ps1",
+    "Start-DSH-Debug.cmd",
+    "Start-DSH-Debug.vbs",
+    "Start-DSH-Combined.ps1",
+    "Start-DSH-Combined.cmd",
+    "Start-DSH-Combined.vbs",
+    "DEBUG-QUICKSTART.md",
+    "Debug-DSH.ps1",
+    "DSH-Provenance.ps1",
+    "DSH-Debug.ps1",
+    "DSH-Debug.cmd",
+    "DSH-Debug.vbs",
+    "Test-DSHStandalone.ps1",
+    "RESEARCH.md",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "test": "node --test",
+    "check": "node scripts/build.mjs && node --check lib/index.js && node --check lib/client.js && node --test",
+    "check:standalone": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\Test-DSHStandalone.ps1",
+    "check:integration": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\tools\\Test-DSHProvenanceIntegration.ps1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "provenance",
+    "debug",
+    "health-check",
+    "crash-guard",
+    "plugin-inspector"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.6 <0.2.0",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  }
+}

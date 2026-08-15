@@ -1,0 +1,22 @@
+# Local/runtime state
+**/node_modules/
+**/logs/
+**/state/
+**/coverage/
+**/.dsh/
+**/.codex/
+**/.env*
+**/*.key
+**/*.pem
+**/*.pfx
+**/*.p12
+**/*.jks
+**/*.keystore
+**/*.sqlite*
+**/*.db
+
+# OS/editor residue
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

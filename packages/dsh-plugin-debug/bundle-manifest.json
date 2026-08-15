@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "package": "dsh-plugin-debug",
+  "version": "0.4.0",
+  "bundleType": "dsh-npm-bundle",
+  "independentRuntime": true,
+  "features": {
+    "pointerProvenance": {
+      "embedded": true,
+      "clientEntry": "lib/client.js",
+      "global": "__DSH_PLUGIN_DEBUG__",
+      "legacyGlobal": "__DSH_PLUGIN_PROVENANCE__",
+      "bridgeSelector": "meta[data-dsh-debug-bridge=\"1\"]",
+      "pointerEvent": "dsh-plugin-debug:pointer",
+      "observationSchemaVersion": 2,
+      "apiMethod": "getPointerEvidence"
+    },
+    "clientDiagnostics": true,
+    "hostPolicy": true,
+    "externalCrashGuard": true,
+    "metadataTraceAutopsy": true,
+    "boundedKnownGoodRecovery": true,
+    "localRpcFixture": true
+  },
+  "files": {
+    "package.json": {
+      "bytes": 2731,
+      "sha256": "6a0131749c4bdb6fe867da899e3b967d61f3a608e3a2363e559af684398d2a49"
+    },
+    "cordis.patch.yml": {
+      "bytes": 242,
+      "sha256": "09add5de1b427332a653d5af802bfed5ecd895c19c3bac15a9acfe4bb3395cbe"
+    },
+    "lib/index.js": {
+      "bytes": 5007,
+      "sha256": "7d451a9d65a3085f70522f849ca4411aed1afca8a3596a2cd67a816f13c2a2c7"
+    },
+    "lib/client.js": {
+      "bytes": 113668,
+      "sha256": "9241dde6d772ec930b6f0ae9575fc0738b29ff35d4ba3184758803c64bb9dc94"
+    }
+  }
+}

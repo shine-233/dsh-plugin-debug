@@ -1,0 +1,6 @@
+# This bundle adds the standalone debug Client plugin. The Host-side
+# tools/pre-execute policy is opt-in through a later Profile patch; with no
+# config it is a strict no-op.
+- insert:
+    - id: dsh-plugin-debug
+      name: dsh-plugin-debug

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "name": "incomplete page pending dispatch turn error fixture",
+  "assertions": [
+    {
+      "kind": "equals",
+      "path": "hasMore",
+      "expected": true
+    },
+    {
+      "kind": "equals",
+      "path": "toolCallStats.callCount",
+      "expected": 1
+    },
+    {
+      "kind": "equals",
+      "path": "toolCallStats.resultCount",
+      "expected": 0
+    },
+    {
+      "kind": "equals",
+      "path": "toolCallStats.pendingCount",
+      "expected": 1
+    },
+    {
+      "kind": "equals",
+      "path": "toolCallStats.dispatchErrorCount",
+      "expected": 1
+    },
+    {
+      "kind": "equals",
+      "path": "toolCallStats.turnErrorCount",
+      "expected": 1
+    },
+    {
+      "kind": "equals",
+      "path": "pendingToolCalls[0].callId",
+      "expected": "pending-call-1"
+    },
+    {
+      "kind": "equals",
+      "path": "codeDispatchErrors[0].name",
+      "expected": "bash"
+    },
+    {
+      "kind": "equals",
+      "path": "turnErrors[0].reason",
+      "expected": "error"
+    }
+  ]
+}

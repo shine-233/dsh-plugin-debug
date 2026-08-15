@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "repositoryRole": "dsh-publication-candidate",
+  "status": "local-prepublication",
+  "publication": {
+    "githubOwner": "shine-233",
+    "repositoryName": "dsh-plugin-debug",
+    "visibility": "public",
+    "copyrightHolder": "shine-233",
+    "remoteConfigured": false,
+    "pushPerformed": false
+  },
+  "verification": {
+    "sourceSnapshotComparedAt": "2026-08-16",
+    "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
+    "packageFileCount": 79
+  },
+  "layout": {
+    "packageRoot": "packages/dsh-plugin-debug",
+    "runtimeRoot": "packages/dsh-plugin-debug/tools/runtime",
+    "fixtures": "packages/dsh-plugin-debug/tools/fixtures"
+  },
+  "components": [
+    {
+      "id": "dsh-plugin-debug",
+      "path": "packages/dsh-plugin-debug",
+      "kind": "dsh-debug-plugin",
+      "version": "0.4.0",
+      "standaloneInstall": true,
+      "includes": ["runtime-provenance", "host-diagnostics", "recovery", "crash-guard", "workbench", "one-click-launcher"],
+      "license": "MIT"
+    }
+  ],
+  "removedComponents": [
+    {
+      "id": "dsh-plugin-store",
+      "reason": "User requested the plugin-store be disabled for this release; its source and capability are not part of this candidate."
+    }
+  ],
+  "excludedFromPublication": [
+    "**/node_modules/**",
+    "**/logs/**",
+    "**/state/**",
+    "**/.env*",
+    "**/*.key",
+    "**/*.pem",
+    "**/*.pfx",
+    "**/*.sqlite*",
+    ".dsh",
+    ".codex"
+  ]
+}

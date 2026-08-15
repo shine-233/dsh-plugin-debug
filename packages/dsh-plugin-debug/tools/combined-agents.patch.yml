@@ -1,0 +1,41 @@
+# Optional overlay for the DSH Web profile.
+#
+# Install the two provider packages once with Install-DSH-Agents.vbs, then
+# launch with Start-DSH-Combined.vbs. This file is passed with --patch, so it
+# does not overwrite the profile's own cordis.patch.yml.
+#
+# Kimi is driven through its local ACP server (`kimi acp`). Codex is driven
+# through DSH's official one-shot app-server provider. The Codex provider was
+# developed against codex-cli 0.147.0; the current host must be checked before
+# relying on it (the launcher never supplies credentials here).
+
+- insert:
+    - id: dsh-one-click-subagent-kimi
+      name: '@deepseek-ai/dsh-subagent-acp'
+      config:
+        providerName: kimi
+        command: kimi
+        args: [acp]
+        permission: reject
+        env: {}
+
+    - id: dsh-one-click-tool-subagent-kimi
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: kimi
+        toolName: subagent_kimi
+        enableRunInBackground: false
+        maxDepth: provider-managed
+
+    - id: dsh-one-click-subagent-codex
+      name: '@deepseek-ai/dsh-subagent-codex'
+      config:
+        env: {}
+
+    - id: dsh-one-click-tool-subagent-codex
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: codex
+        toolName: subagent_codex
+        enableRunInBackground: false
+        maxDepth: provider-managed
