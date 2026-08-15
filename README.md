@@ -124,7 +124,7 @@ npm run check:integration
 
 ## 当前开源边界
 
-当前只发布 `packages/dsh-plugin-debug` 一个 MIT 包。`dsh-plugin-store` 不在包内，也不在项目目录中；旧模块已迁移后删除并保留在 Windows 回收站作为可恢复备份，不会自动恢复。详细发布门禁见 [`PUBLICATION-CHECKLIST.md`](PUBLICATION-CHECKLIST.md)、[`PUBLISHING.md`](PUBLISHING.md) 和 [`SECURITY.md`](SECURITY.md)。
+当前只发布 `packages/dsh-plugin-debug` 一个 MIT 包。`dsh-plugin-store` 不在包内，也不在项目目录中；旧 provenance、debug-suite 和 one-click 目录已从项目树删除，发布流程不会恢复第二个插件。详细发布门禁见 [`PUBLICATION-CHECKLIST.md`](PUBLICATION-CHECKLIST.md)、[`PUBLISHING.md`](PUBLISHING.md) 和 [`SECURITY.md`](SECURITY.md)。
 
 ## 许可证
 
