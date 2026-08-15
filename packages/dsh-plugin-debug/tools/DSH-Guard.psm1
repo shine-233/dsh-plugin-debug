@@ -63,8 +63,9 @@ function Get-DshManifestPackageSpec {
     [Parameter(Mandatory = $true)][string]$Name
   )
   foreach ($sectionName in @('dependencies', 'devDependencies', 'optionalDependencies')) {
-    $section = $Manifest.PSObject.Properties[$sectionName].Value
-    if ($null -eq $section) { continue }
+    $sectionProperty = $Manifest.PSObject.Properties[$sectionName]
+    if ($null -eq $sectionProperty -or $null -eq $sectionProperty.Value) { continue }
+    $section = $sectionProperty.Value
     $property = $section.PSObject.Properties[$Name]
     if ($null -ne $property) { return [string]$property.Value }
   }

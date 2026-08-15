@@ -108,7 +108,7 @@ test('the client exposes a bounded in-page provenance bridge for the standalone 
   assert.equal(documentObject.__DSH_PLUGIN_PROVENANCE__, api)
   assert.equal(api.pluginId, 'dsh-plugin-debug')
   assert.equal(api.apiVersion, 1)
-  assert.equal(api.reportSchemaVersion, 5)
+  assert.equal(api.reportSchemaVersion, 6)
   assert.equal(api.pointerEvent, 'dsh-plugin-debug:pointer')
   assert.equal(typeof api.enable, 'function')
   assert.equal(typeof api.getPointerEvidence, 'function')
@@ -173,6 +173,41 @@ test('startup guard notification is metadata-only and refuses ordinary session c
   assert.equal(autoState.status, 'created')
   assert.equal(autoState.sessionId, 'diagnostic-1')
   assert.match(autoPrompt, /no-tools/u)
+})
+
+test('client diagnostic breadcrumbs are bounded, redacted, and included in reports', async () => {
+  const source = await readFile(resolve(root, 'lib/client.js'), 'utf8')
+  let handoff
+  runInNewContext(source, {
+    window: { __ModuleLoader__: { load(value) { handoff = value } } },
+  })
+  const module = handoff.factory(() => ({
+    createElement() {},
+    useEffect() {},
+    useState() { return [false, () => {}] },
+  }))
+
+  module.recordDiagnosticBreadcrumb('client-error', {
+    status: 'captured',
+    message: 'token=secret https://dsh.test/path?secret=body C:\\secret\\workspace',
+  })
+  for (let index = 0; index < 90; index += 1) {
+    module.recordDiagnosticBreadcrumb('runtime', { status: `event-${index}` })
+  }
+
+  const timeline = module.getDiagnosticBreadcrumbs()
+  assert.equal(timeline.limit, 80)
+  assert.equal(timeline.items.length, 80)
+  assert.equal(timeline.truncated, true)
+  assert.equal(timeline.dropped, 11)
+  assert.equal(timeline.items.at(-1).details.status, 'event-89')
+  assert.doesNotMatch(JSON.stringify(timeline), /token=secret|secret=body|C:\\\\secret\\\\workspace/u)
+
+  const report = module.scanDiagnostics(null, [])
+  assert.equal(report.schemaVersion, 6)
+  assert.equal(report.counts.breadcrumbs, 80)
+  assert.equal(report.breadcrumbs.dropped, 11)
+  assert.equal(report.truncated.breadcrumbs, true)
 })
 
 test('the frozen-page fallback keeps a readable DOM bridge snapshot', async () => {
@@ -433,7 +468,7 @@ test('diagnostic reports expose a stable Client versus Host Guard capability bou
   }, [])
   const capabilities = JSON.parse(JSON.stringify(report.capabilities))
 
-  assert.equal(report.schemaVersion, 5)
+  assert.equal(report.schemaVersion, 6)
   assert.equal(report.pointer.schemaVersion, 2)
   assert.equal(report.pointer.current, null)
   assert.equal(capabilities.schemaVersion, 1)

@@ -1,0 +1,20 @@
+{
+  "manifest": {
+    "name": "fixture-profile",
+    "version": "1.0.0",
+    "dependencies": {
+      "fixture-plugin": "1.0.0",
+      "@deepseek-ai/dsh-tools": "0.1.0-rc.6"
+    }
+  },
+  "packages": {
+    "fixture-plugin": {
+      "name": "fixture-plugin",
+      "version": "1.0.0"
+    },
+    "@deepseek-ai/dsh-tools": {
+      "name": "@deepseek-ai/dsh-tools",
+      "version": "0.1.0-rc.6"
+    }
+  }
+}

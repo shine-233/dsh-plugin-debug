@@ -8,7 +8,13 @@
 - DSH 启动失败或 Web ready 后发现第三方插件失败时，生成可逆的 `disabled: true` Guard patch，并最多进行一次受控重启。
 - 启动冲突时不杀掉已有 DSH，也不覆盖已有 Profile；默认切换到新的 loopback 端口和隔离 Profile。
 - 在 Web 页面提供鼠标来源检查器和诊断页，报告插件、Module、Slot、客户端错误、Host 插件清单、Tool Call 元数据和运行时线索。
+- 在客户端保留最多 80 条脱敏诊断 breadcrumb，串起启动处置、鼠标来源变化、插件清单刷新、Slot/客户端错误；超出上限会记录丢弃计数，不保存 Tool 参数、正文、DOM 文本或凭据。
+- 比较两次脱敏诊断/事故报告的状态、计数和 Issue code；检测到消息、路径、命令或凭据字段时只返回 `MANUAL_REVIEW`。
 - 提供 Profile/Workspace snapshot、known-good restore、incident capture、脱敏 trace/eval、资源压力和失败归档工具。
+- 根据脱敏插件清单、失败证据和 Profile manifest 生成只读插件二分定位计划，给出安全第三方候选顺序；不会自动禁用插件、不会写 Profile、不会执行命令。
+- 离线静态预检 JS/MJS/CJS 的 `inject` 与 `ctx.*` 服务依赖；不执行插件代码，动态访问或超出扫描上限时只返回人工复核。
+- 根据 Profile/package metadata 生成离线依赖图，报告缺失依赖、循环和未引用本地包；不运行 npm/pnpm、不安装依赖、不执行 package code。
+- 对脱敏 Trace 事件做有限窗口的重复循环分析；只输出重复次数、索引和稳定签名，敏感字段会转人工复核。
 - 在 Host 明确声明 no-tools planner 能力时，才允许创建隔离的修复规划 Session；普通 Host 上保持 `UNAVAILABLE`，不会偷偷创建一个带工具的 Session。
 
 诊断结果是证据和线索，不会把“发现失败插件”夸大成已经证明根因，也不会把“报告写入成功”夸大成 DSH 已经恢复。
@@ -42,6 +48,8 @@ dsh plugin --profile debug add . --offline
 
 因此“有问题就直接禁用”不是无条件删除：它只自动隔离有明确证据的安全第三方候选，无法归因时保留人工复核。
 
+每次启动还会在当前 `StateRoot` 写入 `startup-incident.json` 启动处置回执。它记录本次启动是 `healthy`、`restarting`、`recovered`、`degraded` 还是 `failed`，以及关联 ID、重启次数、被隔离的插件 ID 和可查看的本地证据文件名。回执不写原始日志、Tool 参数、凭据或完整路径；`incident-capture` 会在存在时把它纳入 `components.startup`，方便后续诊断和复现。
+
 如果目标端口已有其他 DSH 实例，而目标 Profile 尚未安装 Debug bundle，启动器默认自动使用类似 `web-debug-3082` 的隔离 Profile。原实例、原端口和原 Profile 不会被修改。要恢复严格拒绝模式，可传：
 
 ```powershell
@@ -52,6 +60,8 @@ dsh plugin --profile debug add . --offline
 
 Web Client 会把 Host inventory 中的 failed plugin、动态插件运行错误和 Slot 渲染错误显示在诊断页，并持续刷新运行时状态。页面提示只报告“发现了什么”，不会伪造因果结论。
 
+诊断页还会显示本地时间线。它是一个固定上限的环形缓冲，事件只有类别、时间、状态、插件/Module/Slot 标识和经过脱敏的短摘要；`getDiagnosticBreadcrumbs()` 与导出的诊断 JSON 会同时返回 `limit`、`dropped` 和 `truncated`，便于判断是否因为事件太多而丢失早期线索。
+
 修复规划默认是只读 dry-run：
 
 ```powershell
@@ -60,17 +70,51 @@ Web Client 会把 Host inventory 中的 failed plugin、动态插件运行错误
 
 只有 `host.describe` 明确声明 no-tools planner 能力时，这个动作才会创建隔离的最小 Session；它会拒绝已有用户 Session、工具调用、审批事件、执行事件、未知字段和过期证据。当前 DSH rc.6 未提供该能力时，结果为 `UNAVAILABLE`，这是预期的安全结果。任何实际 patch 应使用显式 `repair-apply -Force`，并保留 receipt 供回滚。
 
+## 静态预检和依赖图
+
+静态插件预检只读取指定目录中的 `.js`、`.mjs`、`.cjs` 文件，检查静态 `inject` 声明与 `ctx.*` 服务使用是否一致。它不会 import、require 或执行目标插件；动态 `ctx[...]`、动态 inject 以及超出文件/大小上限的输入会返回 `MANUAL_REVIEW`：
+
+```powershell
+.\Debug-DSH.ps1 -Action plugin-preflight `
+  -InputPath .\path\to\plugin `
+  -PreflightPath .\state\preflight.json
+```
+
+依赖图检查读取脱敏的 Profile/package metadata，输出 `nodes`、`edges`、`missing`、`cycles`、`unreferenced` 和 `protectedCore`。输入可以是 `manifest` 或 `profileManifest` 加 `packages` 的 JSON；也可以把 `-InputPath` 指向包含 `package.json` 和本地 `node_modules` 的测试 Profile 目录。它不调用 npm/pnpm，不联网，不安装依赖，也不执行 package code：
+
+```powershell
+.\Debug-DSH.ps1 -Action plugin-dependency-graph `
+  -InputPath .\tools\fixtures\plugin-dependency-graph.json `
+  -DependencyGraphPath .\state\dependency-graph.json
+
+.\tools\Test-DSHDependencyGraph.ps1
+```
+
+缺失依赖、依赖环或未引用本地包会返回 `FAIL` 和非零退出码；`@deepseek-ai/*` 与 runtime 条目只会被标记为受保护节点，不会被当作可隔离插件。报告仍然只含包名、关系和版本规格类型，不回显绝对路径、源码、命令或凭据。
+
+Trace loop 分析用于发现同一状态在短窗口内反复出现的情况。它只比较允许的状态/插件/Module 元数据，发现 `message`、路径、命令或凭据等字段时返回 `MANUAL_REVIEW`，不会把重复现象直接解释为根因：
+
+```powershell
+.\Debug-DSH.ps1 -Action trace-loop `
+  -InputPath .\tools\fixtures\trace-loop.json `
+  -WindowSize 12 `
+  -RepeatThreshold 3
+```
+
 ## 测试
 
 测试源码和脱敏 fixture 会随 GitHub 源码一起发布，便于别人复现实现和检查发布边界：
 
 ```powershell
+Set-Location .
+.\scripts\Verify-Publication.ps1
+
 Set-Location .\packages\dsh-plugin-debug
 npm ci --ignore-scripts
 npm test
 npm run check
 .\Test-DSHStandalone.ps1
-.\tools\Test-DSHProvenanceIntegration.ps1
+.\tools\Test-DSHPluginIntegration.ps1
 .\tools\Test-DSHLauncherConflict.ps1
 .\tools\Test-DSHCrashGuard.ps1
 .\tools\Test-DSHRuntimeSupervisor.ps1
@@ -81,16 +125,41 @@ npm run check
 .\tools\Test-DSHTraceProfile.ps1
 .\tools\Test-DSHResourcePressure.ps1
 .\tools\Test-DSHIncidentRuntimeEvidence.ps1
+.\tools\Test-DSHBisect.ps1
+.\tools\Test-DSHPreflight.ps1
+.\tools\Test-DSHDependencyGraph.ps1
+.\tools\Test-DSHTraceLoop.ps1
 .\tools\Test-DSHPointerBrowser.ps1  # 可选；退出码 2 表示浏览器运行时不可用
 Pop-Location
-
-Set-Location .
-.\scripts\Verify-Publication.ps1
 ```
+
+发布边界检查必须在 `npm ci` 之前运行；它会严格拒绝安装后生成的
+`tools/runtime/node_modules`。runtime 安装属于本地/CI 测试准备，不属于 GitHub
+源码或 npm 发布内容。
 
 `tools\\fixtures` 中的 JSON/HTML 是合成且脱敏的输入数据，会被 trace 和浏览器契约测试直接引用。Crash Guard、启动冲突和 runtime supervisor 的 fake DSH 会在测试运行时创建到临时目录，测试结束后清理；仓库中没有真实 Profile、日志、凭据或崩溃转储。
 
 `Test-DSHPointerBrowser.ps1` 需要 `python.exe`、`npx` 和可用的 Playwright 浏览器 daemon；缺少这些依赖时只报告 `UNAVAILABLE`，不会把静态 HTML 加载冒充成真实 DSH Web 验证。
+
+Crash Guard 的测试还会检查启动处置回执：第一次启动失败、生成可逆隔离并受控重启后，回执必须变成 `recovered`，并保留被隔离插件 ID。这样别人不只可以看到“启动成功”，还可以审阅启动异常是如何被处理的。
+
+插件二分计划也提供独立的可复现命令：
+
+```powershell
+.\Debug-DSH.ps1 -Action plugin-bisect-plan `
+  -InputPath '.\tools\fixtures\plugin-bisect-plan.json' `
+  -BisectPath '.\tmp\plugin-bisect-report.json'
+
+# 比较两次脱敏诊断报告；重复 -InputPath 表示 before 和 after
+.\Debug-DSH.ps1 -Action diagnostics-diff `
+  -InputPath '.\state\before-incident.json' `
+  -InputPath '.\state\after-incident.json' `
+  -DiffPath '.\state\incident-diff.json'
+.\tools\Test-DSHBisect.ps1
+.\tools\Test-DSHDiagnosticsDiff.ps1
+```
+
+输入必须是脱敏 JSON，包含 `inventory`、失败证据和当前 Profile manifest。输出只保留插件 ID、证据类型、映射方式、`safe`/`protected`/`ambiguous` 分类、人工步骤和隐私契约；`safe` 只代表可以安全地列入人工试验顺序，不代表已经证明根因。
 
 `npm pack --dry-run --ignore-scripts` 只验证可发布包。GitHub 源码可以包含测试脚本和测试输入，但 npm/DSH 包不应包含 `node_modules`、state、logs、`.env`、凭据或任何本机运行生成物。
 

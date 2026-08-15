@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('doctor', 'start', 'diagnostics', 'plugin-health', 'snapshot', 'restore', 'workspace-list', 'workspace-snapshot', 'workspace-restore', 'session-history', 'session-fork', 'known-good-list', 'known-good-save', 'known-good-restore', 'known-good-fixture', 'plugin-enable', 'plugin-disable', 'repair-plan', 'repair-assist', 'self-repair', 'repair-apply', 'repair-revert', 'trace-contract', 'trace-eval', 'trace-live', 'trace-baseline', 'trace-profile', 'trace-autopsy', 'live-api-fixture', 'trace-autopsy-fixture', 'crash-fixture', 'runtime-supervisor-fixture', 'incident-capture', 'incident-correlation', 'repro-export', 'context-doctor', 'security-audit', 'session-health', 'fail-log', 'provenance', 'pointer-evidence')]
+  [ValidateSet('doctor', 'start', 'diagnostics', 'plugin-health', 'snapshot', 'restore', 'workspace-list', 'workspace-snapshot', 'workspace-restore', 'session-history', 'session-fork', 'known-good-list', 'known-good-save', 'known-good-restore', 'known-good-fixture', 'plugin-enable', 'plugin-disable', 'repair-plan', 'repair-assist', 'self-repair', 'repair-apply', 'repair-revert', 'plugin-bisect-plan', 'plugin-dependency-graph', 'plugin-preflight', 'diagnostics-diff', 'trace-contract', 'trace-eval', 'trace-live', 'trace-baseline', 'trace-profile', 'trace-loop', 'trace-autopsy', 'live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'crash-fixture', 'runtime-supervisor-fixture', 'incident-capture', 'incident-correlation', 'repro-export', 'context-doctor', 'security-audit', 'session-health', 'fail-log', 'provenance', 'pointer-evidence')]
   [string]$Action,
   [string]$Profile = 'debug',
   [int]$Port = 3081,
@@ -28,7 +28,14 @@ param(
   [string]$DiagnosticsPath = '',
   [string]$CorrelationKey = '',
   [string]$PlanPath = '',
+  [string]$BisectPath = '',
+  [string]$DependencyGraphPath = '',
+  [string]$PackageRoot = '',
+  [string]$PreflightPath = '',
+  [string]$DiffPath = '',
   [string]$CasePath = '',
+  [ValidateRange(2, 100000)][int]$WindowSize = 12,
+  [ValidateRange(2, 100)][int]$RepeatThreshold = 3,
   [string]$ReceiptPath = '',
   [string]$Cwd = '',
   [int]$RepairTimeoutSec = 60,
@@ -114,6 +121,77 @@ try {
     if ($autopsyStatus -eq 'INVALID') { $autopsyExitCode = 1 }
     exit $autopsyExitCode
   }
+  if ($Action -eq 'trace-loop') {
+    if ($InputPath.Count -eq 0 -or [string]::IsNullOrWhiteSpace($InputPath[0])) { throw '-InputPath is required for trace-loop' }
+    $loopScript = Join-Path $packageRoot 'tools\DSH-TraceLoop.ps1'
+    $loopArguments = @{
+      InputPath = $InputPath[0]
+      WindowSize = $WindowSize
+      RepeatThreshold = $RepeatThreshold
+    }
+    $LASTEXITCODE = 0
+    & $loopScript @loopArguments
+    $nestedSucceeded = $?
+    exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
+  }
+  if ($Action -eq 'plugin-bisect-plan') {
+    if ($InputPath.Count -eq 0 -or [string]::IsNullOrWhiteSpace($InputPath[0])) { throw '-InputPath is required for plugin-bisect-plan' }
+    $bisectScript = Join-Path $packageRoot 'tools\DSH-Bisect.ps1'
+    $bisectArguments = @{
+      InputPath = $InputPath[0]
+      OutputPath = $BisectPath
+    }
+    $LASTEXITCODE = 0
+    & $bisectScript @bisectArguments
+    $nestedSucceeded = $?
+    exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
+  }
+  if ($Action -eq 'plugin-dependency-graph') {
+    if ($InputPath.Count -eq 0 -or [string]::IsNullOrWhiteSpace($InputPath[0])) { throw '-InputPath is required for plugin-dependency-graph' }
+    $dependencyGraphScript = Join-Path $packageRoot 'tools\DSH-DependencyGraph.ps1'
+    $dependencyGraphArguments = @{
+      InputPath = $InputPath[0]
+      OutputPath = $DependencyGraphPath
+      PackageRoot = $PackageRoot
+    }
+    $LASTEXITCODE = 0
+    & $dependencyGraphScript @dependencyGraphArguments
+    $nestedSucceeded = $?
+    exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
+  }
+  if ($Action -eq 'plugin-preflight') {
+    if ($InputPath.Count -eq 0 -or [string]::IsNullOrWhiteSpace($InputPath[0])) { throw '-InputPath is required for plugin-preflight' }
+    $preflightScript = Join-Path $packageRoot 'tools\DSH-Preflight.ps1'
+    $preflightArguments = @{
+      InputPath = $InputPath[0]
+      OutputPath = $PreflightPath
+    }
+    $LASTEXITCODE = 0
+    & $preflightScript @preflightArguments
+    $nestedSucceeded = $?
+    exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
+  }
+  if ($Action -eq 'diagnostics-diff') {
+    $beforePath = $BaselinePath
+    $afterPath = if ($InputPath.Count -gt 0) { $InputPath[0] } else { '' }
+    if ($InputPath.Count -ge 2) {
+      $beforePath = $InputPath[0]
+      $afterPath = $InputPath[1]
+    }
+    if ([string]::IsNullOrWhiteSpace($beforePath) -or [string]::IsNullOrWhiteSpace($afterPath)) {
+      throw 'diagnostics-diff requires two report paths'
+    }
+    $diffScript = Join-Path $packageRoot 'tools\DSH-DiagnosticsDiff.ps1'
+    $diffArguments = @{
+      BeforePath = $beforePath
+      AfterPath = $afterPath
+      OutputPath = $DiffPath
+    }
+    $LASTEXITCODE = 0
+    & $diffScript @diffArguments
+    $nestedSucceeded = $?
+    exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
+  }
   if ($Action -eq 'known-good-fixture') {
     $knownGoodFixture = Join-Path $packageRoot 'tools\Test-DSHKnownGood.ps1'
     $LASTEXITCODE = 0
@@ -151,10 +229,11 @@ try {
     Restore-DshKnownGoodCheckpoint @knownGoodArguments | ConvertTo-Json -Depth 30
     exit 0
   }
-  if ($Action -in @('live-api-fixture', 'trace-autopsy-fixture', 'crash-fixture', 'runtime-supervisor-fixture')) {
+  if ($Action -in @('live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'crash-fixture', 'runtime-supervisor-fixture')) {
     $fixture = switch ($Action) {
       'live-api-fixture' { Join-Path $packageRoot 'tools\Test-DSHLiveApi.ps1' }
       'trace-autopsy-fixture' { Join-Path $packageRoot 'tools\Test-DSHTraceAutopsy.ps1' }
+      'trace-loop-fixture' { Join-Path $packageRoot 'tools\Test-DSHTraceLoop.ps1' }
       'crash-fixture' { Join-Path $packageRoot 'tools\Test-DSHCrashGuard.ps1' }
       default { Join-Path $packageRoot 'tools\Test-DSHRuntimeSupervisor.ps1' }
     }

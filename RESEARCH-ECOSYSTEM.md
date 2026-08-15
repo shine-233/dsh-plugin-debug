@@ -40,7 +40,7 @@ foreach ($repo in $repos) { gh api "repos/$repo" }
 | [chenw2759-wq/dsh-plugin-healthcheck](https://github.com/chenw2759-wq/dsh-plugin-healthcheck) | MIT | L0 静态检查、L1 composition、L2 isolated boot、恶意代码扫描、safe repair/rollback | 吸收分层健康门和安全修复方向；不自动改 Profile，不自动处理核心包，无法归因时 fail-closed |
 | [gordonlu/dsh-context-lens](https://github.com/gordonlu/dsh-context-lens) | MIT | metadata-only context profiling、tool schema fingerprint、cache delta、replay consistency | 吸收 metadata-only trace/profile 和 change-first 诊断；拒绝持久化原始请求、Tool 参数和结果正文 |
 | [wellorbetter/dsh-plugin-window-stats](https://github.com/wellorbetter/dsh-plugin-window-stats) | MIT | session overview、token/context pressure、成本估算、本地只读分析 | 吸收资源压力和窗口统计的只读形状；当前不宣称可从没有 Session ID 的真实实例读取 Tool Call |
-| [PangYiMing/dsh-bisect-debug](https://github.com/PangYiMing/dsh-bisect-debug) | MIT | 代码、边界和 Git commit 二分定位 | 记录为后续增强候选；当前包已有 incident/trace evidence，但没有把任意 Git 工作树变更自动回退 |
+| [PangYiMing/dsh-bisect-debug](https://github.com/PangYiMing/dsh-bisect-debug) | MIT | 代码、边界和 Git commit 二分定位 | 已吸收为 `plugin-bisect-plan` 的只读插件候选排序、证据摘要和人工步骤；不自动切换 Git 工作树、不执行命令、不修改 Profile |
 | [linyp/dsh-plugin-langfuse](https://github.com/linyp/dsh-plugin-langfuse) | MIT | OpenTelemetry/Langfuse 外部导出 | 拒绝：会扩大网络出口，并可能泄漏原始内容；当前包只做本地 metadata-only evidence |
 | [LX2000WASD/dsh-web-plugin-manager](https://github.com/LX2000WASD/dsh-web-plugin-manager) | MIT | 运行时启停、依赖/冲突/健康检查 | 吸收只读 inventory 和明确第三方隔离；拒绝把本项目变成 marketplace 或任意运行时管理器 |
 | [awesome-dsh-plugin/awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | CC0-1.0 | 生态索引和插件发现 | 仅作为发布前人工审查入口，不作为运行时依赖 |
@@ -57,6 +57,7 @@ foreach ($repo in $repos) { gh api "repos/$repo" }
 - workspace/Profile snapshot、known-good checkpoint、recovery；
 - constrained self-repair、receipt、pre-image/post-image hash 和 rollback conflict fail-closed；
 - one-click launcher、Supervisor、Crash Guard、启动冲突隔离和 Workbench；
+- `plugin-bisect-plan`：根据脱敏 inventory、失败证据和 Profile manifest 生成 `safe`、`protected`、`ambiguous` 候选及人工复核顺序；
 - 启动后页面通知，以及只在 Host 明确声明 `no-tools` planner 时创建隔离诊断会话。
 
 ## 明确不引入的边界
@@ -72,8 +73,8 @@ Session。无法明确归因、缺少 evidence、目标是核心包或 receipt �
 
 1. 在 DSH 官方提供稳定 no-tools planner 和 durable rewind 事件后，再增加对应的
    capability probe 和独立回归测试。
-2. 增加可选的 code/commit bisect，但必须使用用户明确指定的工作树和恢复点，
-   默认只生成候选区间，不自动 reset 或删除文件。
+2. 在用户明确指定工作树和恢复点、且有独立恢复门禁后，再考虑 code/commit bisect；
+   当前 `plugin-bisect-plan` 只处理插件 inventory/evidence，不自动 reset 或删除文件。
 3. 在 fresh Profile 流程稳定后增加 composition 与 isolated-boot 两级发布门，
    并把结果写入 JSON，而不是把“静态通过”说成生产运行通过。
 4. 只有用户明确开启、并且存在脱敏 schema 和本地留存策略时，才考虑外部

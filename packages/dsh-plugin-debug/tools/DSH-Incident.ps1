@@ -189,6 +189,41 @@ function Get-IncidentGuardSummary {
   }
 }
 
+function Get-IncidentStartupReceiptSummary {
+  param([Parameter(Mandatory = $true)][string]$StateRootPath)
+  $receiptPath = Join-Path $StateRootPath 'startup-incident.json'
+  if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) {
+    return [ordered]@{ status = 'NOT_REQUESTED'; present = $false; incidentId = $null; correlationKey = $null; startupStatus = $null; restartCount = 0; quarantinedPluginIds = @() }
+  }
+  try {
+    $receipt = Get-Content -LiteralPath $receiptPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $startupStatus = [string](Get-IncidentProperty -Object $receipt -Name 'status')
+    $componentStatus = switch ($startupStatus) {
+      'healthy' { 'PASS' }
+      'recovered' { 'PASS' }
+      'restarting' { 'PARTIAL' }
+      'degraded' { 'PARTIAL' }
+      'failed' { 'FAIL' }
+      default { 'UNAVAILABLE' }
+    }
+    return [ordered]@{
+      status = $componentStatus
+      present = $true
+      incidentId = [string](Get-IncidentProperty -Object $receipt -Name 'incidentId')
+      correlationKey = [string](Get-IncidentProperty -Object $receipt -Name 'correlationKey')
+      startupStatus = $startupStatus
+      reason = [string](Get-IncidentProperty -Object $receipt -Name 'reason')
+      profile = [string](Get-IncidentProperty -Object $receipt -Name 'profile')
+      port = Get-IncidentProperty -Object $receipt -Name 'port'
+      restartCount = [int](Get-IncidentProperty -Object $receipt -Name 'restartCount')
+      quarantinedPluginIds = @(Get-IncidentItems -Value (Get-IncidentProperty -Object $receipt -Name 'quarantinedPluginIds') | Select-Object -First 100)
+      privacy = Get-IncidentProperty -Object $receipt -Name 'privacy'
+    }
+  } catch {
+    return [ordered]@{ status = 'UNAVAILABLE'; present = $true; incidentId = $null; correlationKey = $null; startupStatus = $null; restartCount = 0; quarantinedPluginIds = @(); parseError = 'startup incident receipt could not be parsed' }
+  }
+}
+
 function Get-IncidentDiagnosticsSummary {
   param([AllowNull()]$Child)
   $value = Get-IncidentPayload -Child $Child
@@ -447,6 +482,7 @@ try {
 
   $manifestSummary = Get-IncidentManifestSummary -DshHomeRoot $dshHomeRoot
   $guardSummary = Get-IncidentGuardSummary -StateRootPath $stateRootPath
+  $startupSummary = Get-IncidentStartupReceiptSummary -StateRootPath $stateRootPath
   $quarantineEvents = @($guardSummary.quarantinedPluginIds | ForEach-Object {
     if ([string]::IsNullOrWhiteSpace([string]$_)) { return }
     [ordered]@{
@@ -462,6 +498,7 @@ try {
   $components = [ordered]@{
     diagnostics = Get-IncidentDiagnosticsSummary -Child $diagnosticsChild
     pluginHealth = Get-IncidentHealthSummary -Child $healthChild
+    startup = $startupSummary
     security = Get-IncidentSecuritySummary -Child $securityChild
     sessionHealth = Get-IncidentSessionSummary -Child $sessionChild
     context = Get-IncidentContextSummary -Child $contextChild
@@ -548,6 +585,7 @@ try {
     pointerEvidenceProvided = -not [string]::IsNullOrWhiteSpace($PointerPath)
     profileManifest = $manifestSummary
     guard = $guardSummary
+    startupIncident = $startupSummary
     correlation = $correlationReport
     components = $components
     componentHashes = [ordered]@{}

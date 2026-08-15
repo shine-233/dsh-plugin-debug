@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-debug",
-  "version": "0.4.0",
+  "version": "0.7.0",
   "description": "A single, safe DeepSeek Harness debug plugin for provenance, health, diagnostics, recovery, trace inspection, and constrained self-repair",
   "author": "shine-233",
   "repository": {
@@ -56,7 +56,7 @@
     "test": "node --test",
     "check": "node scripts/build.mjs && node --check lib/index.js && node --check lib/client.js && node --test",
     "check:standalone": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\Test-DSHStandalone.ps1",
-    "check:integration": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\tools\\Test-DSHProvenanceIntegration.ps1"
+    "check:integration": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\tools\\Test-DSHPluginIntegration.ps1"
   },
   "engines": {
     "node": ">=22"
@@ -70,7 +70,11 @@
     "debug",
     "health-check",
     "crash-guard",
-    "plugin-inspector"
+    "plugin-inspector",
+    "diagnostics-diff",
+    "plugin-preflight",
+    "dependency-graph",
+    "trace-loop"
   ],
   "dsh": {
     "bundle": {

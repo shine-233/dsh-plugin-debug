@@ -39,6 +39,7 @@ $PidFile = Join-Path $StateRoot 'dsh-web.pid.json'
 $GuardStateFile = Join-Path $StateRoot 'guard-state.json'
 $GuardPatch = Join-Path $StateRoot 'guard.patch.yml'
 $SupervisorStateFile = Join-Path $StateRoot 'supervisor-state.json'
+$StartupIncidentFile = Join-Path $StateRoot 'startup-incident.json'
 $GuardModulePath = Join-Path $LauncherRoot 'DSH-Guard.psm1'
 $AgentsPatch = if ([string]::IsNullOrWhiteSpace($AgentsPatchPath)) { Join-Path $LauncherRoot 'combined-agents.patch.yml' } else { [IO.Path]::GetFullPath($AgentsPatchPath) }
 $Url = "http://$HostName`:$Port/"
@@ -106,6 +107,7 @@ function Set-DshLaunchTarget {
   $script:GuardStateFile = Join-Path $script:StateRoot 'guard-state.json'
   $script:GuardPatch = Join-Path $script:StateRoot 'guard.patch.yml'
   $script:SupervisorStateFile = Join-Path $script:StateRoot 'supervisor-state.json'
+  $script:StartupIncidentFile = Join-Path $script:StateRoot 'startup-incident.json'
 }
 
 function Try-IsolateDshConflict {
@@ -139,6 +141,7 @@ function Write-LauncherLog {
 $script:LaunchMutex = $null
 $script:LaunchMutexHeld = $false
 $script:BrowserOpened = $false
+$script:StartupIncidentId = [guid]::NewGuid().ToString('N')
 
 function Get-DshLaunchMutexName {
   $identity = "$LauncherRoot|$Profile|$HostName|$Port"
@@ -515,6 +518,58 @@ function Get-SafeSupervisorText {
   $result = $result -replace '(?i)[A-Z]:\\[^\s;,)}]+', '<path>'
   if ($result.Length -gt 800) { return $result.Substring(0, 800) + '...' }
   return $result
+}
+
+function Write-DshStartupIncident {
+  param(
+    [Parameter(Mandatory = $true)][ValidateSet('healthy', 'restarting', 'recovered', 'degraded', 'failed')][string]$Status,
+    [Parameter(Mandatory = $true)][string]$Reason,
+    [int]$RestartCount = 0
+  )
+
+  $quarantined = @()
+  if ($null -ne $script:GuardState -and $null -ne $script:GuardState.quarantined) {
+    $quarantined = @($script:GuardState.quarantined | ForEach-Object {
+      $entryId = [string]$_.entryId
+      if ([string]::IsNullOrWhiteSpace($entryId)) { $entryId = [string]$_.moduleName }
+      if (-not [string]::IsNullOrWhiteSpace($entryId)) { $entryId }
+    } | Select-Object -First 100)
+  }
+
+  $receipt = [ordered]@{
+    schemaVersion = 1
+    kind = 'dsh-startup-incident'
+    incidentId = $script:StartupIncidentId
+    correlationKey = "startup-$($script:StartupIncidentId)"
+    status = $Status
+    reason = Get-SafeSupervisorText -Value $Reason
+    profile = $Profile
+    host = $HostName
+    port = $Port
+    restartCount = [Math]::Max(0, $RestartCount)
+    crashGuardEnabled = $script:GuardAvailable -eq $true
+    quarantinedPluginIds = $quarantined
+    generatedAt = (Get-Date).ToUniversalTime().ToString('o')
+    evidenceFiles = @('guard-state.json', 'guard.patch.yml', 'supervisor-state.json', 'logs/launcher.log')
+    privacy = [ordered]@{
+      rawLogsStored = $false
+      rawToolPayloadStored = $false
+      credentialsStored = $false
+      absolutePathsStored = $false
+    }
+  }
+
+  $temporary = $null
+  try {
+    Ensure-Directory $StateRoot
+    $temporary = Join-Path $StateRoot ('startup-incident.' + [guid]::NewGuid().ToString('N') + '.tmp')
+    $receipt | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $temporary -Encoding UTF8
+    Move-Item -LiteralPath $temporary -Destination $StartupIncidentFile -Force
+  } catch {
+    try { if ($null -ne $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue } } catch { }
+    Write-LauncherLog "startup incident receipt write failed: $($_.Exception.Message)"
+  }
+  return $receipt
 }
 
 function Invoke-DshRuntimeSupervisor {
@@ -1008,6 +1063,7 @@ try {
           $guardRestarted = $true
           $restartRequested = $true
           Write-LauncherLog "guard will restart after quarantining a startup candidate; old pid=$($process.Id) exit=$exitCodeText"
+          Write-DshStartupIncident -Status 'restarting' -Reason 'startup-failure-quarantine' -RestartCount 1 | Out-Null
           break
         }
         $detail = Get-DshStartupFailureDetail
@@ -1025,6 +1081,7 @@ try {
           $guardRestarted = $true
           $restartRequested = $true
           Write-LauncherLog "guard will restart after a non-DSH response; old pid=$($process.Id)"
+          Write-DshStartupIncident -Status 'restarting' -Reason 'non-dsh-response-quarantine' -RestartCount 1 | Out-Null
           break
         }
         throw "port $Port returned a non-DSH page; see $DshStderrLog"
@@ -1051,6 +1108,7 @@ try {
       $errorText = Get-DshGuardErrorText
       if (-not $guardRestarted -and (Try-DshGuardStartupRecovery -ErrorText $errorText)) {
         $guardRestarted = $true
+        Write-DshStartupIncident -Status 'restarting' -Reason 'startup-timeout-quarantine' -RestartCount 1 | Out-Null
         try {
           $process.Refresh()
           if (-not $process.HasExited) {
@@ -1070,6 +1128,7 @@ try {
     if (-not $guardRestarted -and (Invoke-DshGuardReadyCheck)) {
       $guardRestarted = $true
       Write-LauncherLog "guard will restart once with the generated quarantine patch."
+      Write-DshStartupIncident -Status 'restarting' -Reason 'runtime-plugin-inventory-quarantine' -RestartCount 1 | Out-Null
       try {
         $process.Refresh()
         if (-not $process.HasExited) {
@@ -1091,6 +1150,7 @@ try {
       if ($supervisorResult.restartRequested) {
         $guardRestarted = $true
         Write-LauncherLog "runtime supervisor requested one controlled restart: reason=$($supervisorResult.reason) pid=$($process.Id)"
+        Write-DshStartupIncident -Status 'restarting' -Reason "runtime-supervisor-$($supervisorResult.reason)" -RestartCount 1 | Out-Null
         try {
           $process.Refresh()
           if (-not $process.HasExited) {
@@ -1108,6 +1168,10 @@ try {
     }
     break
   }
+
+  $finalStartupStatus = if ($guardRestarted) { 'recovered' } else { 'healthy' }
+  $finalStartupReason = if ($guardRestarted) { 'quarantine-and-controlled-restart' } else { 'web-ready' }
+  Write-DshStartupIncident -Status $finalStartupStatus -Reason $finalStartupReason -RestartCount ([int]$guardRestarted) | Out-Null
 
   if (-not $NoBrowser) {
     Start-Process (Get-DshBrowserLaunchUrl -StartupGuardNotice:$guardRestarted) | Out-Null
@@ -1133,6 +1197,10 @@ try {
   }
   try {
     Ensure-Directory $LogDir
+    $restartCount = 0
+    $guardVariable = Get-Variable -Name guardRestarted -ErrorAction SilentlyContinue
+    if ($null -ne $guardVariable -and [bool]$guardVariable.Value) { $restartCount = 1 }
+    Write-DshStartupIncident -Status 'failed' -Reason 'startup-failure' -RestartCount $restartCount | Out-Null
     Write-LauncherLog "ERROR $message"
   } catch {
     # Preserve the original failure if logging itself is unavailable.

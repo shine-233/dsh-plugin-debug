@@ -35,15 +35,44 @@ Assert-Publication ($forbiddenFiles.Count -eq 0) 'publication candidate contains
 
 $manifestPath = Join-Path $root 'RELEASE-MANIFEST.json'
 $packageManifestPath = Join-Path $packageRoot 'package.json'
+$packageLockPath = Join-Path $packageRoot 'package-lock.json'
 $bundleManifestPath = Join-Path $packageRoot 'bundle-manifest.json'
 $runtimeLockPath = Join-Path $packageRoot 'tools\runtime\package-lock.json'
-foreach ($path in @($manifestPath, $packageManifestPath, $bundleManifestPath, $runtimeLockPath)) {
+foreach ($path in @($manifestPath, $packageManifestPath, $packageLockPath, $bundleManifestPath, $runtimeLockPath)) {
   Assert-Publication (Test-Path -LiteralPath $path -PathType Leaf) "missing JSON artifact: $path"
 }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $packageManifest = Get-Content -LiteralPath $packageManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-Get-Content -LiteralPath $bundleManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json | Out-Null
-Assert-Publication ([string]($packageManifest.name) -ceq 'dsh-plugin-debug') 'package runtime ID is not dsh-plugin-debug'
+$packageLock = Get-Content -LiteralPath $packageLockPath -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable
+$bundleManifest = Get-Content -LiteralPath $bundleManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$packageName = [string]$packageManifest.name
+$packageVersion = [string]$packageManifest.version
+Assert-Publication ($packageName -ceq 'dsh-plugin-debug') 'package runtime ID is not dsh-plugin-debug'
+Assert-Publication ($packageName -match '^[a-z0-9][a-z0-9._-]*$') "package name is not a legal unscoped npm name: $packageName"
+Assert-Publication ($packageVersion -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$') "package version is not valid SemVer: $packageVersion"
+$repository = $packageManifest.repository
+$repositoryUrl = [string]$repository.url
+$repositoryUri = $null
+$repositoryUrlValid = [Uri]::TryCreate($repositoryUrl, [UriKind]::Absolute, [ref]$repositoryUri)
+Assert-Publication ($null -ne $repository -and [string]$repository.type -ceq 'git') 'package repository.type must be git'
+Assert-Publication ($repositoryUrlValid -and $repositoryUri.Scheme -ceq 'https' -and $repositoryUri.Host -ceq 'github.com' -and $repositoryUri.AbsolutePath.Trim('/') -ne '') 'package repository.url must be an absolute GitHub HTTPS URL'
+Assert-Publication ([string]$repository.directory -ceq 'packages/dsh-plugin-debug') 'package repository.directory must point to packages/dsh-plugin-debug'
+$packageLockRoot = $null
+if ($packageLock.ContainsKey('packages') -and $null -ne $packageLock['packages'] -and $packageLock['packages'].ContainsKey('')) {
+  $packageLockRoot = $packageLock['packages']['']
+}
+Assert-Publication ($packageLock.ContainsKey('name') -and [string]$packageLock['name'] -ceq $packageName) 'package-lock.json top-level name does not match package.json'
+Assert-Publication ($packageLock.ContainsKey('version') -and [string]$packageLock['version'] -ceq $packageVersion) 'package-lock.json top-level version does not match package.json'
+Assert-Publication ($null -ne $packageLockRoot -and [string]$packageLockRoot['name'] -ceq $packageName) 'package-lock.json root package name does not match package.json'
+Assert-Publication ($null -ne $packageLockRoot -and [string]$packageLockRoot['version'] -ceq $packageVersion) 'package-lock.json root package version does not match package.json'
+Assert-Publication ([string]$bundleManifest.package -ceq $packageName) 'bundle-manifest.json package does not match package.json'
+Assert-Publication ([string]$bundleManifest.version -ceq $packageVersion) 'bundle-manifest.json version does not match package.json'
+$manifestComponents = @($manifest.components)
+Assert-Publication ($manifestComponents.Count -gt 0) 'release manifest has no components'
+$primaryComponent = $manifestComponents[0]
+Assert-Publication ([string]$primaryComponent.id -ceq $packageName) 'RELEASE-MANIFEST.json components[0] is not dsh-plugin-debug'
+Assert-Publication ([string]$primaryComponent.path -ceq 'packages/dsh-plugin-debug') 'RELEASE-MANIFEST.json components[0] path does not point to the package'
+Assert-Publication ([string]$primaryComponent.version -ceq $packageVersion) 'RELEASE-MANIFEST.json components[0] version does not match package.json'
 Assert-Publication (@($packageManifest.files) -contains 'tools') 'package files list does not include combined Host tools'
 foreach ($entry in @('Start-DSH-Debug.ps1', 'Start-DSH-Debug.cmd', 'Start-DSH-Debug.vbs', 'Start-DSH-Combined.ps1', 'Start-DSH-Combined.cmd', 'Start-DSH-Combined.vbs')) {
   Assert-Publication (@($packageManifest.files) -contains $entry) "package files list omits public launcher: $entry"
@@ -53,6 +82,30 @@ Assert-Publication (Test-Path -LiteralPath (Join-Path $packageRoot 'tools\Test-D
 Assert-Publication (@($manifest.components | ForEach-Object { $_.path }) -contains 'packages/dsh-plugin-debug') 'release manifest does not declare the single package'
 Assert-Publication (-not (@($manifest.components | ForEach-Object { $_.id }) -contains 'dsh-plugin-store')) 'release manifest declares removed plugin-store as a component'
 Assert-Publication ($null -ne $manifest.removedComponents -and (@($manifest.removedComponents | ForEach-Object { $_.id }) -contains 'dsh-plugin-store')) 'release manifest lacks the recorded plugin-store removal'
+
+$requiredFunctionalFiles = @(
+  'tools/DSH-Preflight.ps1',
+  'tools/Test-DSHPreflight.ps1',
+  'tools/DSH-DependencyGraph.ps1',
+  'tools/Test-DSHDependencyGraph.ps1',
+  'tools/DSH-Bisect.ps1',
+  'tools/DSH-DiagnosticsDiff.ps1',
+  'tools/DSH-TraceLoop.ps1',
+  'tools/Test-DSHTraceLoop.ps1'
+)
+$packageFileSpecs = @($packageManifest.files | ForEach-Object { ([string]$_).Replace('\', '/').TrimEnd('/') })
+foreach ($requiredFile in $requiredFunctionalFiles) {
+  $requiredDiskPath = Join-Path $packageRoot ($requiredFile -replace '/', '\')
+  Assert-Publication (Test-Path -LiteralPath $requiredDiskPath -PathType Leaf) "required functionality file is missing: $requiredFile"
+  $coveredByPackageFiles = $false
+  foreach ($fileSpec in $packageFileSpecs) {
+    if ($fileSpec -eq $requiredFile -or $fileSpec -eq 'tools' -or $requiredFile.StartsWith("$fileSpec/", [StringComparison]::OrdinalIgnoreCase)) {
+      $coveredByPackageFiles = $true
+      break
+    }
+  }
+  Assert-Publication $coveredByPackageFiles "package.json files does not include required functionality file: $requiredFile"
+}
 
 Assert-Publication ($null -ne (Get-Command node -ErrorAction SilentlyContinue)) 'node is required to parse package-lock.json'
 & node -e 'JSON.parse(require(String.fromCharCode(102,115)).readFileSync(process.argv[1], String.fromCharCode(117,116,102,56)));' -- $runtimeLockPath
@@ -75,6 +128,10 @@ try {
 $packFileCount = @($packReport.files).Count
 Assert-Publication ($packFileCount -gt 0) 'npm pack --dry-run returned no package files'
 Assert-Publication ([int]$manifest.verification.packageFileCount -eq $packFileCount) "release manifest packageFileCount $($manifest.verification.packageFileCount) does not match npm pack count $packFileCount"
+$packedPaths = @($packReport.files | ForEach-Object { ([string]$_.path).Replace('\', '/') })
+foreach ($requiredFile in $requiredFunctionalFiles) {
+  Assert-Publication ($packedPaths -contains $requiredFile) "npm pack does not include required functionality file: $requiredFile"
+}
 
 $slash = [char]92
 $unixSlash = [char]47

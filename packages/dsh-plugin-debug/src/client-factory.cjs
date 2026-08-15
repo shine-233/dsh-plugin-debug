@@ -15,7 +15,7 @@ const DEBUG_GLOBAL = '__DSH_PLUGIN_DEBUG__'
 const LEGACY_PROVENANCE_GLOBAL = '__DSH_PLUGIN_PROVENANCE__'
 const BRIDGE_SELECTOR = 'meta[data-dsh-debug-bridge="1"]'
 const LEGACY_BRIDGE_SELECTOR = 'meta[data-dsh-provenance-bridge="1"]'
-const REPORT_SCHEMA_VERSION = 5
+const REPORT_SCHEMA_VERSION = 6
 const POINTER_OBSERVATION_SCHEMA_VERSION = 2
 const CAPABILITY_SCHEMA_VERSION = 1
 const ERROR_CAPTURE_PHASE = 'settings-mounted'
@@ -25,8 +25,12 @@ const MAX_RUNTIME_ITEMS = 80
 const MAX_RUNTIME_NODES = MAX_RUNTIME_ITEMS * 8
 const MAX_SLOT_NODES = 300
 const MAX_POINTER_ANCESTORS = 64
+const MAX_BREADCRUMBS = 80
+const MAX_BREADCRUMB_FIELD = 180
 const clientErrors = []
 const slotErrors = []
+const diagnosticBreadcrumbs = []
+let diagnosticBreadcrumbsDropped = 0
 let errorCaptureInstalled = false
 let errorCaptureStartedAt = null
 let runtimeContext = null
@@ -83,6 +87,11 @@ function emitStartupGuardEvent() {
 
 function setStartupDiagnosticState(next) {
   startupDiagnosticState = { ...startupDiagnosticState, ...next }
+  recordDiagnosticBreadcrumb('startup', {
+    status: startupDiagnosticState.status,
+    sessionId: startupDiagnosticState.sessionId,
+    message: startupDiagnosticState.error,
+  })
   emitStartupGuardEvent()
   if (typeof document !== 'undefined') dispatchDiagnosticsEvent()
 }
@@ -240,6 +249,10 @@ const zh = {
   pluginInventory: 'Host 插件清单',
   dynamicCordis: '动态 Cordis 插件',
   runtimeSignals: '运行时信号',
+  breadcrumbs: '本地诊断时间线',
+  breadcrumbHint: '只保留有界、脱敏的状态元数据；不会记录 Tool 参数、正文或凭据。',
+  noBreadcrumbs: '暂未记录诊断事件。',
+  breadcrumbDropped: '超出上限后已丢弃旧事件',
   runningCalls: '进行中的 Tool Call',
   toolResultErrors: 'Tool Result 错误',
   turnErrors: 'Turn / Agent 错误',
@@ -337,6 +350,10 @@ const en = {
   pluginInventory: 'Host plugin inventory',
   dynamicCordis: 'Dynamic Cordis plugins',
   runtimeSignals: 'Runtime signals',
+  breadcrumbs: 'Local diagnostic timeline',
+  breadcrumbHint: 'Only bounded, redacted state metadata is kept; Tool arguments, bodies, and credentials are excluded.',
+  noBreadcrumbs: 'No diagnostic events recorded yet.',
+  breadcrumbDropped: 'older events dropped after reaching the limit',
   runningCalls: 'Running Tool Calls',
   toolResultErrors: 'Tool result errors',
   turnErrors: 'Turn / Agent errors',
@@ -462,6 +479,15 @@ function setCurrentPointerInfo(info) {
         observedAt: cloned.observedAt || new Date().toISOString(),
       }
     : null
+  if (currentPointerInfo) {
+    recordDiagnosticBreadcrumb('dom', {
+      status: currentPointerInfo.confidence === 'none' ? 'unknown-source' : 'pointer-observed',
+      pluginId: currentPointerInfo.plugin,
+      moduleName: currentPointerInfo.module,
+      slot: currentPointerInfo.slot,
+      source: currentPointerInfo.evidence,
+    })
+  }
   updateBridgeElement(currentPointerInfo)
   if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return
   try {
@@ -527,6 +553,8 @@ function installProvenanceApi() {
     },
     getClientErrors,
     clearClientErrors,
+    getDiagnosticBreadcrumbs,
+    recordDiagnosticBreadcrumb,
   }
   for (const target of uniqueTargets) {
     target[DEBUG_GLOBAL] = api
@@ -561,7 +589,7 @@ function uninstallProvenanceApi(api) {
 }
 
 function dispatchDiagnosticsEvent() {
-  if (typeof document === 'undefined' || typeof Event !== 'function') return
+  if (typeof document === 'undefined' || typeof document.dispatchEvent !== 'function' || typeof Event !== 'function') return
   document.dispatchEvent(new Event(DIAGNOSTICS_EVENT))
 }
 
@@ -594,6 +622,69 @@ function redactSensitiveText(value) {
   return text
     .replace(/\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+/giu, match => `${match.split(/\s+/u)[0]} [redacted]`)
     .replace(/https?:\/\/[^\s"'<>]+/gu, match => sanitizeUrl(match) || '[url]')
+}
+
+const BREADCRUMB_KINDS = new Set(['startup', 'dom', 'slot', 'client-error', 'plugin-inventory', 'session', 'runtime', 'recovery'])
+const BREADCRUMB_FIELDS = ['status', 'source', 'kind', 'pluginId', 'moduleName', 'slot', 'code', 'severity', 'hash', 'correlationId', 'sessionId', 'message', 'durationMs', 'httpStatus', 'count', 'enabled']
+const BREADCRUMB_NUMBER_FIELDS = new Set(['durationMs', 'httpStatus', 'count'])
+const BREADCRUMB_BOOLEAN_FIELDS = new Set(['enabled'])
+
+function redactBreadcrumbText(value) {
+  return redactSensitiveText(value)
+    .replace(/(?:[A-Za-z]:[\\/]|\\\\(?:[^\\/]+[\\/]){1,2}|\/(?:Users|home|workspace)\/)[^\s,;)}\]]+/gu, '[path]')
+    .slice(0, MAX_BREADCRUMB_FIELD)
+}
+
+function projectBreadcrumbDetails(details) {
+  if (!details || typeof details !== 'object') return {}
+  const projected = {}
+  for (const field of BREADCRUMB_FIELDS) {
+    const value = details[field]
+    if (value === null || value === undefined) continue
+    if (BREADCRUMB_BOOLEAN_FIELDS.has(field)) {
+      projected[field] = value === true
+      continue
+    }
+    if (BREADCRUMB_NUMBER_FIELDS.has(field)) {
+      if (Number.isFinite(value)) projected[field] = Math.max(0, Math.min(999999, Math.round(value)))
+      continue
+    }
+    if (typeof value === 'string' && value.length > 0) projected[field] = redactBreadcrumbText(value)
+  }
+  return projected
+}
+
+function recordDiagnosticBreadcrumb(kind, details = {}) {
+  const normalizedKind = BREADCRUMB_KINDS.has(kind) ? kind : 'runtime'
+  const projected = projectBreadcrumbDetails(details)
+  const previous = diagnosticBreadcrumbs.at(-1)
+  if (previous && previous.kind === normalizedKind && JSON.stringify(previous.details) === JSON.stringify(projected)) return
+  if (diagnosticBreadcrumbs.length >= MAX_BREADCRUMBS) {
+    diagnosticBreadcrumbs.shift()
+    diagnosticBreadcrumbsDropped += 1
+  }
+  diagnosticBreadcrumbs.push({
+    kind: normalizedKind,
+    time: new Date().toISOString(),
+    details: projected,
+  })
+  dispatchDiagnosticsEvent()
+}
+
+function getDiagnosticBreadcrumbs() {
+  return {
+    items: diagnosticBreadcrumbs.map(item => ({ kind: item.kind, time: item.time, details: { ...item.details } })),
+    limit: MAX_BREADCRUMBS,
+    dropped: diagnosticBreadcrumbsDropped,
+    truncated: diagnosticBreadcrumbsDropped > 0,
+  }
+}
+
+if (startupGuardNotice) {
+  recordDiagnosticBreadcrumb('startup', {
+    status: 'isolated',
+    source: startupGuardNotice.source,
+  })
 }
 
 function readableError(value) {
@@ -630,6 +721,11 @@ function recordClientError(kind, value, event = null) {
     stack,
   })
   if (clientErrors.length > 100) clientErrors.splice(0, clientErrors.length - 100)
+  recordDiagnosticBreadcrumb('client-error', {
+    status: 'captured',
+    kind,
+    message,
+  })
   dispatchDiagnosticsEvent()
 }
 
@@ -1133,6 +1229,7 @@ function refreshPluginInventory(ctx = runtimeContext) {
   const request = ++pluginInventoryRequest
   pluginInventoryState = 'loading'
   pluginInventoryError = null
+  recordDiagnosticBreadcrumb('plugin-inventory', { status: 'loading' })
   dispatchDiagnosticsEvent()
   return Promise.resolve()
     .then(() => list.call(remote))
@@ -1148,11 +1245,13 @@ function refreshPluginInventory(ctx = runtimeContext) {
       }))
       pluginInventoryState = 'ready'
       pluginInventoryError = null
+      recordDiagnosticBreadcrumb('plugin-inventory', { status: 'ready', count: pluginInventoryEntries.length })
     })
     .catch(error => {
       if (request !== pluginInventoryRequest) return
       pluginInventoryState = 'error'
       pluginInventoryError = summarizeError(error)
+      recordDiagnosticBreadcrumb('plugin-inventory', { status: 'error', message: pluginInventoryError?.message })
     })
     .finally(() => {
       if (request === pluginInventoryRequest) dispatchDiagnosticsEvent()
@@ -1175,6 +1274,13 @@ function recordSlotError(slot, entry, error, info = {}) {
   if (previous && previous.slot === item.slot && previous.registrant === item.registrant && previous.error?.message === item.error?.message) return
   slotErrors.push(item)
   if (slotErrors.length > 100) slotErrors.splice(0, slotErrors.length - 100)
+  recordDiagnosticBreadcrumb('slot', {
+    status: 'error',
+    slot: item.slot,
+    pluginId: item.registrant,
+    severity: 'error',
+    message: item.error?.message,
+  })
   dispatchDiagnosticsEvent()
 }
 
@@ -1523,6 +1629,7 @@ function runtimeCluesOf(runtimeDiagnostics) {
 function scanDiagnostics(documentObject, errors = getClientErrors()) {
   const errorCount = Array.isArray(errors) ? errors.length : 0
   const errorItems = Array.isArray(errors) ? errors.slice(-MAX_REPORTED_ERRORS) : []
+  const breadcrumbs = getDiagnosticBreadcrumbs()
   const runtimeDiagnostics = collectRuntimeDiagnostics()
   const empty = {
     schemaVersion: REPORT_SCHEMA_VERSION,
@@ -1530,6 +1637,7 @@ function scanDiagnostics(documentObject, errors = getClientErrors()) {
     page: getPagePath(),
     title: '',
     pointer: getPointerEvidenceSnapshot(),
+    breadcrumbs,
     runtime: runtimeDiagnostics.runtime,
     boundaries: runtimeDiagnostics.boundaries,
     moduleSystem: runtimeDiagnostics.moduleSystem,
@@ -1559,6 +1667,7 @@ function scanDiagnostics(documentObject, errors = getClientErrors()) {
       failedPlugins: runtimeDiagnostics.pluginInventory.entries.filter(entry => entry.fiberPhase === 'failed').length,
       toolResultErrors: runtimeDiagnostics.toolCalls.resultErrors.length,
       turnErrors: runtimeDiagnostics.toolCalls.turnErrors.length,
+      breadcrumbs: breadcrumbs.items.length,
     },
     plugins: [],
     modules: [],
@@ -1574,6 +1683,7 @@ function scanDiagnostics(documentObject, errors = getClientErrors()) {
       errors: errorCount > MAX_REPORTED_ERRORS,
       clues: false,
       toolCalls: runtimeDiagnostics.toolCalls.truncated?.any === true,
+      breadcrumbs: breadcrumbs.truncated,
     },
   }
   if (!documentObject || typeof documentObject.querySelectorAll !== 'function') return empty
@@ -1643,6 +1753,7 @@ function scanDiagnostics(documentObject, errors = getClientErrors()) {
     ...empty,
     title: '',
     pointer: getPointerEvidenceSnapshot(),
+    breadcrumbs,
     runtime: runtimeDiagnostics.runtime,
     boundaries: runtimeDiagnostics.boundaries,
     moduleSystem: runtimeDiagnostics.moduleSystem,
@@ -1671,6 +1782,7 @@ function scanDiagnostics(documentObject, errors = getClientErrors()) {
       failedPlugins: runtimeDiagnostics.pluginInventory.entries.filter(entry => entry.fiberPhase === 'failed').length,
       toolResultErrors: runtimeDiagnostics.toolCalls.resultErrors.length,
       turnErrors: runtimeDiagnostics.toolCalls.turnErrors.length,
+      breadcrumbs: breadcrumbs.items.length,
     },
     plugins,
     modules,
@@ -1686,6 +1798,7 @@ function scanDiagnostics(documentObject, errors = getClientErrors()) {
       errors: errorCount > MAX_REPORTED_ERRORS,
       clues: clueCandidates.length > MAX_REPORTED_CLUES,
       toolCalls: runtimeDiagnostics.toolCalls.truncated?.any === true,
+      breadcrumbs: breadcrumbs.truncated,
     },
   }
   return report
@@ -2063,6 +2176,14 @@ function runtimeItemText(item) {
   return item.kind || 'runtime clue'
 }
 
+function breadcrumbItemText(item) {
+  const details = item?.details || {}
+  const identity = details.pluginId || details.moduleName || details.slot || details.source || ''
+  const status = details.status || details.kind || ''
+  const message = details.message ? `: ${details.message}` : ''
+  return `${item?.time || 'unknown time'} [${item?.kind || 'runtime'}] ${status}${identity ? ` (${identity})` : ''}${message}`.trim()
+}
+
 function DiagnosticsPanel({ t, report, onRescan, onCopy, onDownload, onClear, copyState, downloadState }) {
   const moduleLoader = report.runtime.moduleLoader === 'present'
     ? t('present')
@@ -2094,6 +2215,7 @@ function DiagnosticsPanel({ t, report, onRescan, onCopy, onDownload, onClear, co
     ...report.toolCalls.turnErrors.slice(0, 8).map(item => runtimeItemText({ kind: 'turn-error', ...item })),
     ...report.toolCalls.running.slice(0, 8).map(item => `${item.name || 'unknown tool'} (${item.callId || 'unknown call'}): ${t('runningToolCall')}`),
   ]
+  const breadcrumbItems = (report.breadcrumbs?.items || []).slice(-12).map(breadcrumbItemText)
   return createElement(
     'div',
     { style: styles.diagnostics },
@@ -2131,11 +2253,20 @@ function DiagnosticsPanel({ t, report, onRescan, onCopy, onDownload, onClear, co
       metricRow(t('slotErrors'), report.slotErrors.length),
       metricRow(t('loadedPackages'), report.dynamicCordis.loaded.length),
       metricRow(t('failedPlugins'), report.counts.failedPlugins),
+      metricRow(t('breadcrumbs'), report.counts.breadcrumbs),
     ),
     runtimeItems.length === 0
       ? createElement('p', { style: styles.muted }, t('noConflicts'))
       : createElement('ul', { style: styles.diagnosticsList }, runtimeItems.map((item, index) => createElement('li', { key: `${item}-${index}` }, item))),
     createElement('p', { style: styles.muted }, t('runtimeFailureHint')),
+    createElement('h4', { style: styles.sectionLabel }, t('breadcrumbs')),
+    breadcrumbItems.length === 0
+      ? createElement('p', { style: styles.muted }, t('noBreadcrumbs'))
+      : createElement('ul', { style: styles.diagnosticsList }, breadcrumbItems.map((item, index) => createElement('li', { key: `${item}-${index}` }, item))),
+    report.breadcrumbs?.dropped > 0
+      ? createElement('p', { style: styles.muted }, `${report.breadcrumbs.dropped} ${t('breadcrumbDropped')}`)
+      : null,
+    createElement('p', { style: styles.muted }, t('breadcrumbHint')),
     createElement('h4', { style: styles.sectionLabel }, t('counts')),
     createElement('dl', { style: styles.metrics },
       metricRow(t('pluginMarkers'), report.counts.pluginMarkers),
@@ -2361,6 +2492,8 @@ module.exports = {
   installClientErrorCapture,
   getClientErrors,
   clearClientErrors,
+  getDiagnosticBreadcrumbs,
+  recordDiagnosticBreadcrumb,
   readEnabled,
   setEnabled,
   installProvenanceApi,

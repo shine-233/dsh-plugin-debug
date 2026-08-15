@@ -1,0 +1,152 @@
+{
+  "source": "trace-loop-fixture",
+  "hasMore": false,
+  "events": [
+    {
+      "event": {
+        "seq": 1,
+        "type": "request/context",
+        "data": {
+          "provider": "fixture-provider",
+          "model": "fixture-model"
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 2,
+        "type": "tool/call",
+        "data": {
+          "name": "read_file",
+          "callId": "fixture-call-a-1",
+          "arguments": {
+            "path": "/workspace/alpha.txt",
+            "mode": "metadata-only"
+          }
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 3,
+        "type": "tool/result",
+        "data": {
+          "message": {
+            "source": {
+              "callId": "fixture-call-a-1"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "isError": false,
+                "text": "fixture result is intentionally not analyzed"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 4,
+        "type": "tool/call",
+        "data": {
+          "name": "read_file",
+          "callId": "fixture-call-b-1",
+          "arguments": {
+            "path": "/workspace/beta.txt",
+            "mode": "metadata-only"
+          }
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 5,
+        "type": "tool/result",
+        "data": {
+          "message": {
+            "source": {
+              "callId": "fixture-call-b-1"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "isError": false,
+                "text": "fixture result is intentionally not analyzed"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 6,
+        "type": "tool/call",
+        "data": {
+          "name": "read_file",
+          "callId": "fixture-call-a-2",
+          "arguments": {
+            "path": "/workspace/alpha.txt",
+            "mode": "metadata-only"
+          }
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 7,
+        "type": "tool/result",
+        "data": {
+          "message": {
+            "source": {
+              "callId": "fixture-call-a-2"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "isError": false,
+                "text": "fixture result is intentionally not analyzed"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 8,
+        "type": "tool/call",
+        "data": {
+          "name": "read_file",
+          "callId": "fixture-call-b-2",
+          "arguments": {
+            "path": "/workspace/beta.txt",
+            "mode": "metadata-only"
+          }
+        }
+      }
+    },
+    {
+      "event": {
+        "seq": 9,
+        "type": "tool/result",
+        "data": {
+          "message": {
+            "source": {
+              "callId": "fixture-call-b-2"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "isError": false,
+                "text": "fixture result is intentionally not analyzed"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

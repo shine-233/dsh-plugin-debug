@@ -47,11 +47,11 @@ depend on the disabled plugin-store.
 The current candidate is verified by:
 
 ```text
-npm run check                         24 passed
+npm run check                         25 passed
 Test-DSHStandalone.ps1               PASS
 Test-DSHProvenanceIntegration.ps1    PASS
-Verify-Publication.ps1               PASS, 75 npm-pack entries
-PowerShell parser                    47 files, 0 errors
+Verify-Publication.ps1               PASS, 89 npm-pack entries
+PowerShell parser                    56 files, 0 errors
 ```
 
 Crash Guard's intentionally failing runtime is generated inside a bounded

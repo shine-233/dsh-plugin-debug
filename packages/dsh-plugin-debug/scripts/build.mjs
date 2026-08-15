@@ -48,6 +48,34 @@ const bundleManifest = {
     metadataTraceAutopsy: true,
     boundedKnownGoodRecovery: true,
     localRpcFixture: true,
+    readOnlyPluginBisectPlan: true,
+    readOnlyPluginPreflight: {
+      standaloneTool: true,
+      metadataOnly: true,
+      dynamicAccessManualReview: true,
+    },
+    readOnlyPluginDependencyGraph: {
+      standaloneTool: true,
+      metadataOnly: true,
+      missingAndCycleWarnings: true,
+    },
+    readOnlyTraceLoopAnalysis: {
+      standaloneTool: true,
+      metadataOnly: true,
+      slidingWindow: true,
+      runtimeBlocking: false,
+    },
+    diagnosticsDiff: {
+      embedded: true,
+      metadataOnly: true,
+      manualReviewOnSensitiveInput: true,
+    },
+    boundedClientBreadcrumbs: {
+      embedded: true,
+      reportSchemaVersion: 6,
+      maxItems: 80,
+      metadataOnly: true,
+    },
   },
   files,
 }

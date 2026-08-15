@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-plugin-debug",
-  "version": "0.4.0",
+  "version": "0.7.0",
   "bundleType": "dsh-npm-bundle",
   "independentRuntime": true,
   "features": {
@@ -20,12 +20,40 @@
     "externalCrashGuard": true,
     "metadataTraceAutopsy": true,
     "boundedKnownGoodRecovery": true,
-    "localRpcFixture": true
+    "localRpcFixture": true,
+    "readOnlyPluginBisectPlan": true,
+    "readOnlyPluginPreflight": {
+      "standaloneTool": true,
+      "metadataOnly": true,
+      "dynamicAccessManualReview": true
+    },
+    "readOnlyPluginDependencyGraph": {
+      "standaloneTool": true,
+      "metadataOnly": true,
+      "missingAndCycleWarnings": true
+    },
+    "readOnlyTraceLoopAnalysis": {
+      "standaloneTool": true,
+      "metadataOnly": true,
+      "slidingWindow": true,
+      "runtimeBlocking": false
+    },
+    "diagnosticsDiff": {
+      "embedded": true,
+      "metadataOnly": true,
+      "manualReviewOnSensitiveInput": true
+    },
+    "boundedClientBreadcrumbs": {
+      "embedded": true,
+      "reportSchemaVersion": 6,
+      "maxItems": 80,
+      "metadataOnly": true
+    }
   },
   "files": {
     "package.json": {
-      "bytes": 2731,
-      "sha256": "6a0131749c4bdb6fe867da899e3b967d61f3a608e3a2363e559af684398d2a49"
+      "bytes": 2817,
+      "sha256": "1b2979270c8eca2263ad9dfd3f454444429d3d435fac93f69339dac9e93c8078"
     },
     "cordis.patch.yml": {
       "bytes": 242,
@@ -36,8 +64,8 @@
       "sha256": "7d451a9d65a3085f70522f849ca4411aed1afca8a3596a2cd67a816f13c2a2c7"
     },
     "lib/client.js": {
-      "bytes": 113668,
-      "sha256": "9241dde6d772ec930b6f0ae9575fc0738b29ff35d4ba3184758803c64bb9dc94"
+      "bytes": 119964,
+      "sha256": "998fef24aed5f9a5a329063d170dbb42734b0245b73ef05163b577448bf5df1d"
     }
   }
 }

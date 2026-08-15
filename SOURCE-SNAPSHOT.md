@@ -5,7 +5,7 @@ This is the published single-package source tree. The public remote is
 
 | Component | Files | Notes |
 | --- | ---: | --- |
-| packages/dsh-plugin-debug | 75 npm-pack entries | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, Workbench and one-click launcher; the six small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer tests, while fake runtimes and temporary Profiles are generated at test time |
+| packages/dsh-plugin-debug | 89 npm-pack entries | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, startup incident receipts, read-only plugin bisect planning, diagnostics-report diffing, static plugin preflight, dependency graph inspection, offline trace-loop analysis, bounded client breadcrumbs, Workbench and one-click launcher; the nine small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer/bisect/dependency/trace-loop tests, while fake runtimes and temporary Profiles are generated at test time |
 
 The original provenance, debug-suite and one-click inputs were removed from the
 projects tree after migration review and are not package dependencies. The
@@ -13,6 +13,8 @@ store directory was already absent and remains disabled. Repeat source/hash
 comparison after any functional change; do not silently call this snapshot
 current without that comparison.
 
-The publication baseline commit is
-`c0512d0e8cf69ffc596233e4fba1836ec3923cfe`. A fresh clone has passed the same
-package and publication checks before a later change is considered released.
+The previous publication baseline commit was
+`202d4aa6369232a2dc852b5d4e898290efb7cf3b`; the 0.7.0 candidate is currently
+being revalidated locally and must receive a new commit hash after push. A
+fresh clone must pass the same package and publication checks before this
+candidate is called released.

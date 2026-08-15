@@ -26,6 +26,39 @@ function Get-StandaloneSha256 {
   }
 }
 
+function Stop-StandaloneProcessTree {
+  param([Diagnostics.Process]$Process)
+  if ($null -eq $Process) { return }
+  try {
+    if ($Process.HasExited) { return }
+  } catch { return }
+
+  # A fixture may start a server below the wrapper.  Killing only the
+  # wrapper leaves that server alive and makes the next run look hung.
+  $taskKill = Get-Command taskkill.exe -ErrorAction SilentlyContinue
+  if ($null -ne $taskKill) {
+    try {
+      & $taskKill.Source /PID ([string]$Process.Id) /T /F *> $null
+      return
+    } catch { }
+  }
+  try { $Process.Kill() } catch { }
+}
+
+function Read-StandaloneTaskText {
+  param(
+    [Parameter(Mandatory = $true)]$Task,
+    [int]$TimeoutMs = 5000
+  )
+  try {
+    if (-not $Task.Wait($TimeoutMs)) { return $null }
+    if (-not $Task.IsCompleted) { return $null }
+    return [string]$Task.Result
+  } catch {
+    return $null
+  }
+}
+
 function Invoke-PowerShellJson {
   param(
     [string]$ScriptPath,
@@ -48,6 +81,9 @@ function Invoke-PowerShellJson {
     $argumentMap[$entry.Key] = $value
   }
   $process = $null
+  $invocationWatch = [Diagnostics.Stopwatch]::StartNew()
+  $scriptName = Split-Path -Leaf $ScriptPath
+  Write-Host "[standalone] start $scriptName"
   try {
     # Start-Process returns a Process object whose ExitCode can remain null
     # after WaitForExit() when stdout/stderr are redirected under Windows
@@ -84,20 +120,26 @@ function Invoke-PowerShellJson {
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
     if (-not $process.WaitForExit($TimeoutSec * 1000)) {
-      # Kill only the bounded child wrapper. A recursive taskkill can include
-      # the outer test host on Windows when the child was launched from an
-      # encoded PowerShell command, which would suppress the JSON result.
-      try { $process.Kill() } catch { }
+      Stop-StandaloneProcessTree -Process $process
       Start-Sleep -Milliseconds 100
       $timeoutText = "child PowerShell timed out after ${TimeoutSec}s: $ScriptPath"
+      $invocationWatch.Stop()
+      Write-Host "[standalone] timeout $scriptName after $([Math]::Round($invocationWatch.Elapsed.TotalSeconds, 1))s"
       return [PSCustomObject]@{ exitCode = 124; text = $timeoutText; value = $null }
     }
-    # A second wait drains asynchronous stdout/stderr completion before the
-    # process handle is disposed, while ExitCode remains the real child code.
-    $process.WaitForExit()
+    # Do not call parameterless WaitForExit or GetResult here.  A nested
+    # fixture can inherit a redirected handle after the wrapper exits, which
+    # would otherwise block the whole standalone suite indefinitely.
     $exitCode = [int]$process.ExitCode
-    $stdout = $stdoutTask.GetAwaiter().GetResult()
-    $stderr = $stderrTask.GetAwaiter().GetResult()
+    $stdout = Read-StandaloneTaskText -Task $stdoutTask
+    $stderr = Read-StandaloneTaskText -Task $stderrTask
+    $outputDrainWarning = if ($null -eq $stdout -or $null -eq $stderr) {
+      'child output did not close within 5s after process exit'
+    } else {
+      $null
+    }
+    if ($null -eq $stdout) { $stdout = '' }
+    if ($null -eq $stderr) { $stderr = '' }
     # Windows PowerShell serializes progress records as CLIXML on the error
     # stream when stdout/stderr are redirected.  The child scripts keep their
     # JSON contract on stdout, so parse that stream first and use stderr only
@@ -108,9 +150,14 @@ function Invoke-PowerShellJson {
     } else {
       $primaryText
     }
+    if ($null -ne $outputDrainWarning) {
+      $text = if ([string]::IsNullOrWhiteSpace($text)) { $outputDrainWarning } else { "$text`n$outputDrainWarning" }
+    }
   } finally {
     if ($null -ne $process) { $process.Dispose() }
   }
+  $invocationWatch.Stop()
+  Write-Host "[standalone] done $scriptName exit=$exitCode after $([Math]::Round($invocationWatch.Elapsed.TotalSeconds, 1))s"
   $value = $null
   try {
     if (-not [string]::IsNullOrWhiteSpace($stdout)) {
@@ -132,6 +179,8 @@ $expected = @(
   'DSH-Trace.psm1',
   'DSH-TraceAutopsy.psm1',
   'DSH-TraceEval.ps1',
+  'DSH-TraceLoop.ps1',
+  'Test-DSHTraceLoop.ps1',
   'Test-DSHTraceProfile.ps1',
   'DSH-IncidentCorrelation.psm1',
   'Test-DSHTraceAutopsy.ps1',
@@ -153,6 +202,16 @@ $expected = @(
   'Set-DSHPluginState.ps1',
   'Start-DSH.ps1',
   'Test-DSHLauncherConflict.ps1',
+  'DSH-Bisect.ps1',
+  'Test-DSHBisect.ps1',
+  'DSH-Preflight.ps1',
+  'Test-DSHPreflight.ps1',
+  'DSH-DependencyGraph.ps1',
+  'Test-DSHDependencyGraph.ps1',
+  'DSH-TraceLoop.ps1',
+  'Test-DSHTraceLoop.ps1',
+  'DSH-DiagnosticsDiff.ps1',
+  'Test-DSHDiagnosticsDiff.ps1',
   'DSH-ProvenanceSuite.ps1',
   'Test-DSHRuntimeSupervisor.ps1',
   'runtime\package.json',
@@ -161,7 +220,10 @@ $expected = @(
   'fixtures\tool-call-baseline.json',
   'fixtures\tool-call-incomplete-page.json',
   'fixtures\tool-call-incomplete-page-case.json',
-  'fixtures\pointer-browser.html'
+  'fixtures\pointer-browser.html',
+  'fixtures\plugin-bisect-plan.json',
+  'fixtures\plugin-dependency-graph.json',
+  'fixtures\trace-loop.json'
 )
 foreach ($relative in $expected) {
   Assert-Standalone (Test-Path -LiteralPath (Join-Path $toolRoot $relative) -PathType Leaf) "missing standalone file: $relative"
@@ -559,6 +621,49 @@ fs.cpSync(source, installedRoot, { recursive: true });
 
   $reproFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHRepro.ps1') -Arguments @{}
   Assert-Standalone ($reproFixture.exitCode -eq 0 -and $reproFixture.value.result -eq 'PASS' -and $reproFixture.value.offline -eq $true -and $reproFixture.value.networkAccessed -eq $false) "repro export fixture did not return PASS: $($reproFixture.text)"
+  $fixtureChecks++
+
+  $bisectInputPath = Join-Path $toolRoot 'fixtures\plugin-bisect-plan.json'
+  $bisectFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{
+    Action = 'plugin-bisect-plan'
+    InputPath = $bisectInputPath
+  }
+  Assert-Standalone ($bisectFixture.exitCode -eq 0 -and $bisectFixture.value.result -eq 'PASS') "plugin-bisect-plan did not return PASS: $($bisectFixture.text)"
+  Assert-Standalone ($bisectFixture.value.offline -eq $true -and $bisectFixture.value.networkAccessed -eq $false -and $bisectFixture.value.safety.autoDisabled -eq $false) 'plugin-bisect-plan crossed the offline or no-auto-disable boundary'
+  Assert-Standalone (@($bisectFixture.value.candidates | Where-Object { $_.classification -eq 'safe' -and $_.pluginId -eq 'fixture-dsh-plugin' }).Count -eq 1) 'plugin-bisect-plan did not retain the safe mapped candidate'
+  Assert-Standalone (@($bisectFixture.value.candidates | Where-Object { $_.classification -eq 'protected' -and $_.reason -eq 'core-package' }).Count -eq 1) 'plugin-bisect-plan did not protect the DSH core candidate'
+  $fixtureChecks++
+
+  $bisectPublicWrapper = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'Debug-DSH.ps1') -Arguments @{
+    Action = 'plugin-bisect-plan'
+    InputPath = $bisectInputPath
+  }
+  Assert-Standalone ($bisectPublicWrapper.exitCode -eq 0 -and $bisectPublicWrapper.value.result -eq 'PASS') "Debug-DSH wrapper did not preserve named argument binding: $($bisectPublicWrapper.text)"
+  $fixtureChecks++
+
+  $bisectTest = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHBisect.ps1') -Arguments @{}
+  Assert-Standalone ($bisectTest.exitCode -eq 0 -and $bisectTest.value.result -eq 'PASS' -and $bisectTest.value.privacyContract -eq $true -and $bisectTest.value.mutationContract -eq $true) "plugin-bisect test did not return PASS: $($bisectTest.text)"
+  $fixtureChecks++
+
+  $preflightTest = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHPreflight.ps1') -Arguments @{}
+  Assert-Standalone ($preflightTest.exitCode -eq 0 -and $preflightTest.value.result -eq 'PASS') "plugin preflight test did not return PASS: $($preflightTest.text)"
+  Assert-Standalone ($preflightTest.value.metadataOnly -eq $true -and $preflightTest.value.networkAccessed -eq $false -and $preflightTest.value.dynamicResult -eq 'MANUAL_REVIEW') 'plugin preflight test crossed its safety or dynamic-input boundary'
+  $fixtureChecks++
+
+  $traceLoopTest = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHTraceLoop.ps1') -Arguments @{}
+  Assert-Standalone ($traceLoopTest.exitCode -eq 0 -and $traceLoopTest.value.result -eq 'PASS') "trace loop test did not return PASS: $($traceLoopTest.text)"
+  Assert-Standalone ($traceLoopTest.value.metadataOnly -eq $true -and $traceLoopTest.value.networkAccessed -eq $false -and $traceLoopTest.value.loopDetected -eq $true) 'trace loop test crossed its offline/privacy boundary'
+  $fixtureChecks++
+
+  $dependencyGraphTest = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHDependencyGraph.ps1') -Arguments @{}
+  Assert-Standalone ($dependencyGraphTest.exitCode -eq 0 -and $dependencyGraphTest.value.result -eq 'PASS') "dependency graph test did not return PASS: $($dependencyGraphTest.text)"
+  Assert-Standalone ($dependencyGraphTest.value.metadataOnly -eq $true -and $dependencyGraphTest.value.networkAccessed -eq $false) 'dependency graph test crossed its offline/privacy boundary'
+  $fixtureChecks++
+
+  $diagnosticsDiffTest = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHDiagnosticsDiff.ps1') -Arguments @{}
+  Assert-Standalone ($diagnosticsDiffTest.exitCode -eq 0 -and $diagnosticsDiffTest.value.result -eq 'PASS') "diagnostics diff test did not return PASS: $($diagnosticsDiffTest.text)"
+  Assert-Standalone ($diagnosticsDiffTest.value.metadataOnly -eq $true -and $diagnosticsDiffTest.value.networkAccessed -eq $false) 'diagnostics diff test crossed its offline/privacy boundary'
+  Assert-Standalone ($diagnosticsDiffTest.value.manualReview -eq 'MANUAL_REVIEW' -and $diagnosticsDiffTest.value.invalidInput -eq 'FAIL') 'diagnostics diff negative paths were not fail-closed'
   $fixtureChecks++
 
   $diagnosticsPath = Join-Path $tempRoot 'repair-diagnostics.json'
