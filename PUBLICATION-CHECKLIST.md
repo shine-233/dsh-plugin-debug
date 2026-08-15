@@ -49,4 +49,4 @@ proof of a real production DSH or successful GitHub publication.
 - [x] A reviewed local first commit exists.
 - [x] Remote URL is explicitly confirmed before configuration.
 - [x] Push is performed only after staged contents are approved.
-- [ ] A fresh clone passes the single-package tests and publication checks.
+- [x] A fresh clone passes the single-package tests and publication checks.
