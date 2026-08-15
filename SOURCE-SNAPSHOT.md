@@ -5,7 +5,7 @@ This is the published single-package source tree. The public remote is
 
 | Component | Files | Notes |
 | --- | ---: | --- |
-| packages/dsh-plugin-debug | 79 npm-pack entries | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, Workbench and one-click launcher; test programs stay in the GitHub source tree, while temporary fixtures are generated at test time |
+| packages/dsh-plugin-debug | 79 npm-pack entries | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, Workbench and one-click launcher; the six small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer tests, while fake runtimes and temporary Profiles are generated at test time |
 
 The original provenance, debug-suite and one-click inputs were removed from the
 projects tree after migration review and are not package dependencies. The
@@ -14,5 +14,5 @@ comparison after any functional change; do not silently call this snapshot
 current without that comparison.
 
 The publication baseline commit is
-`181fc80e39bd55a2e61f75198fbc8cabc8380259`. A fresh clone must pass the same
+`b1319fecab127d609b2f65d80b6485c0ee12ec9c`. A fresh clone must pass the same
 package and publication checks before a later change is considered released.
