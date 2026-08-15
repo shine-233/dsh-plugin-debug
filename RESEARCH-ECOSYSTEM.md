@@ -83,3 +83,20 @@ Session。无法明确归因、缺少 evidence、目标是核心包或 receipt �
 
 第三方项目的名称和链接仅用于研究引用；本项目没有复制它们的源码。发布前
 仍应逐个确认第三方仓库的许可证和版本信息，不能仅凭 README 推断许可证。
+
+本轮 GitHub 公开元数据中看到的 SPDX 线索如下；它们只是 API 元数据，不是
+法律意见，也不改变本项目的 MIT 许可证：
+
+| 项目 | 公开 SPDX 线索 |
+| --- | --- |
+| `zoahdev/dsh-plugin-doctor` | MIT |
+| `chenw2759-wq/dsh-plugin-healthcheck` | MIT |
+| `gordonlu/dsh-context-lens` | MIT |
+| `wellorbetter/dsh-plugin-window-stats` | MIT |
+| `PangYiMing/dsh-bisect-debug` | MIT |
+| `linyp/dsh-plugin-langfuse` | MIT |
+| `LX2000WASD/dsh-web-plugin-manager` | MIT |
+| `awesome-dsh-plugin/awesome-dsh-plugin` | CC0-1.0 |
+
+许可证信息只用于决定是否需要进一步人工复核；本项目没有把这些仓库作为
+依赖，也没有复制其源码、测试 fixture 或发布脚本。

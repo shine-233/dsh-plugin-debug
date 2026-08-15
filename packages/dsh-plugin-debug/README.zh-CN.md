@@ -96,7 +96,9 @@ Set-Location .
 5. 修改 `package.json` 的 `version`，同步 `package-lock.json`，确认 CHANGELOG/README 描述与行为一致。
 6. 先在本地做一次可审阅的 commit，再配置明确的 GitHub remote；新仓库第一次发布前应从 fresh clone 重跑测试。
 
-当前候选仍是 `local-not-pushed`：没有配置 GitHub owner、仓库名、remote 或 push。没有这些信息时，不会把“本地验证通过”写成“已经发布”。
+发布前候选状态、GitHub remote、fresh clone 验证结果会记录在仓库根目录的
+`RELEASE-MANIFEST.json` 和 `SOURCE-SNAPSHOT.md`；本地测试通过不等于真实 DSH
+生产实例已经验证。
 
 ## 研究和吸收边界
 

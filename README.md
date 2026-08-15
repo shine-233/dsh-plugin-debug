@@ -75,5 +75,7 @@ production DSH, GitHub account, device or external service.
 
 The candidate must not contain `.dsh`, `.codex`, Profile state, logs, state,
 coverage, `node_modules`, credentials, private keys or temporary artifacts.
-No GitHub repository, remote, commit or push is configured by this snapshot.
-See `PUBLICATION-CHECKLIST.md` and `PUBLISHING.md` before any first commit.
+The first public release is available at
+`https://github.com/shine-233/dsh-plugin-debug` on `main`. A fresh-clone
+verification is still a separate release gate; see `PUBLICATION-CHECKLIST.md`
+and `PUBLISHING.md` before publishing later changes.

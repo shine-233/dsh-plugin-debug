@@ -19,7 +19,8 @@ $storeDirs = @(Get-ChildItem -LiteralPath $root -Recurse -Force -Directory -Filt
 Assert-Publication ($storeDirs.Count -eq 0) 'removed plugin-store directory is present'
 
 foreach ($name in @('node_modules', 'coverage', 'logs', 'state', '.dsh', '.codex', 'sessions')) {
-  $residue = @(Get-ChildItem -LiteralPath $root -Recurse -Force -Directory -Filter $name -ErrorAction SilentlyContinue)
+  $residue = @(Get-ChildItem -LiteralPath $root -Recurse -Force -Directory -Filter $name -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '(?i)[\\/]\.git(?:[\\/]|$)' })
   Assert-Publication ($residue.Count -eq 0) "publication candidate contains forbidden directory: $name"
 }
 $nestedGit = @(Get-ChildItem -LiteralPath $root -Force -Directory | Where-Object { $_.Name -ne '.git' } | ForEach-Object {

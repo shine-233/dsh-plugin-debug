@@ -1,7 +1,7 @@
 # Source snapshot status
 
-This is one local, uncommitted, unpublished package candidate. It has no
-configured remote and has not been pushed to GitHub.
+This is the published single-package source tree. The public remote is
+`https://github.com/shine-233/dsh-plugin-debug.git`, default branch `main`.
 
 | Component | Files | Notes |
 | --- | ---: | --- |
@@ -12,3 +12,7 @@ projects tree after migration review and are not package dependencies. The
 store directory was already absent and remains disabled. Repeat source/hash
 comparison after any functional change; do not silently call this snapshot
 current without that comparison.
+
+The publication baseline commit is
+`181fc80e39bd55a2e61f75198fbc8cabc8380259`. A fresh clone must pass the same
+package and publication checks before a later change is considered released.
