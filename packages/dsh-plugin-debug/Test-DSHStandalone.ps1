@@ -773,7 +773,16 @@ fs.cpSync(source, installedRoot, { recursive: true });
   $fixtureChecks++
 } finally {
   if (Test-Path -LiteralPath $tempRoot) {
-    Remove-Item -LiteralPath $tempRoot -Recurse -Force
+    $cleanupDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+      try {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction Stop
+        break
+      } catch {
+        if ([DateTime]::UtcNow -ge $cleanupDeadline) { throw }
+        Start-Sleep -Milliseconds 100
+      }
+    } while ([DateTime]::UtcNow -lt $cleanupDeadline)
   }
 }
 

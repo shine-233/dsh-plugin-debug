@@ -67,6 +67,12 @@ function Stop-FixtureProcesses {
       if (-not $launcherProcess.HasExited) { Stop-Process -Id $launcherProcess.Id -Force -ErrorAction SilentlyContinue }
     } catch { }
   }
+  $deadline = [DateTime]::UtcNow.AddSeconds(5)
+  while ([DateTime]::UtcNow -lt $deadline) {
+    $active = @($fixtureProcess, $launcherProcess | Where-Object { $null -ne $_ -and -not $_.HasExited })
+    if ($active.Count -eq 0) { break }
+    Start-Sleep -Milliseconds 100
+  }
 }
 
 try {
@@ -200,5 +206,16 @@ process.on('SIGINT', close);
   Stop-FixtureProcesses
   if ($null -eq $previousDshHome) { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue } else { $env:DSH_HOME = $previousDshHome }
   Remove-Item Env:DSH_RUNTIME_SUPERVISOR_BOOT_FILE -ErrorAction SilentlyContinue
-  if (Test-Path -LiteralPath $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue }
+  if (Test-Path -LiteralPath $tempRoot) {
+    $cleanupDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+      try {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction Stop
+        break
+      } catch {
+        if ([DateTime]::UtcNow -ge $cleanupDeadline) { break }
+        Start-Sleep -Milliseconds 100
+      }
+    } while ([DateTime]::UtcNow -lt $cleanupDeadline)
+  }
 }
