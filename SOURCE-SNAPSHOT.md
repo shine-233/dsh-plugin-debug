@@ -14,5 +14,5 @@ comparison after any functional change; do not silently call this snapshot
 current without that comparison.
 
 The publication baseline commit is
-`e545188818aebac706686ba7fe8255a93e72e424`. A fresh clone has passed the same
+`c0512d0e8cf69ffc596233e4fba1836ec3923cfe`. A fresh clone has passed the same
 package and publication checks before a later change is considered released.
