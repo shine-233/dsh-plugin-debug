@@ -5,7 +5,7 @@ This is the published single-package source tree. The public remote is
 
 | Component | Files | Notes |
 | --- | ---: | --- |
-| packages/dsh-plugin-debug | 79 npm-pack entries | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, Workbench and one-click launcher; the six small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer tests, while fake runtimes and temporary Profiles are generated at test time |
+| packages/dsh-plugin-debug | 75 npm-pack entries | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, Workbench and one-click launcher; the six small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer tests, while fake runtimes and temporary Profiles are generated at test time |
 
 The original provenance, debug-suite and one-click inputs were removed from the
 projects tree after migration review and are not package dependencies. The

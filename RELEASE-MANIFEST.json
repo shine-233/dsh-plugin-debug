@@ -16,7 +16,7 @@
   "verification": {
     "sourceSnapshotComparedAt": "2026-08-16",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
-    "packageFileCount": 79
+    "packageFileCount": 75
   },
   "layout": {
     "packageRoot": "packages/dsh-plugin-debug",

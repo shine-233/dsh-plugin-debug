@@ -50,7 +50,7 @@ The current candidate is verified by:
 npm run check                         24 passed
 Test-DSHStandalone.ps1               PASS
 Test-DSHProvenanceIntegration.ps1    PASS
-Verify-Publication.ps1               PASS, 79 npm-pack entries
+Verify-Publication.ps1               PASS, 75 npm-pack entries
 PowerShell parser                    47 files, 0 errors
 ```
 

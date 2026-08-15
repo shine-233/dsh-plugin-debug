@@ -74,9 +74,14 @@ npm run check
 .\tools\Test-DSHLauncherConflict.ps1
 .\tools\Test-DSHCrashGuard.ps1
 .\tools\Test-DSHRuntimeSupervisor.ps1
+.\tools\Test-DSHGuard.ps1
+.\tools\Test-DSHPluginHealth.ps1
+.\tools\Test-DSHPluginState.ps1
+.\tools\Test-DSHRecovery.ps1
 .\tools\Test-DSHTraceProfile.ps1
 .\tools\Test-DSHResourcePressure.ps1
 .\tools\Test-DSHIncidentRuntimeEvidence.ps1
+.\tools\Test-DSHPointerBrowser.ps1  # 可选；退出码 2 表示浏览器运行时不可用
 Pop-Location
 
 Set-Location .
@@ -84,6 +89,8 @@ Set-Location .
 ```
 
 `tools\\fixtures` 中的 JSON/HTML 是合成且脱敏的输入数据，会被 trace 和浏览器契约测试直接引用。Crash Guard、启动冲突和 runtime supervisor 的 fake DSH 会在测试运行时创建到临时目录，测试结束后清理；仓库中没有真实 Profile、日志、凭据或崩溃转储。
+
+`Test-DSHPointerBrowser.ps1` 需要 `python.exe`、`npx` 和可用的 Playwright 浏览器 daemon；缺少这些依赖时只报告 `UNAVAILABLE`，不会把静态 HTML 加载冒充成真实 DSH Web 验证。
 
 `npm pack --dry-run --ignore-scripts` 只验证可发布包。GitHub 源码可以包含测试脚本和测试输入，但 npm/DSH 包不应包含 `node_modules`、state、logs、`.env`、凭据或任何本机运行生成物。
 

@@ -49,3 +49,10 @@ jobs:
       - name: Run incident runtime-evidence regression
         shell: powershell
         run: .\packages\dsh-plugin-debug\tools\Test-DSHIncidentRuntimeEvidence.ps1
+      - name: Run Guard and recovery regressions
+        shell: powershell
+        run: |
+          .\packages\dsh-plugin-debug\tools\Test-DSHGuard.ps1
+          .\packages\dsh-plugin-debug\tools\Test-DSHPluginHealth.ps1
+          .\packages\dsh-plugin-debug\tools\Test-DSHPluginState.ps1
+          .\packages\dsh-plugin-debug\tools\Test-DSHRecovery.ps1

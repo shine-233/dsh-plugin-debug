@@ -29,6 +29,11 @@ npm run check
 .\tools\Test-DSHProvenanceIntegration.ps1
 .\tools\Test-DSHResourcePressure.ps1
 .\tools\Test-DSHIncidentRuntimeEvidence.ps1
+.\tools\Test-DSHGuard.ps1
+.\tools\Test-DSHPluginHealth.ps1
+.\tools\Test-DSHPluginState.ps1
+.\tools\Test-DSHRecovery.ps1
+.\tools\Test-DSHPointerBrowser.ps1  # optional; exit 2 means browser runtime unavailable
 Pop-Location
 
 Set-Location .

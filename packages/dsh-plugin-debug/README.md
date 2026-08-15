@@ -173,6 +173,10 @@ git diff --check
 所有者、版权人和 remote 后再提交或 push；本地测试通过不等于真实 DSH 或 GitHub
 运行验证通过。
 
+`Test-DSHPointerBrowser.ps1` needs `python.exe`, `npx`, and a usable Playwright
+browser daemon. Missing browser dependencies are reported as `UNAVAILABLE`, not
+as proof of a real DSH Web verification.
+
 ## 统一入口示例
 
 ```powershell
@@ -317,6 +321,11 @@ npm run check
 .\Test-DSHStandalone.ps1
 .\tools\Test-DSHResourcePressure.ps1
 .\tools\Test-DSHIncidentRuntimeEvidence.ps1
+.\tools\Test-DSHGuard.ps1
+.\tools\Test-DSHPluginHealth.ps1
+.\tools\Test-DSHPluginState.ps1
+.\tools\Test-DSHRecovery.ps1
+.\tools\Test-DSHPointerBrowser.ps1  # optional; exit 2 means browser runtime unavailable
 Pop-Location
 ```
 
