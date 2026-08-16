@@ -192,7 +192,7 @@ Pop-Location
 `tools/runtime/node_modules`。runtime 安装属于本地/CI 测试准备，不属于 GitHub
 源码或 npm 发布内容。
 
-`tools\\fixtures` 中的 JSON/HTML 是合成且脱敏的输入数据，会被 trace 和浏览器契约测试直接引用。Trace fixture 只保存事件类型、调用键名、权限枚举、错误代码和 pending/错误语义，不保存 raw arguments、Tool result 正文、Token 或危险命令。Recovery fixture 会证明 `.env` 只标记为存在但排除，快照和 restore 都不会接触其内容。Crash Guard、启动冲突和 runtime supervisor 的 fake DSH 会在测试运行时创建到临时目录，测试结束后清理；仓库中没有真实 Profile、日志、凭据或崩溃转储。
+`tools\fixtures` 中的 JSON/HTML 是合成且脱敏的输入数据，会被 trace 和浏览器契约测试直接引用。Trace fixture 只保存事件类型、调用键名、权限枚举、错误代码和 pending/错误语义，不保存 raw arguments、Tool result 正文、Token 或危险命令。Recovery fixture 会证明 `.env` 只标记为存在但排除，快照和 restore 都不会接触其内容。Crash Guard、启动冲突和 runtime supervisor 的 fake DSH 会在测试运行时创建到临时目录，测试结束后清理；仓库中没有真实 Profile、日志、凭据或崩溃转储。
 
 `Test-DSHPointerBrowser.ps1` 需要 `python.exe`、`npx` 和可用的 Playwright 浏览器 daemon；缺少这些依赖时只报告 `UNAVAILABLE`，不会把静态 HTML 加载冒充成真实 DSH Web 验证。
 

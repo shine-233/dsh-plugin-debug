@@ -9,10 +9,10 @@
 环境要求：Windows PowerShell、Node.js 22 或更高版本。进入包目录后可以运行：
 
 ```powershell
-Set-Location .\\packages\\dsh-plugin-debug
+Set-Location .\packages\dsh-plugin-debug
 npm ci --ignore-scripts
 npm test
-.\\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -NoBrowser
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -NoBrowser
 ```
 
 只想安装本地包时，也可以使用 DSH CLI：
@@ -24,8 +24,8 @@ dsh plugin --profile debug add . --offline
 首次启动如果本地还没有固定版本的 DSH runtime，启动器可能先下载 pinned runtime；`--offline` 只约束本地 Debug bundle 安装。更新已经安装到 Profile 的本地源码时，先停止同一个 Profile/端口，再显式强制覆盖 bundle：
 
 ```powershell
-.\\tools\\Stop-DSH.ps1 -Profile debug -Port 3081
-.\\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -ForcePluginInstall -NoBrowser
+.\tools\Stop-DSH.ps1 -Profile debug -Port 3081
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -ForcePluginInstall -NoBrowser
 ```
 
 ## 安全边界

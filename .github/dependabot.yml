@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Keep the package runtime lockfile current without changing the published
+  # package boundary or running install scripts in CI.
+  - package-ecosystem: npm
+    directory: /packages/dsh-plugin-debug
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+
+  # The pinned DSH runtime is maintained separately from the plugin's own
+  # development dependency graph.
+  - package-ecosystem: npm
+    directory: /packages/dsh-plugin-debug/tools/runtime
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - dsh-runtime
+
+  # Keep Actions versions current as part of the same reviewable workflow.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions

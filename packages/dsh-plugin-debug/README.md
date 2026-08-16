@@ -4,6 +4,32 @@
 
 本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。候选发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库中的 [`RELEASE-MANIFEST.json`](https://github.com/shine-233/dsh-plugin-debug/blob/main/RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](https://github.com/shine-233/dsh-plugin-debug/blob/main/SOURCE-SNAPSHOT.md) 和远端提交为准。
 
+## 小白快速开始
+
+你只需要先做下面三步。命令都在 Windows PowerShell 中执行：
+
+```powershell
+Set-Location .\packages\dsh-plugin-debug
+npm ci --ignore-scripts
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -NoBrowser
+```
+
+启动后打开 `http://127.0.0.1:3081`。如果只想做离线检查、不启动 DSH：
+
+```powershell
+npm test
+.\Test-DSHStandalone.ps1
+```
+
+更新已经安装到同一个 Profile 的本地源码时，先停止旧实例，再强制覆盖 bundle：
+
+```powershell
+.\tools\Stop-DSH.ps1 -Profile debug -Port 3081
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -ForcePluginInstall -NoBrowser
+```
+
+结果这样看：`PASS` 是通过，`UNAVAILABLE` 是本机缺少对应服务，`PARTIAL/WARN` 是证据不完整，`FAIL` 是检查失败。报告写出来不等于生产 DSH 已恢复。
+
 ## 适用范围
 
 它适合在 Windows PowerShell 中排查以下问题：

@@ -34,6 +34,19 @@ foreach ($repo in $repos) { gh api "repos/$repo" }
 
 ## 核对过的公开项目
 
+### 2026-08-16 GitHub 搜索复查
+
+本次用 GitHub 公共仓库搜索复查了 `dsh debug plugin`，结果中出现了几类值得区分的项目：
+
+- [yefei124/superpowers-workflow](https://github.com/yefei124/superpowers-workflow)：偏开发流程引导（头脑风暴、计划、TDD、调试和 Markdown 导出），不是运行时诊断器；可借鉴新手引导，但不应把工作流提示当成故障证据。
+- [PangYiMing/dsh-bisect-debug](https://github.com/PangYiMing/dsh-bisect-debug)：专门做代码/边界/commit 二分；本项目继续只输出安全候选计划，不自动切换工作树或执行 reset。
+- [akira399/dsh-guardian](https://github.com/akira399/dsh-guardian)：任务循环、递归和中断保护；本项目已用独立实现吸收 observer-only 形状，并继续禁止任务/进程终止。
+- [zoahdev/dsh-plugin-doctor](https://github.com/zoahdev/dsh-plugin-doctor) 与 [jorinyang/dsh-doctor](https://github.com/jorinyang/dsh-doctor)：分别强调插件打包/安装门禁与环境/端口/Profile 诊断；本项目已具备对应的离线边界检查和只读 doctor，但真实 fresh-profile/生产 Web readiness 仍单独标注。
+- [jkrandom-sudo/dsh-ci-doctor](https://github.com/jkrandom-sudo/dsh-ci-doctor)：把 Actions 失败转换为结构化诊断卡和重复失败账本；本项目本轮先打开 Dependabot、CodeQL 和定期 CI，不引入常驻 GitHub watcher 或外部 telemetry。
+- [dongsheng123132/harness-doctor](https://github.com/dongsheng123132/harness-doctor)：只读 support bundle 和 allowlist 修复；本项目保留 metadata-only repro export，仍拒绝无 allowlist 的完整目录打包。
+
+这些项目的仓库描述、默认分支、许可证元数据和更新时间通过 GitHub 公共 API 在本日期读取；它们不是本项目的运行时依赖，也没有复制第三方源码。搜索结果不能证明生态完整，功能结论仍以各仓库当前 README/代码为准。
+
 | 项目 | SPDX 元数据 | 观察到的能力 | 本项目的吸收或拒绝决定 |
 | --- | --- | --- | --- |
 | [zoahdev/dsh-plugin-doctor](https://github.com/zoahdev/dsh-plugin-doctor) | MIT | manifest/patch/entry/files 检查、fresh-profile 安装、BOM、大文件、入口副作用、环境检查、JSON CI 报告 | 吸收分层 doctor、fresh-profile 验证和可机器读取报告；本项目仍以离线、只读、边界明确为默认 |

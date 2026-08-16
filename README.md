@@ -12,6 +12,33 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 
 本项目面向 Windows PowerShell，建议使用 Node.js 22 或更高版本。它可以在没有真实 DSH 服务的情况下运行离线测试；启动真实 Web 页面、浏览器契约测试或 Host API 测试时，仍然需要相应的本机 DSH、Python、npx 或 Playwright 环境。
 
+## 不懂代码也能启动：只做这三步
+
+1. 安装 Node.js 22 或更高版本，然后在 PowerShell 进入仓库根目录。
+2. 复制下面三行命令；第一次会安装测试依赖，启动时只安装本地 Debug 包：
+
+   ```powershell
+   Set-Location .\packages\dsh-plugin-debug
+   npm ci --ignore-scripts
+   .\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -NoBrowser
+   ```
+
+3. 看到 JSON 或窗口后，再打开 `http://127.0.0.1:3081`。如果你只是想检查文件，不想启动 DSH，运行：
+
+   ```powershell
+   npm test
+   .\Test-DSHStandalone.ps1
+   ```
+
+更新已经安装过的本地插件时，先停止旧实例，再加 `-ForcePluginInstall`；不要直接重复启动后猜测源码是否已覆盖：
+
+```powershell
+.\tools\Stop-DSH.ps1 -Profile debug -Port 3081
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -ForcePluginInstall -NoBrowser
+```
+
+看到 `PASS` 表示这项检查通过；`UNAVAILABLE` 表示本机没有对应的 DSH/浏览器/Host 服务；`PARTIAL` 或 `WARN` 表示只有部分证据；`FAIL` 才表示检查本身失败。任何一个报告生成成功，都不等于真实生产 DSH 已经恢复。
+
 - 想先启动：看下面的“安装与启动”。
 - 想逐项了解动作、输入和安全边界：阅读 [`packages/dsh-plugin-debug/README.zh-CN.md`](packages/dsh-plugin-debug/README.zh-CN.md)。
 - 想确认源码是否可公开：运行 [`scripts/Verify-Publication.ps1`](scripts/Verify-Publication.ps1)，再看 [`PUBLICATION-CHECKLIST.md`](PUBLICATION-CHECKLIST.md)。
@@ -186,6 +213,16 @@ npm run check:integration
 7. 发布后再读取远端提交哈希，并把 `RELEASE-MANIFEST.json` 的发布字段和 `SOURCE-SNAPSHOT.md` 更新为事实；不能用旧提交哈希冒充新版本。
 
 不要把 `node_modules`、`.dsh`、`.codex`、Profile state、logs、coverage、credentials、临时 fake runtime 或测试输出提交进仓库。功能继续扩展时，必须保持单包边界、默认离线、仅元数据和失败即停止（fail-closed）的安全契约。
+
+## GitHub 自动维护现在已经打开什么
+
+- `DSH Debug Plugin CI`：提交、Pull Request、手动触发和每周定时运行；包含 Node、Windows PowerShell、发布边界和 fresh clone 门禁。
+- `CodeQL`：扫描 JavaScript/TypeScript 和 GitHub Actions workflow；它只报告安全问题，不会改变插件运行时。
+- `Dependabot`：每月检查插件依赖、固定 runtime 依赖和 Actions 版本，生成可审阅的更新 PR。
+- GitHub 依赖漏洞告警和自动安全修复：已在仓库设置中打开。
+- Issue/PR 模板：诊断报告、功能建议和隐私/测试检查都放在仓库根目录的 `.github/` 下，GitHub 页面会真正读取这些文件。
+
+这些自动化也不能替代本地测试、真实 DSH/浏览器验证或人工审阅；看到 CI 变绿时，仍要看它覆盖的是哪一层。
 
 ## 当前开源边界
 
