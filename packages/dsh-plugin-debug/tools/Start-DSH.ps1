@@ -533,9 +533,13 @@ function Get-DshSupervisorSnapshot {
     catch { $inventoryError = $_.Exception.Message }
   }
   $failed = @($entries | Where-Object { [string]$_.fiberPhase -eq 'failed' })
-  $candidates = if ($script:GuardAvailable -and $null -ne $script:GuardManifest) {
-    @(Get-DshGuardCandidates -Entries $entries -Manifest $script:GuardManifest)
-  } else { @() }
+  # Keep the collection shape explicit. Windows PowerShell unwraps a single
+  # object emitted by an if-expression, so `$candidates.Count` otherwise
+  # becomes `$null` exactly when one safe plugin is observed.
+  $candidates = @()
+  if ($script:GuardAvailable -and $null -ne $script:GuardManifest) {
+    $candidates = @(Get-DshGuardCandidates -Entries $entries -Manifest $script:GuardManifest)
+  }
   return [ordered]@{
     checkedAt = (Get-Date).ToUniversalTime().ToString('o')
     processAlive = $processAlive
@@ -544,10 +548,10 @@ function Get-DshSupervisorSnapshot {
     httpStatus = [int]$probe.StatusCode
     inventoryObserved = $probe.Reachable -and $probe.IsDsh
     inventoryError = if ($null -eq $inventoryError) { $null } else { Get-SafeSupervisorText -Value $inventoryError }
-    entryCount = $entries.Count
-    failedCount = $failed.Count
+    entryCount = @($entries).Count
+    failedCount = @($failed).Count
     failedModules = @($failed | ForEach-Object { [string]$_.moduleName } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
-    candidateCount = $candidates.Count
+    candidateCount = @($candidates).Count
     candidateModules = @($candidates | ForEach-Object { [string]$_.moduleName } | Sort-Object -Unique)
     # Keep the resolved, manifest-backed candidates in the in-memory snapshot
     # so the supervisor can register the exact live inventory evidence. This
@@ -1235,6 +1239,7 @@ try {
           Write-LauncherLog "supervisor cleanup warning for pid=$($process.Id): $($_.Exception.Message)"
         }
         if (Test-Path -LiteralPath $PidFile -PathType Leaf) { Remove-Item -LiteralPath $PidFile -Force }
+        Wait-DshPortReleasedOrThrow -Reason 'runtime supervisor restart'
         continue
       }
       if ([string]$supervisorResult.status -ne 'healthy') {

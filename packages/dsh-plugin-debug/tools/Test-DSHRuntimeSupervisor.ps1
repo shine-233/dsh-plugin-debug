@@ -136,25 +136,28 @@ if (priorBoots > 0 && !unresolvedPlugin && (!/id:\s*'test-dsh-plugin'/.test(patc
   process.exit(48);
 }
 let failed = false;
+let inventoryRequests = 0;
 const port = Number(argument('--port'));
 const server = http.createServer((request, response) => {
   if (request.url === '/api/pluginInventory/list') {
+    inventoryRequests += 1;
     response.setHeader('content-type', 'application/json');
     const entries = failed ? [{ entryId: failingModule, moduleName: failingModule, enabled: true, fiberPhase: 'failed' }] : [];
     response.end(JSON.stringify({ result: { ok: true, value: { entries } } }));
+    // The first inventory request is the launcher's ready check. Fail only
+    // after that response so the test deterministically exercises the
+    // keep-alive supervisor's runtime restart path instead of sometimes
+    // racing startup Crash Guard on a busy Windows runner.
+    if (priorBoots === 0 && inventoryRequests === 1) {
+      failed = true;
+      process.stderr.write('Error: test-dsh-plugin runtime failed after Web ready\n');
+    }
     return;
   }
   response.setHeader('content-type', 'text/html; charset=utf-8');
   response.end('<!doctype html><title>DeepSeek Harness runtime supervisor fixture</title><main>DeepSeek Harness fixture ready</main>');
 });
 server.listen(port, '127.0.0.1');
-if (priorBoots === 0) {
-  setTimeout(() => {
-    failed = true;
-    process.stderr.write('Error: test-dsh-plugin runtime failed after Web ready\n');
-    if (!unresolvedPlugin) setTimeout(() => process.exit(47), 350);
-  }, 1000);
-}
 const close = () => server.close(() => process.exit(0));
 process.on('SIGTERM', close);
 process.on('SIGINT', close);
@@ -253,7 +256,16 @@ process.on('SIGINT', close);
   }
   if (-not $recovered) {
     $log = Read-FixtureText -Path $launcherLogPath
-    throw "runtime supervisor did not recover within ${TimeoutSec}s; boots=$(Read-BootCount); log=$log"
+    $supervisorStateText = if (Test-Path -LiteralPath (Join-Path $fixtureState 'supervisor-state.json') -PathType Leaf) {
+      Get-Content -LiteralPath (Join-Path $fixtureState 'supervisor-state.json') -Raw -Encoding UTF8
+    } else { '' }
+    $guardStateText = if (Test-Path -LiteralPath $guardStatePath -PathType Leaf) {
+      Get-Content -LiteralPath $guardStatePath -Raw -Encoding UTF8
+    } else { '' }
+    $stderrText = if (Test-Path -LiteralPath (Join-Path $fixtureState 'logs\dsh.stderr.log') -PathType Leaf) {
+      Get-Content -LiteralPath (Join-Path $fixtureState 'logs\dsh.stderr.log') -Raw -Encoding UTF8
+    } else { '' }
+    throw "runtime supervisor did not recover within ${TimeoutSec}s; boots=$(Read-BootCount); supervisor=$supervisorStateText; guard=$guardStateText; stderr=$stderrText; log=$log"
   }
   if ($log -notmatch '等待旧 DSH 子进程释放端口') {
     throw 'runtime supervisor recovery did not exercise the guarded port-release wait'
