@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "events": [
+    {
+      "seq": 1,
+      "type": "agent-start",
+      "data": {
+        "agentId": "fixture-agent-secret",
+        "sessionId": "fixture-session-secret"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "tool-workflow/run-start",
+      "data": {
+        "message": "fixture-message-secret"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "tool-workflow/agent-start",
+      "data": {
+        "arguments": {
+          "token": "fixture-token-secret"
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "type": "tool-workflow/run-start",
+      "data": {
+        "name": "nested-fixture"
+      }
+    },
+    {
+      "seq": 5,
+      "type": "tool-workflow/run-end"
+    },
+    {
+      "seq": 6,
+      "type": "tool-workflow/agent-end"
+    },
+    {
+      "seq": 7,
+      "type": "tool-workflow/run-end"
+    },
+    {
+      "seq": 8,
+      "type": "agent-end"
+    }
+  ]
+}

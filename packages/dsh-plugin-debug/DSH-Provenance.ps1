@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('doctor', 'start', 'diagnostics', 'plugin-health', 'snapshot', 'restore', 'workspace-list', 'workspace-snapshot', 'workspace-restore', 'session-history', 'session-fork', 'known-good-list', 'known-good-save', 'known-good-restore', 'known-good-fixture', 'plugin-enable', 'plugin-disable', 'repair-plan', 'repair-assist', 'self-repair', 'repair-apply', 'repair-revert', 'plugin-bisect-plan', 'plugin-dependency-graph', 'plugin-preflight', 'diagnostics-diff', 'trace-contract', 'trace-eval', 'trace-live', 'trace-baseline', 'trace-profile', 'trace-loop', 'trace-autopsy', 'live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'crash-fixture', 'runtime-supervisor-fixture', 'incident-capture', 'incident-correlation', 'repro-export', 'context-doctor', 'security-audit', 'session-health', 'fail-log', 'provenance', 'pointer-evidence')]
+  [ValidateSet('doctor', 'start', 'diagnostics', 'plugin-health', 'snapshot', 'restore', 'workspace-list', 'workspace-snapshot', 'workspace-restore', 'session-history', 'session-fork', 'known-good-list', 'known-good-save', 'known-good-restore', 'known-good-fixture', 'plugin-enable', 'plugin-disable', 'repair-plan', 'repair-assist', 'self-repair', 'repair-apply', 'repair-revert', 'plugin-bisect-plan', 'plugin-dependency-graph', 'plugin-preflight', 'diagnostics-diff', 'trace-contract', 'trace-eval', 'trace-live', 'trace-baseline', 'trace-profile', 'trace-loop', 'trace-recursion', 'trace-autopsy', 'guardian-status', 'live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'trace-recursion-fixture', 'guardian-status-fixture', 'crash-fixture', 'runtime-supervisor-fixture', 'incident-capture', 'incident-correlation', 'repro-export', 'context-doctor', 'security-audit', 'session-health', 'fail-log', 'provenance', 'pointer-evidence')]
   [string]$Action,
   [string]$Profile = 'debug',
   [int]$Port = 3081,
@@ -36,6 +36,7 @@ param(
   [string]$CasePath = '',
   [ValidateRange(2, 100000)][int]$WindowSize = 12,
   [ValidateRange(2, 100)][int]$RepeatThreshold = 3,
+  [ValidateRange(1, 32)][int]$MaxDepth = 4,
   [string]$ReceiptPath = '',
   [string]$Cwd = '',
   [int]$RepairTimeoutSec = 60,
@@ -134,6 +135,29 @@ try {
     $nestedSucceeded = $?
     exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
   }
+  if ($Action -eq 'trace-recursion') {
+    if ($InputPath.Count -eq 0 -or [string]::IsNullOrWhiteSpace($InputPath[0])) { throw '-InputPath is required for trace-recursion' }
+    $recursionScript = Join-Path $packageRoot 'tools\DSH-TraceRecursion.ps1'
+    $recursionArguments = @{
+      InputPath = $InputPath[0]
+      MaxDepth = $MaxDepth
+    }
+    $LASTEXITCODE = 0
+    & $recursionScript @recursionArguments
+    $nestedSucceeded = $?
+    exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
+  }
+  if ($Action -eq 'guardian-status') {
+    $guardianStatusScript = Join-Path $packageRoot 'tools\Get-DSHGuardianStatus.ps1'
+    $guardianStatusArguments = @{
+      Url = "http://$HostName`:$Port/api/dsh-plugin-debug/guardian/status"
+      InputPath = if ($InputPath.Count -gt 0) { $InputPath[0] } else { '' }
+    }
+    $LASTEXITCODE = 0
+    & $guardianStatusScript @guardianStatusArguments
+    $nestedSucceeded = $?
+    exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
+  }
   if ($Action -eq 'plugin-bisect-plan') {
     if ($InputPath.Count -eq 0 -or [string]::IsNullOrWhiteSpace($InputPath[0])) { throw '-InputPath is required for plugin-bisect-plan' }
     $bisectScript = Join-Path $packageRoot 'tools\DSH-Bisect.ps1'
@@ -229,11 +253,13 @@ try {
     Restore-DshKnownGoodCheckpoint @knownGoodArguments | ConvertTo-Json -Depth 30
     exit 0
   }
-  if ($Action -in @('live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'crash-fixture', 'runtime-supervisor-fixture')) {
+  if ($Action -in @('live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'trace-recursion-fixture', 'guardian-status-fixture', 'crash-fixture', 'runtime-supervisor-fixture')) {
     $fixture = switch ($Action) {
       'live-api-fixture' { Join-Path $packageRoot 'tools\Test-DSHLiveApi.ps1' }
       'trace-autopsy-fixture' { Join-Path $packageRoot 'tools\Test-DSHTraceAutopsy.ps1' }
       'trace-loop-fixture' { Join-Path $packageRoot 'tools\Test-DSHTraceLoop.ps1' }
+      'trace-recursion-fixture' { Join-Path $packageRoot 'tools\Test-DSHTraceRecursion.ps1' }
+      'guardian-status-fixture' { Join-Path $packageRoot 'tools\Test-DSHGuardianStatus.ps1' }
       'crash-fixture' { Join-Path $packageRoot 'tools\Test-DSHCrashGuard.ps1' }
       default { Join-Path $packageRoot 'tools\Test-DSHRuntimeSupervisor.ps1' }
     }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-plugin-debug",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "bundleType": "dsh-npm-bundle",
   "independentRuntime": true,
   "features": {
@@ -38,6 +38,22 @@
       "slidingWindow": true,
       "runtimeBlocking": false
     },
+    "readOnlyTraceRecursionAnalysis": {
+      "standaloneTool": true,
+      "metadataOnly": true,
+      "boundedDepth": true,
+      "runtimeBlocking": false
+    },
+    "observerOnlyTaskGuardian": {
+      "embedded": true,
+      "statusPath": "/api/dsh-plugin-debug/guardian/status",
+      "liveLoopGuidance": true,
+      "liveRecursionGuidance": true,
+      "interruptionAwareness": true,
+      "taskTermination": false,
+      "processTermination": false,
+      "profileMutation": false
+    },
     "diagnosticsDiff": {
       "embedded": true,
       "metadataOnly": true,
@@ -52,20 +68,24 @@
   },
   "files": {
     "package.json": {
-      "bytes": 2817,
-      "sha256": "1b2979270c8eca2263ad9dfd3f454444429d3d435fac93f69339dac9e93c8078"
+      "bytes": 2930,
+      "sha256": "c0e227769fa256523d50322250ff98670406b52f7db5c0b3f5cbe7ca223db6ed"
     },
     "cordis.patch.yml": {
       "bytes": 242,
       "sha256": "09add5de1b427332a653d5af802bfed5ecd895c19c3bac15a9acfe4bb3395cbe"
     },
     "lib/index.js": {
-      "bytes": 5007,
-      "sha256": "7d451a9d65a3085f70522f849ca4411aed1afca8a3596a2cd67a816f13c2a2c7"
+      "bytes": 5448,
+      "sha256": "425f3269aa33c1017ede6908d7bf6077d37a0c3e2c11cc3bcb77197450349e2a"
+    },
+    "lib/task-guardian.js": {
+      "bytes": 16146,
+      "sha256": "666c8003fd8f172320acef7c7d722b7288593c424ce7a3ccebf4f4b3a4c50bac"
     },
     "lib/client.js": {
-      "bytes": 119964,
-      "sha256": "998fef24aed5f9a5a329063d170dbb42734b0245b73ef05163b577448bf5df1d"
+      "bytes": 120581,
+      "sha256": "2c0f747868e2e42257a88c6cd86142193da5e954c6121b5423501318243521ff"
     }
   }
 }

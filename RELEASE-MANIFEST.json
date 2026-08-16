@@ -16,7 +16,7 @@
   "verification": {
     "sourceSnapshotComparedAt": "2026-08-16",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
-    "packageFileCount": 89
+    "packageFileCount": 95
   },
   "layout": {
     "packageRoot": "packages/dsh-plugin-debug",
@@ -28,9 +28,9 @@
       "id": "dsh-plugin-debug",
       "path": "packages/dsh-plugin-debug",
       "kind": "dsh-debug-plugin",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "standaloneInstall": true,
-      "includes": ["runtime-provenance", "host-diagnostics", "recovery", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "dependency-graph", "trace-loop-analysis", "bounded-client-breadcrumbs"],
+      "includes": ["runtime-provenance", "host-diagnostics", "recovery", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
       "license": "MIT"
     }
   ],

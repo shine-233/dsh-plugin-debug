@@ -48,6 +48,7 @@ foreach ($repo in $repos) { gh api "repos/$repo" }
 | [lire1131/dsh-undo-plugin](https://github.com/lire1131/dsh-undo-plugin) | 本轮未重新核对 | 配置快照、undo/redo、离线 CLI/GUI、启动异常横幅 | 已有 snapshot/restore、Crash Guard 和页面通知；不复制其 GUI 或包加载方式 |
 | [PerryLink/dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind) | 本轮未重新核对 | 变更前 checkpoint、三阶段事务、配额、恢复日志、Session fork | 吸收 checkpoint/receipt 的安全形状；真实 durable rewind 事件未在 DSH rc.6 验证，因此不伪造该能力 |
 | [BiBoyang/dsh-eval-harness](https://github.com/BiBoyang/dsh-eval-harness) | 本轮未重新核对 | 隔离 workspace/session、JSONL trace、baseline PASS/WARN/FAIL 门禁 | 已有脱敏 Trace/Eval/baseline；zstd 解码和真实 headless LLM 回归仍标为未完成 |
+| [akira399/dsh-guardian](https://github.com/akira399/dsh-guardian) | MIT；本轮只读复核的 `main` 提交为 `5bf7ef3ad56d5e0b78e40071ac99d94b697e468b` | 插件预检、重复 Tool Call 循环、Agent/Workflow 递归、中断感知、`safeToRestart` 和实际安全重启助手 | 单包已独立实现预检、运行时循环/递归观察、冷却提示、事件上报和只读状态检查；不复制源码，不并入实际重启脚本 |
 
 ## 已经进入单包的能力
 
@@ -59,6 +60,7 @@ foreach ($repo in $repos) { gh api "repos/$repo" }
 - one-click launcher、Supervisor、Crash Guard、启动冲突隔离和 Workbench；
 - `plugin-bisect-plan`：根据脱敏 inventory、失败证据和 Profile manifest 生成 `safe`、`protected`、`ambiguous` 候选及人工复核顺序；
 - 启动后页面通知，以及只在 Host 明确声明 `no-tools` planner 时创建隔离诊断会话。
+- observer-only `dsh-guardian`：运行时循环/递归/中断检测、一次性引导、脱敏事件上报和只读 `safeToRestart` 状态；它不终止任务、不杀进程、不重启 Host、不禁用插件。
 
 ## 明确不引入的边界
 

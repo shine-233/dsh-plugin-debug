@@ -15,6 +15,20 @@ function Assert-DshDependencyGraph {
   if (-not $Condition) { throw $Message }
 }
 
+function Get-DshDependencyFileHash {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $hashCommand = Get-Command Get-FileHash -ErrorAction SilentlyContinue
+  if ($null -ne $hashCommand) {
+    return [string](Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+  }
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try {
+    return ([BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($Path)))).Replace('-', '')
+  } finally {
+    $sha.Dispose()
+  }
+}
+
 function Invoke-DshDependencyGraphJson {
   param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][string[]]$Arguments)
   $previousErrorAction = $ErrorActionPreference
@@ -64,9 +78,9 @@ try {
     }
   })
 
-  $goodHashBefore = (Get-FileHash -LiteralPath $goodInputPath -Algorithm SHA256).Hash
+  $goodHashBefore = Get-DshDependencyFileHash -Path $goodInputPath
   $good = Invoke-DshDependencyGraphJson -Path $graphScript -Arguments @('-InputPath', $goodInputPath)
-  $goodHashAfter = (Get-FileHash -LiteralPath $goodInputPath -Algorithm SHA256).Hash
+  $goodHashAfter = Get-DshDependencyFileHash -Path $goodInputPath
   Assert-DshDependencyGraph ($good.exitCode -eq 0 -and $good.value.result -eq 'PASS') "good dependency graph did not pass: $($good.text)"
   Assert-DshDependencyGraph ($good.value.summary.nodeCount -eq 3 -and $good.value.summary.missingCount -eq 0 -and $good.value.summary.protectedCoreCount -eq 1) 'good dependency graph summary was incorrect'
   Assert-DshDependencyGraph ($good.value.offline -eq $true -and $good.value.networkAccessed -eq $false -and $good.value.readOnly -eq $true -and $good.value.safety.commandsExecuted -eq $false -and $good.value.safety.pluginsExecuted -eq $false) 'dependency graph crossed its offline/read-only boundary'

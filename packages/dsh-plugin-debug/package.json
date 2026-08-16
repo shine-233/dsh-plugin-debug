@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-debug",
-  "version": "0.7.0",
-  "description": "A single, safe DeepSeek Harness debug plugin for provenance, health, diagnostics, recovery, trace inspection, and constrained self-repair",
+  "version": "0.8.0",
+  "description": "A single DeepSeek Harness debug plugin for diagnostics, recovery, trace inspection, and observer-only task protection",
   "author": "shine-233",
   "repository": {
     "type": "git",
@@ -23,6 +23,9 @@
     },
     "./repository-check": {
       "default": "./lib/repository-check.js"
+    },
+    "./guardian": {
+      "default": "./lib/task-guardian.js"
     },
     "./package.json": "./package.json"
   },
@@ -74,7 +77,10 @@
     "diagnostics-diff",
     "plugin-preflight",
     "dependency-graph",
-    "trace-loop"
+    "trace-loop",
+    "trace-recursion",
+    "task-guardian",
+    "safe-restart"
   ],
   "dsh": {
     "bundle": {

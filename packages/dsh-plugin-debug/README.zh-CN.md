@@ -1,20 +1,26 @@
-# DSH Debug Plugin
+# DSH Debug Plugin（DSH 调试插件）
 
-这是一个把 DSH 检测、调试、日志、恢复、Crash Guard 和一键启动能力合并到一起的单一插件。运行时包名是 `dsh-plugin-debug`，不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。
+这是单包 `dsh-plugin-debug` 的完整中文手册。它把 DSH 检测、调试、来源追踪、日志取证、恢复、崩溃防护（Crash Guard）、插件预检、Trace 分析、任务守护和一键启动能力合并到一起；不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。包内默认的 [`README.md`](README.md) 也是中文简版，GitHub 首页不会要求读者先阅读英文文档。
+
+本手册说明当前源码能做什么、明确不会做什么，以及如何测试、更新和发布。候选版本是否已经推送，以仓库根目录的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准；本地测试通过不等于生产 DSH 已验证。
+
+建议环境：Windows PowerShell、Node.js 22 或更高版本。离线核心测试不需要真实 DSH；页面、浏览器和 Host API 测试需要额外的本机运行环境。
 
 ## 这个插件解决什么问题
 
-- 启动前检查 Profile、bundle、patch、runtime 和本地依赖是否一致。
+- 启动前检查 Profile、bundle、patch、运行时（runtime）和本地依赖是否一致。
 - DSH 启动失败或 Web ready 后发现第三方插件失败时，生成可逆的 `disabled: true` Guard patch，并最多进行一次受控重启。
 - 启动冲突时不杀掉已有 DSH，也不覆盖已有 Profile；默认切换到新的 loopback 端口和隔离 Profile。
-- 在 Web 页面提供鼠标来源检查器和诊断页，报告插件、Module、Slot、客户端错误、Host 插件清单、Tool Call 元数据和运行时线索。
-- 在客户端保留最多 80 条脱敏诊断 breadcrumb，串起启动处置、鼠标来源变化、插件清单刷新、Slot/客户端错误；超出上限会记录丢弃计数，不保存 Tool 参数、正文、DOM 文本或凭据。
+- 在 Web 页面提供鼠标来源检查器和诊断页，报告插件、Module、Slot、客户端错误、主机端（Host）插件清单、Tool Call 元数据和运行时线索。
+- 在客户端保留最多 80 条脱敏诊断 breadcrumb（面包屑事件），串起启动处置、鼠标来源变化、插件清单刷新、Slot/客户端错误；超出上限会记录丢弃计数，不保存 Tool 参数、正文、DOM 文本或凭据。
 - 比较两次脱敏诊断/事故报告的状态、计数和 Issue code；检测到消息、路径、命令或凭据字段时只返回 `MANUAL_REVIEW`。
-- 提供 Profile/Workspace snapshot、known-good restore、incident capture、脱敏 trace/eval、资源压力和失败归档工具。
+- 提供 Profile/Workspace 快照（snapshot）、known-good 恢复、事故采集（incident capture）、脱敏 trace/eval、资源压力和失败归档工具。
 - 根据脱敏插件清单、失败证据和 Profile manifest 生成只读插件二分定位计划，给出安全第三方候选顺序；不会自动禁用插件、不会写 Profile、不会执行命令。
 - 离线静态预检 JS/MJS/CJS 的 `inject` 与 `ctx.*` 服务依赖；不执行插件代码，动态访问或超出扫描上限时只返回人工复核。
-- 根据 Profile/package metadata 生成离线依赖图，报告缺失依赖、循环和未引用本地包；不运行 npm/pnpm、不安装依赖、不执行 package code。
+- 根据 Profile/package 元数据（metadata）生成离线依赖图，报告缺失依赖、循环和未引用本地包；不运行 npm/pnpm、不安装依赖、不执行 package code。
 - 对脱敏 Trace 事件做有限窗口的重复循环分析；只输出重复次数、索引和稳定签名，敏感字段会转人工复核。
+- 对 Agent/Workflow 生命周期做有界递归分析；深度超限返回 `RECURSION_DETECTED`，动态、错配或未闭合标记返回 `MANUAL_REVIEW`，不回显 ID 或正文。
+- 运行时任务守护观察 Tool Call 循环、子任务递归和中断；默认只在冷却窗口内发送一次脱敏提示，永远不终止任务、杀进程、重启 Host、禁用插件或修改 Profile。
 - 在 Host 明确声明 no-tools planner 能力时，才允许创建隔离的修复规划 Session；普通 Host 上保持 `UNAVAILABLE`，不会偷偷创建一个带工具的 Session。
 
 诊断结果是证据和线索，不会把“发现失败插件”夸大成已经证明根因，也不会把“报告写入成功”夸大成 DSH 已经恢复。
@@ -27,7 +33,7 @@
 .\Start-DSH-Debug.ps1 -NoBrowser
 ```
 
-默认使用 `debug` Profile 和 `127.0.0.1:3081`，首次运行把当前目录中的 bundle 离线安装到该 Profile。需要后台运行时使用 `Start-DSH-Debug.vbs`。
+默认使用 `debug` Profile 和 `127.0.0.1:3081`，首次运行把当前目录中的 bundle 离线安装到该 Profile。需要后台运行时使用 `Start-DSH-Debug.vbs`。启动器只读取本地包，不搜索、安装或调用插件商店。
 
 也可以通过 DSH CLI 安装本地包：
 
@@ -35,7 +41,7 @@
 dsh plugin --profile debug add . --offline
 ```
 
-`Start-DSH-Combined.*` 只在你先运行 `tools\\Install-DSH-Agents.vbs` 后才会启用可选的 Kimi/Codex Agent overlay；overlay 不是 Debug 核心依赖。
+`Start-DSH-Combined.*` 只在你先运行 `tools\Install-DSH-Agents.vbs` 后才会启用可选的 Kimi/Codex Agent 覆盖层（overlay）；覆盖层不是 Debug 核心依赖。
 
 ## 启动故障处理
 
@@ -101,6 +107,31 @@ Trace loop 分析用于发现同一状态在短窗口内反复出现的情况。
   -RepeatThreshold 3
 ```
 
+Trace 递归分析用于发现 Agent 或 Workflow 在生命周期事件中嵌套过深。它要求事件序号递增，并只接受明确的开始/结束标记；超过上限的输入直接 `FAIL`，未闭合、错配或动态标记进入 `MANUAL_REVIEW`。输出只保留计数、深度、序号和分类，不输出 Agent ID、Session ID、消息、路径或 Tool 参数：
+
+```powershell
+.\Debug-DSH.ps1 -Action trace-recursion `
+  -InputPath .\tools\fixtures\trace-recursion.json `
+  -MaxDepth 3
+
+.\tools\Test-DSHTraceRecursion.ps1
+```
+
+任务守护（Guardian）是运行时的 observer-only 保护层。它监听 Host 的 `agent/created`、`agent/status` 和 `session/event`（若 Host 提供），用脱敏的 Tool 参数形状生成指纹，识别短窗口重复调用、子任务/工作流递归和取消/失败中断。默认配置为 `policy=auto`，在冷却时间内最多对同一 Session 发一次指导；设置为 `policy=report` 时只记录不指导。状态接口如下：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:3081/api/dsh-plugin-debug/guardian/status
+```
+
+接口和 `$DSH_HOME/guardian/events.jsonl` 只包含有界计数、事件类别、深度和不可逆指纹，不返回原始 Session ID、Tool 参数、消息正文或凭据。内存中的最近事件窗口和单条事件元数据有界；事件文件当前按行追加、没有自动轮转，因此不保证整个文件大小有界。长期运行时请按自己的保留策略管理本地日志，不要把日志提交或上传。守护不会终止任务、杀进程、重启 Host、禁用插件或修改 Profile；`agents` 服务或这些事件在 Host 中缺失时，插件仍可启动并保持 `UNAVAILABLE`/空闲状态。
+
+重启前可以通过统一入口读取守护状态。空闲时返回退出码 0 和 `SAFE_TO_RESTART`；存在活动 Session 或未完成操作时返回退出码 2 和 `BUSY_DO_NOT_RESTART`，脚本只给出建议，不会自行重启：
+
+```powershell
+.\Debug-DSH.ps1 -Action guardian-status -Profile debug -Port 3081
+.\tools\Test-DSHGuardianStatus.ps1
+```
+
 ## 测试
 
 测试源码和脱敏 fixture 会随 GitHub 源码一起发布，便于别人复现实现和检查发布边界：
@@ -129,6 +160,8 @@ npm run check
 .\tools\Test-DSHPreflight.ps1
 .\tools\Test-DSHDependencyGraph.ps1
 .\tools\Test-DSHTraceLoop.ps1
+.\tools\Test-DSHTraceRecursion.ps1
+.\tools\Test-DSHGuardianStatus.ps1
 .\tools\Test-DSHPointerBrowser.ps1  # 可选；退出码 2 表示浏览器运行时不可用
 Pop-Location
 ```

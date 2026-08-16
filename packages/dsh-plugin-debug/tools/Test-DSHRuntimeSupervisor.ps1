@@ -44,6 +44,20 @@ function Read-BootCount {
   try { return [int](Get-Content -LiteralPath $bootFile -Raw -Encoding UTF8) } catch { return 0 }
 }
 
+function Read-FixtureText {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
+  for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    try {
+      return Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    } catch {
+      if ($attempt -eq 19) { return '' }
+      Start-Sleep -Milliseconds 100
+    }
+  }
+  return ''
+}
+
 function Get-FreeLoopbackPort {
   $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
   try {
@@ -160,7 +174,7 @@ process.on('SIGINT', close);
       if ($null -eq $guardState) { @() }
       else { @($guardState.quarantined | Where-Object { [string]$_.moduleName -eq 'test-dsh-plugin' }) }
     )
-    $log = if (Test-Path -LiteralPath $launcherLogPath -PathType Leaf) { Get-Content -LiteralPath $launcherLogPath -Raw -Encoding UTF8 } else { '' }
+    $log = Read-FixtureText -Path $launcherLogPath
     if ((Read-BootCount) -ge 2 -and $quarantine.Count -eq 1 -and
         @($log -split "`r?`n" | Where-Object { $_ -match 'DSH Web ready' }).Count -ge 2 -and
         $null -ne $supervisorState -and [string]$supervisorState.status -eq 'healthy') {
@@ -170,7 +184,7 @@ process.on('SIGINT', close);
     Start-Sleep -Milliseconds 250
   }
   if (-not $recovered) {
-    $log = if (Test-Path -LiteralPath $launcherLogPath -PathType Leaf) { Get-Content -LiteralPath $launcherLogPath -Raw -Encoding UTF8 } else { '' }
+    $log = Read-FixtureText -Path $launcherLogPath
     throw "runtime supervisor did not recover within ${TimeoutSec}s; boots=$(Read-BootCount); log=$log"
   }
   if ($log -notmatch '等待旧 DSH 子进程释放端口') {

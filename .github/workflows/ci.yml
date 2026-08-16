@@ -30,7 +30,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify publication boundary
+      - name: Verify publication boundary (Windows PowerShell)
+        shell: powershell
+        run: .\scripts\Verify-Publication.ps1
+      - name: Verify publication boundary (PowerShell 7)
         shell: pwsh
         run: ./scripts/Verify-Publication.ps1
       - name: Run combined plugin integration
@@ -73,6 +76,12 @@ jobs:
       - name: Run trace-loop regression
         shell: powershell
         run: .\packages\dsh-plugin-debug\tools\Test-DSHTraceLoop.ps1
+      - name: Run trace-recursion regression
+        shell: powershell
+        run: .\packages\dsh-plugin-debug\tools\Test-DSHTraceRecursion.ps1
+      - name: Run observer-only Guardian status regression
+        shell: powershell
+        run: .\packages\dsh-plugin-debug\tools\Test-DSHGuardianStatus.ps1
       - name: Run Guard and recovery regressions
         shell: powershell
         run: |

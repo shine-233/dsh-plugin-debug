@@ -14,9 +14,8 @@ This file records the source-boundary decision for the single public package
 
 The three old source directories and the additional
 `dsh-open-source-one-click-excluded` snapshot were removed from the projects
-tree after this review and are recoverable only from the Windows Recycle Bin.
-None is a package dependency. The disabled `dsh-plugin-store` directory was
-already absent and was not recreated.
+tree after this review. None is a package dependency. The disabled
+`dsh-plugin-store` directory was already absent and was not recreated.
 
 ## Intentional name changes and exclusions
 
@@ -47,11 +46,11 @@ depend on the disabled plugin-store.
 The current candidate is verified by:
 
 ```text
-npm run check                         25 passed
+npm run check                         37 passed
 Test-DSHStandalone.ps1               PASS
 Test-DSHProvenanceIntegration.ps1    PASS
-Verify-Publication.ps1               PASS, 89 npm-pack entries
-PowerShell parser                    56 files, 0 errors
+Verify-Publication.ps1               PASS, 95 npm-pack entries
+PowerShell parser                    62 files, 0 errors
 ```
 
 Crash Guard's intentionally failing runtime is generated inside a bounded

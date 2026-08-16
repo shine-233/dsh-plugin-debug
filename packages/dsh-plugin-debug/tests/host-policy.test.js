@@ -58,7 +58,7 @@ test('apply registers only the opt-in pre-execute hook', () => {
   const ctx = { on: (...args) => registrations.push(args) }
   apply({}, {})
   assert.equal(registrations.length, 0)
-  apply(ctx, { toolPolicy: { enabled: true, defaultDecision: 'ask' } })
+  apply(ctx, { guardian: { enabled: false }, toolPolicy: { enabled: true, defaultDecision: 'ask' } })
   assert.equal(registrations.length, 1)
   assert.equal(registrations[0][0], 'tools/pre-execute')
   assert.equal(registrations[0][2].prepend, true)

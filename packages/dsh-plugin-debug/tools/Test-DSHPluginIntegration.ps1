@@ -59,7 +59,8 @@ try {
     'package.json', 'bundle-manifest.json', 'cordis.patch.yml', 'lib\index.js', 'lib\client.js',
     'DSH-Provenance.ps1', 'Start-DSH-Combined.ps1', 'tools\Start-DSH.ps1',
     'tools\Install-DSH-Agents.ps1', 'tools\combined-agents.patch.yml',
-    'tools\DSH-IncidentCorrelation.psm1', 'tools\Test-DSHIncidentCorrelation.ps1'
+    'tools\DSH-IncidentCorrelation.psm1', 'tools\Test-DSHIncidentCorrelation.ps1',
+    'tools\Test-DSHProvenanceIntegration.ps1'
   )
   foreach ($relative in $required) {
     Assert-PluginIntegration (Test-Path -LiteralPath (Join-Path $packageRoot $relative) -PathType Leaf) "combined package is missing $relative"
@@ -127,6 +128,20 @@ fs.cpSync(source, installedRoot, { recursive: true });
 
   $correlation = Invoke-JsonChild -ScriptPath (Join-Path $stagedRoot 'tools\Test-DSHIncidentCorrelation.ps1') -Arguments @{}
   Assert-PluginIntegration ($correlation.exitCode -eq 0 -and $correlation.value.result -eq 'PASS' -and $correlation.value.networkAccessed -eq $false) 'offline incident-correlation fixture failed or crossed the network boundary'
+
+  if ($env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION -ne '1') {
+    # The compatibility entry points back to this canonical script. Set the
+    # guard only for that child so the staged wrapper proves its forwarding
+    # contract once instead of recursively staging and invoking itself.
+    $previousSkipCompat = $env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION
+    try {
+      $env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION = '1'
+      $compatibility = Invoke-JsonChild -ScriptPath (Join-Path $stagedRoot 'tools\Test-DSHProvenanceIntegration.ps1') -Arguments @{}
+    } finally {
+      if ($null -eq $previousSkipCompat) { Remove-Item Env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION -ErrorAction SilentlyContinue } else { $env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION = $previousSkipCompat }
+    }
+    Assert-PluginIntegration ($compatibility.exitCode -eq 0 -and $compatibility.value.result -eq 'PASS' -and $compatibility.value.pluginStoreCapability -eq 'REMOVED') 'historical provenance integration wrapper did not forward the canonical contract'
+  }
 
   [ordered]@{
     result = 'PASS'

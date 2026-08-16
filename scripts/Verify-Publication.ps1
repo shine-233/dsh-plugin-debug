@@ -12,6 +12,56 @@ function Assert-Publication {
   if (-not $Condition) { throw $Message }
 }
 
+function Get-JsonPropertyValue {
+  param(
+    [AllowNull()][object]$InputObject,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Name
+  )
+  if ($null -eq $InputObject) { return $null }
+  if ($InputObject -is [System.Collections.IDictionary] -and $InputObject.Contains($Name)) {
+    return $InputObject[$Name]
+  }
+  $property = $InputObject.PSObject.Properties[$Name]
+  if ($null -eq $property) { return $null }
+  return $property.Value
+}
+
+function ConvertTo-PublicationMap {
+  param([AllowNull()][object]$Value)
+  if ($null -eq $Value) { return $null }
+  if ($Value -is [System.Collections.IDictionary]) {
+    $map = @{}
+    foreach ($key in $Value.Keys) { $map[[string]$key] = ConvertTo-PublicationMap -Value $Value[$key] }
+    return $map
+  }
+  if ($Value -is [string] -or $Value -is [ValueType]) { return $Value }
+  if ($Value -is [System.Collections.IEnumerable]) {
+    $items = @()
+    foreach ($item in $Value) { $items += ,(ConvertTo-PublicationMap -Value $item) }
+    return ,$items
+  }
+  $properties = @($Value.PSObject.Properties)
+  if ($properties.Count -eq 0) { return $Value }
+  $map = @{}
+  foreach ($property in $properties) { $map[[string]$property.Name] = ConvertTo-PublicationMap -Value $property.Value }
+  return $map
+}
+
+function Read-PublicationPackageLock {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $raw = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+  $convert = Get-Command ConvertFrom-Json -ErrorAction Stop
+  if ($convert.Parameters.ContainsKey('AsHashtable')) {
+    return ($raw | ConvertFrom-Json -AsHashtable)
+  }
+  # Windows PowerShell 5.1 cannot parse an empty JSON property name with its
+  # ConvertFrom-Json cmdlet. The inbox .NET JSON serializer can, so use it only
+  # for this lockfile and project the result into ordinary maps.
+  Add-Type -AssemblyName System.Web.Extensions
+  $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+  return ConvertTo-PublicationMap -Value ($serializer.DeserializeObject($raw))
+}
+
 Assert-Publication (Test-Path -LiteralPath $packageRoot -PathType Container) 'missing single package: packages/dsh-plugin-debug'
 Assert-Publication (-not (Test-Path -LiteralPath (Join-Path $root 'packages\dsh-plugin-provenance') -PathType Container)) 'legacy provenance package directory is present'
 Assert-Publication (-not (Test-Path -LiteralPath (Join-Path $root 'tools\dsh-one-click') -PathType Container)) 'separate one-click component is present'
@@ -43,7 +93,7 @@ foreach ($path in @($manifestPath, $packageManifestPath, $packageLockPath, $bund
 }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $packageManifest = Get-Content -LiteralPath $packageManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-$packageLock = Get-Content -LiteralPath $packageLockPath -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable
+$packageLock = Read-PublicationPackageLock -Path $packageLockPath
 $bundleManifest = Get-Content -LiteralPath $bundleManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $packageName = [string]$packageManifest.name
 $packageVersion = [string]$packageManifest.version
@@ -57,14 +107,16 @@ $repositoryUrlValid = [Uri]::TryCreate($repositoryUrl, [UriKind]::Absolute, [ref
 Assert-Publication ($null -ne $repository -and [string]$repository.type -ceq 'git') 'package repository.type must be git'
 Assert-Publication ($repositoryUrlValid -and $repositoryUri.Scheme -ceq 'https' -and $repositoryUri.Host -ceq 'github.com' -and $repositoryUri.AbsolutePath.Trim('/') -ne '') 'package repository.url must be an absolute GitHub HTTPS URL'
 Assert-Publication ([string]$repository.directory -ceq 'packages/dsh-plugin-debug') 'package repository.directory must point to packages/dsh-plugin-debug'
-$packageLockRoot = $null
-if ($packageLock.ContainsKey('packages') -and $null -ne $packageLock['packages'] -and $packageLock['packages'].ContainsKey('')) {
-  $packageLockRoot = $packageLock['packages']['']
-}
-Assert-Publication ($packageLock.ContainsKey('name') -and [string]$packageLock['name'] -ceq $packageName) 'package-lock.json top-level name does not match package.json'
-Assert-Publication ($packageLock.ContainsKey('version') -and [string]$packageLock['version'] -ceq $packageVersion) 'package-lock.json top-level version does not match package.json'
-Assert-Publication ($null -ne $packageLockRoot -and [string]$packageLockRoot['name'] -ceq $packageName) 'package-lock.json root package name does not match package.json'
-Assert-Publication ($null -ne $packageLockRoot -and [string]$packageLockRoot['version'] -ceq $packageVersion) 'package-lock.json root package version does not match package.json'
+$packageLockPackages = Get-JsonPropertyValue -InputObject $packageLock -Name 'packages'
+$packageLockRoot = Get-JsonPropertyValue -InputObject $packageLockPackages -Name ''
+$packageLockName = Get-JsonPropertyValue -InputObject $packageLock -Name 'name'
+$packageLockVersion = Get-JsonPropertyValue -InputObject $packageLock -Name 'version'
+$packageLockRootName = Get-JsonPropertyValue -InputObject $packageLockRoot -Name 'name'
+$packageLockRootVersion = Get-JsonPropertyValue -InputObject $packageLockRoot -Name 'version'
+Assert-Publication ([string]$packageLockName -ceq $packageName) 'package-lock.json top-level name does not match package.json'
+Assert-Publication ([string]$packageLockVersion -ceq $packageVersion) 'package-lock.json top-level version does not match package.json'
+Assert-Publication ($null -ne $packageLockRoot -and [string]$packageLockRootName -ceq $packageName) 'package-lock.json root package name does not match package.json'
+Assert-Publication ($null -ne $packageLockRoot -and [string]$packageLockRootVersion -ceq $packageVersion) 'package-lock.json root package version does not match package.json'
 Assert-Publication ([string]$bundleManifest.package -ceq $packageName) 'bundle-manifest.json package does not match package.json'
 Assert-Publication ([string]$bundleManifest.version -ceq $packageVersion) 'bundle-manifest.json version does not match package.json'
 $manifestComponents = @($manifest.components)
@@ -91,7 +143,11 @@ $requiredFunctionalFiles = @(
   'tools/DSH-Bisect.ps1',
   'tools/DSH-DiagnosticsDiff.ps1',
   'tools/DSH-TraceLoop.ps1',
-  'tools/Test-DSHTraceLoop.ps1'
+  'tools/Test-DSHTraceLoop.ps1',
+  'tools/DSH-TraceRecursion.ps1',
+  'tools/Test-DSHTraceRecursion.ps1',
+  'tools/Get-DSHGuardianStatus.ps1',
+  'tools/Test-DSHGuardianStatus.ps1'
 )
 $packageFileSpecs = @($packageManifest.files | ForEach-Object { ([string]$_).Replace('\', '/').TrimEnd('/') })
 foreach ($requiredFile in $requiredFunctionalFiles) {

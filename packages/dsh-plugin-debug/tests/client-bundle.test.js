@@ -175,6 +175,30 @@ test('startup guard notification is metadata-only and refuses ordinary session c
   assert.match(autoPrompt, /no-tools/u)
 })
 
+test('startup diagnostic prompts redact hostile inventory labels before model handoff', async () => {
+  const source = await readFile(resolve(root, 'lib/client.js'), 'utf8')
+  let handoff
+  runInNewContext(source, {
+    location: { search: '?dsh_debug_guard=isolated', pathname: '/', href: 'http://127.0.0.1:3080/?dsh_debug_guard=isolated' },
+    window: { __ModuleLoader__: { load(value) { handoff = value } } },
+  })
+  const module = handoff.factory(() => ({
+    createElement() {},
+    useEffect() {},
+    useState(initial) { return [typeof initial === 'function' ? initial() : initial, () => {}] },
+  }))
+
+  const prompt = module.startupDiagnosticPrompt([{
+    moduleName: 'C:\\secret\\plugin token=super-secret\nsecond-line',
+    fiberPhase: 'failed',
+    enabled: false,
+  }])
+  assert.doesNotMatch(prompt, /C:\\secret\\plugin/u)
+  assert.doesNotMatch(prompt, /token=super-secret/u)
+  assert.doesNotMatch(prompt, /\nsecond-line/u)
+  assert.match(prompt, /\[path\]/u)
+})
+
 test('client diagnostic breadcrumbs are bounded, redacted, and included in reports', async () => {
   const source = await readFile(resolve(root, 'lib/client.js'), 'utf8')
   let handoff

@@ -106,10 +106,23 @@ window.__ModuleLoader__.load({
         .filter(entry => entry.enabled === false || entry.fiberPhase === 'failed')
         .slice(0, 8)
         .map(entry => ({
-          moduleName: typeof entry.moduleName === 'string' ? entry.moduleName.slice(0, 160) : null,
+          moduleName: startupDiagnosticLabel(entry.moduleName),
           fiberPhase: typeof entry.fiberPhase === 'string' ? entry.fiberPhase : null,
           enabled: entry.enabled === true,
         }))
+    }
+
+    // Host inventory is metadata, but a broken adapter can still put a local path,
+    // token-shaped text, or control characters in moduleName. The automatic
+    // startup prompt is deliberately no-tools; it must also be safe to send to a
+    // model. Keep the label bounded and apply the same redaction used by the
+    // breadcrumb/report boundary before interpolating it into prompt text.
+    function startupDiagnosticLabel(value) {
+      const safe = redactBreadcrumbText(value)
+        .replace(/[\u0000-\u001f\u007f]/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim()
+      return truncateText(safe, 160) || 'unknown'
     }
 
     function startupDiagnosticMarker(notice, entries) {
@@ -121,7 +134,7 @@ window.__ModuleLoader__.load({
     function startupDiagnosticPrompt(entries) {
       const facts = entries.length === 0
         ? '安全隔离已发生，但当前页面没有可读取的插件清单。'
-        : entries.map(entry => `${entry.moduleName || 'unknown'} (${entry.fiberPhase || (entry.enabled ? 'enabled' : 'disabled')})`).join(', ')
+        : entries.map(entry => `${startupDiagnosticLabel(entry.moduleName)} (${entry.fiberPhase || (entry.enabled ? 'enabled' : 'disabled')})`).join(', ')
       return [
         'DSH Debug 启动故障诊断摘要。只使用下面的元数据，不读取原始日志、Tool 参数、Tool 结果、凭据或文件内容。',
         `Crash Guard 已隔离一个明确映射的第三方插件；可见条目：${facts}。`,

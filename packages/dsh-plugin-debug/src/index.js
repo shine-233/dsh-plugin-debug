@@ -1,5 +1,6 @@
 import { checkRepository, getCheckSchema, scanRepositories } from './repository-check.js'
 import { registerPluginCheckTool } from './tool-adapter.js'
+import { registerTaskGuardian } from './task-guardian.js'
 
 // The debug bundle is intentionally standalone.  DSH hosts that expose a
 // richer `defineTool` helper may still normalize this object at registration
@@ -8,6 +9,9 @@ import { registerPluginCheckTool } from './tool-adapter.js'
 const defineTool = (definition) => definition
 
 export const name = 'dsh-plugin-debug'
+// The Guardian observes agent/session events when the Host exposes them, but
+// their absence must not prevent the rest of the read-only debug bundle from
+// loading on older or reduced DSH Hosts.
 export const inject = ['tools']
 
 const VALID_DECISIONS = new Set(['allow', 'ask', 'deny'])
@@ -121,6 +125,7 @@ export function apply(ctx, config = {}) {
       },
     })
   }
+  registerTaskGuardian(ctx, asRecord(config).guardian)
   const policy = normalizeToolPolicyConfig(config)
   if (!policy.enabled || !ctx || typeof ctx.on !== 'function') return
   ctx.on('tools/pre-execute', (exec, next) => {
@@ -131,3 +136,4 @@ export function apply(ctx, config = {}) {
 }
 
 export { checkRepository, getCheckSchema, scanRepositories }
+export { GUARDIAN_STATUS_PATH, guardianToolFingerprint, normalizeGuardianConfig, registerTaskGuardian } from './task-guardian.js'

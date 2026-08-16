@@ -181,6 +181,8 @@ $expected = @(
   'DSH-TraceEval.ps1',
   'DSH-TraceLoop.ps1',
   'Test-DSHTraceLoop.ps1',
+  'DSH-TraceRecursion.ps1',
+  'Test-DSHTraceRecursion.ps1',
   'Test-DSHTraceProfile.ps1',
   'DSH-IncidentCorrelation.psm1',
   'Test-DSHTraceAutopsy.ps1',
@@ -206,6 +208,8 @@ $expected = @(
   'Test-DSHBisect.ps1',
   'DSH-Preflight.ps1',
   'Test-DSHPreflight.ps1',
+  'Get-DSHGuardianStatus.ps1',
+  'Test-DSHGuardianStatus.ps1',
   'DSH-DependencyGraph.ps1',
   'Test-DSHDependencyGraph.ps1',
   'DSH-TraceLoop.ps1',
@@ -223,7 +227,8 @@ $expected = @(
   'fixtures\pointer-browser.html',
   'fixtures\plugin-bisect-plan.json',
   'fixtures\plugin-dependency-graph.json',
-  'fixtures\trace-loop.json'
+  'fixtures\trace-loop.json',
+  'fixtures\trace-recursion.json'
 )
 foreach ($relative in $expected) {
   Assert-Standalone (Test-Path -LiteralPath (Join-Path $toolRoot $relative) -PathType Leaf) "missing standalone file: $relative"
@@ -520,8 +525,8 @@ fs.cpSync(source, installedRoot, { recursive: true });
   Assert-Standalone ($knownGoodFixture.value.automaticRestoreBounded -eq $true -and $knownGoodFixture.value.failedPluginPreserved -eq $true -and $knownGoodFixture.value.workspaceUntouched -eq $true) "known-good fixture did not prove bounded recovery and workspace safety: $($knownGoodFixture.text)"
   $fixtureChecks++
 
-  $liveApiFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'live-api-fixture' }
-  Assert-Standalone ($liveApiFixture.exitCode -eq 0 -and $liveApiFixture.value.result -eq 'PASS') 'live API fixture did not return PASS'
+  $liveApiFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'live-api-fixture' } -TimeoutSec 90
+  Assert-Standalone ($liveApiFixture.exitCode -eq 0 -and $liveApiFixture.value.result -eq 'PASS') "live API fixture did not return PASS: exit=$($liveApiFixture.exitCode); text=$($liveApiFixture.text)"
   Assert-Standalone ($liveApiFixture.value.usedRealDshPort -eq $false -and $liveApiFixture.value.usedRealDshHome -eq $false) 'live API fixture crossed the real DSH boundary'
   $fixtureChecks++
 
@@ -543,6 +548,40 @@ fs.cpSync(source, installedRoot, { recursive: true });
   Assert-Standalone ($runtimeSupervisorFixture.value.bootCount -eq 2 -and $runtimeSupervisorFixture.value.quarantinedPlugin -eq 'test-dsh-plugin') 'runtime supervisor did not perform exactly one plugin quarantine restart'
   Assert-Standalone ($runtimeSupervisorFixture.value.reversiblePatchPresent -eq $true -and $runtimeSupervisorFixture.value.webReadyAfterRestart -eq $true) 'runtime supervisor fixture did not prove reversible patch and second Web readiness'
   Assert-Standalone ($runtimeSupervisorFixture.value.supervisorStatus -eq 'healthy' -and $runtimeSupervisorFixture.value.supervisorRestartCount -eq 1) 'runtime supervisor did not finish in healthy state after one restart'
+  $fixtureChecks++
+
+  $guardianStatusFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'guardian-status-fixture' }
+  Assert-Standalone ($guardianStatusFixture.exitCode -eq 0 -and $guardianStatusFixture.value.result -eq 'PASS') 'Guardian status fixture did not return PASS'
+  Assert-Standalone ($guardianStatusFixture.value.readOnly -eq $true -and $guardianStatusFixture.value.noTermination -eq $true) 'Guardian status fixture did not prove read-only behavior'
+  $fixtureChecks++
+
+  $guardianIdlePath = Join-Path $tempRoot 'guardian-idle.json'
+  $guardianBusyPath = Join-Path $tempRoot 'guardian-busy.json'
+  [ordered]@{
+    ok = $true
+    kind = 'dsh-plugin-debug-guardian-status'
+    safeToRestart = $true
+    activeSessions = 0
+    inFlightOperations = 0
+  } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $guardianIdlePath -Encoding UTF8
+  [ordered]@{
+    ok = $true
+    kind = 'dsh-plugin-debug-guardian-status'
+    safeToRestart = $false
+    activeSessions = 1
+    inFlightOperations = 2
+  } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $guardianBusyPath -Encoding UTF8
+  $guardianIdleEntry = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'Debug-DSH.ps1') -Arguments @{
+    Action = 'guardian-status'
+    InputPath = $guardianIdlePath
+  }
+  $guardianBusyEntry = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'Debug-DSH.ps1') -Arguments @{
+    Action = 'guardian-status'
+    InputPath = $guardianBusyPath
+  }
+  Assert-Standalone ($guardianIdleEntry.exitCode -eq 0 -and $guardianIdleEntry.value.result -eq 'SAFE_TO_RESTART') 'public Guardian status entry did not accept an idle state'
+  Assert-Standalone ($guardianBusyEntry.exitCode -eq 2 -and $guardianBusyEntry.value.result -eq 'BUSY_DO_NOT_RESTART') 'public Guardian status entry did not fail closed for a busy state'
+  Assert-Standalone ($guardianBusyEntry.value.restartsHost -ne $true -and $guardianBusyEntry.value.terminatesTasks -eq $false) 'public Guardian status entry exposed a mutating action'
   $fixtureChecks++
 
   $pointerEvidencePath = Join-Path $tempRoot 'pointer-evidence.json'
@@ -653,6 +692,20 @@ fs.cpSync(source, installedRoot, { recursive: true });
   $traceLoopTest = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHTraceLoop.ps1') -Arguments @{}
   Assert-Standalone ($traceLoopTest.exitCode -eq 0 -and $traceLoopTest.value.result -eq 'PASS') "trace loop test did not return PASS: $($traceLoopTest.text)"
   Assert-Standalone ($traceLoopTest.value.metadataOnly -eq $true -and $traceLoopTest.value.networkAccessed -eq $false -and $traceLoopTest.value.loopDetected -eq $true) 'trace loop test crossed its offline/privacy boundary'
+  $fixtureChecks++
+
+  $traceRecursionTest = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'trace-recursion-fixture' }
+  Assert-Standalone ($traceRecursionTest.exitCode -eq 0 -and $traceRecursionTest.value.result -eq 'PASS') "trace recursion test did not return PASS: $($traceRecursionTest.text)"
+  Assert-Standalone ($traceRecursionTest.value.metadataOnly -eq $true -and $traceRecursionTest.value.networkAccessed -eq $false -and $traceRecursionTest.value.recursionDetected -eq $true) 'trace recursion test crossed its offline/privacy boundary'
+  $fixtureChecks++
+
+  $traceRecursionEntry = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'Debug-DSH.ps1') -Arguments @{
+    Action = 'trace-recursion'
+    InputPath = (Join-Path $toolRoot 'fixtures\trace-recursion.json')
+    MaxDepth = 3
+  }
+  Assert-Standalone ($traceRecursionEntry.exitCode -eq 0 -and $traceRecursionEntry.value.result -eq 'RECURSION_DETECTED') "trace recursion public entry did not report the fixture: $($traceRecursionEntry.text)"
+  Assert-Standalone ($traceRecursionEntry.value.input.maxObservedDepth -eq 4 -and $traceRecursionEntry.value.privacy.agentIdsReturned -eq $false) 'trace recursion public entry weakened the depth or privacy contract'
   $fixtureChecks++
 
   $dependencyGraphTest = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHDependencyGraph.ps1') -Arguments @{}

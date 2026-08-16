@@ -10,12 +10,14 @@ mkdirSync(resolve(root, 'lib'), { recursive: true })
 cpSync(resolve(root, 'src', 'index.js'), resolve(root, 'lib', 'index.js'))
 cpSync(resolve(root, 'src', 'repository-check.js'), resolve(root, 'lib', 'repository-check.js'))
 cpSync(resolve(root, 'src', 'tool-adapter.js'), resolve(root, 'lib', 'tool-adapter.js'))
+cpSync(resolve(root, 'src', 'task-guardian.js'), resolve(root, 'lib', 'task-guardian.js'))
 await buildClient()
 
 const bundleFiles = [
   'package.json',
   'cordis.patch.yml',
   'lib/index.js',
+  'lib/task-guardian.js',
   'lib/client.js',
 ]
 const files = Object.fromEntries(bundleFiles.map(relative => {
@@ -64,6 +66,22 @@ const bundleManifest = {
       metadataOnly: true,
       slidingWindow: true,
       runtimeBlocking: false,
+    },
+    readOnlyTraceRecursionAnalysis: {
+      standaloneTool: true,
+      metadataOnly: true,
+      boundedDepth: true,
+      runtimeBlocking: false,
+    },
+    observerOnlyTaskGuardian: {
+      embedded: true,
+      statusPath: '/api/dsh-plugin-debug/guardian/status',
+      liveLoopGuidance: true,
+      liveRecursionGuidance: true,
+      interruptionAwareness: true,
+      taskTermination: false,
+      processTermination: false,
+      profileMutation: false,
     },
     diagnosticsDiff: {
       embedded: true,

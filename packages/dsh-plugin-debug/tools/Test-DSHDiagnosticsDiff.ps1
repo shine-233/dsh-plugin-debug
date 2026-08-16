@@ -17,12 +17,20 @@ function Assert-DshDiagnosticsDiff {
 
 function Invoke-DshDiagnosticsDiffJson {
   param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][string[]]$Arguments)
-  $raw = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments 2>&1
-  $exitCode = $LASTEXITCODE
-  $text = ($raw | Out-String).Trim()
-  $value = $null
-  try { $value = $text | ConvertFrom-Json } catch { }
-  return [PSCustomObject]@{ exitCode = $exitCode; text = $text; value = $value }
+  $stderrPath = Join-Path $tempRoot ('stderr-' + [guid]::NewGuid().ToString('N') + '.txt')
+  try {
+    $raw = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments 2> $stderrPath
+    $exitCode = $LASTEXITCODE
+    $text = ($raw | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($text) -and (Test-Path -LiteralPath $stderrPath -PathType Leaf)) {
+      $text = (Get-Content -LiteralPath $stderrPath -Raw -Encoding UTF8).Trim()
+    }
+    $value = $null
+    try { $value = $text | ConvertFrom-Json } catch { }
+    return [PSCustomObject]@{ exitCode = $exitCode; text = $text; value = $value }
+  } finally {
+    Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+  }
 }
 
 function Write-DshDiagnosticsDiffFixture {

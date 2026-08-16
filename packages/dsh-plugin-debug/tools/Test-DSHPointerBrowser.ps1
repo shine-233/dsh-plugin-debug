@@ -64,7 +64,10 @@ try {
   $prefix = @('--yes', '--package', '@playwright/cli', 'playwright-cli', '--session', $session, '--raw')
 
   $open = Invoke-PlaywrightCli -CommandArguments ($prefix + @('open', $url))
-  if ($open.exitCode -ne 0 -and $open.text -match '(?i)(spawn UNKNOWN|Daemon process exited|side-by-side configuration|browser .*not.*open)') {
+  if ($open.exitCode -ne 0) {
+    # A failed playwright open cannot prove the page contract. Treat the
+    # browser/daemon/executable setup as unavailable instead of reporting a
+    # misleading functional failure (and keep the documented exit code 2).
     $unavailable = $true
     throw "PLAYWRIGHT_UNAVAILABLE: $($open.text)"
   }

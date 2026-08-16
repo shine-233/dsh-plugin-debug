@@ -64,6 +64,7 @@ repositories without a standard LICENSE file are not copied into this package.
 | [PerryLink/dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind) | 变更前快照、guard checkpoint、文件恢复、Session fork 的三阶段事务、配额和可恢复日志 | 本项目已具备可逆 snapshot/restore、receipt 和 fork；本轮新增 Crash Guard 集成 fixture。每次 Tool mutation 的自动 checkpoint、增量配额和完整三阶段 journal 仍列为后续增强，不声称已经吸收 |
 | [BiBoyang/dsh-eval-harness](https://github.com/BiBoyang/dsh-eval-harness) | 每条 case 使用隔离 workspace/session，采集 JSONL/zstd trace，断言 Tool Call，并用 baseline 做 CI PASS/WARN/FAIL 门禁 | 本项目独立实现 metadata-only Trace contract、Eval 和 baseline gate；当前只读取 JSONL/Session history，zstd 解码和真实 headless LLM 回归仍未宣称完成 |
 | [sandbaseai/sandbase-harness](https://github.com/sandbaseai/sandbase-harness) | 将 session、sandbox、audit trail、crash recovery 和可恢复事件流作为运行时一等能力 | 作为跨层审计模型参考；本项目不引入其运行时或数据库，先在 PowerShell/JSON 文件中保持零依赖 |
+| [akira399/dsh-guardian](https://github.com/akira399/dsh-guardian) | MIT；本轮只读复核的 `main` 提交为 `5bf7ef3ad56d5e0b78e40071ac99d94b697e468b`；插件预检、重复 Tool Call 循环、Agent/Workflow 递归、中断感知和 `safeToRestart` | 已独立吸收预检、运行时循环/递归观察、冷却提示、事件上报和只读重启前状态检查；不复制源码，不引入实际重启脚本，不终止任务、不杀进程、不重启 Host、不禁用插件 |
 
 ## 当前吸收结果
 
@@ -72,6 +73,8 @@ repositories without a standard LICENSE file are not copied into this package.
 - `crash-fixture` 走真实 `Start-DSH.ps1` 启动循环：第一次启动故意崩溃，Guard 生成第三方插件 quarantine patch，第二次启动只在 patch 生效后报告 Web ready。
 - `trace-baseline` 比较两份脱敏 trace；错误结果、dispatch error、turn error 或 pending Tool Call 增加时门禁失败，模型路由、工具名和权限枚举变化会留下 warning。
 - `incident-capture` 将跨层诊断组合成一份可哈希的本地 evidence bundle；只读采集与本地报告写入分开标记，最终结果使用 `COMPLETE`、`PARTIAL`、`UNAVAILABLE` 或 `FAIL`，避免用“报告文件写成功”冒充“DSH 已恢复”。
+- Guardian 运行时观察器已经合入单包：它对短窗口内重复 Tool Call、Agent lineage、Workflow 深度和取消/失败中断做有界检测；`policy=auto` 只发送一次冷却提示，`policy=report` 只上报，不终止任务。
+- Guardian 状态接口和 `Get-DSHGuardianStatus.ps1` 只读 `safeToRestart`；状态不安全时返回 `BUSY_DO_NOT_RESTART`，不会执行第三方项目中的实际重启流程。事件内存窗口和单条事件元数据有界，但 `events.jsonl` 当前按行追加、没有自动轮转，文档不把整个文件声明为有界。
 - 模型辅助修复仍然是受限 advisory JSON：当前 DSH Host 没有明确的 no-tools planner 能力时直接 `UNAVAILABLE`；即使 Host 将来提供该能力，计划也必须绑定 incident/evidence/Profile/候选/有效期，并经过执行事件拒绝、schema/allowlist、人工 `-Force` 和 receipt 回滚流程。
 
 ## 2026-08-16 公共仓库补充核对
