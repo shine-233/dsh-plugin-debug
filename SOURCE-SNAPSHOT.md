@@ -19,14 +19,14 @@ the exported entry points, the migration manifest and the regression suites; it
 does not claim that a deleted source directory can be re-diffed in place.
 
 Publication evidence is recorded separately in `RELEASE-MANIFEST.json`.
-For the 0.8.1 release, both publication-boundary and fresh-clone verification
-passed against source commit
-`f74e06d8ce82d5c9d7b091e9ab000248e166f368`; the recorded UTC times are
-`2026-08-16 06:26:43.6864902Z` and `2026-08-16 06:26:45.0077274Z`.
+The current `0.8.2` candidate contains a runtime-supervisor restart fix and
+is awaiting its source-commit push, fresh-clone verification and separate
+evidence commit. Do not read the old `publishedCommit` as evidence for this
+candidate.
 
+The previous published release was `0.8.1`, verified against source commit
+`f74e06d8ce82d5c9d7b091e9ab000248e166f368`; its recorded UTC times were
+`2026-08-16 06:26:43.6864902Z` and `2026-08-16 06:26:45.0077274Z`.
 The previous publication baseline commit was
-`202d4aa6369232a2dc852b5d4e898290efb7cf3b`. The 0.8.1 source commit above is
-the commit recorded as `publishedCommit`; the later evidence commit only
-records verification metadata and must not replace that source hash. Future
-functional changes must create a new candidate source commit and repeat the
-same fresh-clone and publication gates.
+`202d4aa6369232a2dc852b5d4e898290efb7cf3b`. The `0.8.2` source commit and
+new verification times must be filled only after the remote gates pass.

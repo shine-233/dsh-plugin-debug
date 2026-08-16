@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-plugin-debug",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "bundleType": "dsh-npm-bundle",
   "independentRuntime": true,
   "features": {
@@ -81,7 +81,7 @@
   "files": {
     "package.json": {
       "bytes": 2930,
-      "sha256": "65974b09363bc3ae2ca8152eed457eae8741b3a99b3c64437c6d63fdf91938c5"
+      "sha256": "e207688bc1caa3fa629ec3747f6b8f5c0d61c061dcce6f4b2b2c1014882965b4"
     },
     "cordis.patch.yml": {
       "bytes": 242,

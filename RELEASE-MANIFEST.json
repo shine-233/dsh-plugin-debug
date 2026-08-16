@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
   "repositoryRole": "dsh-publication-release",
-  "status": "published",
+  "status": "candidate",
   "publication": {
     "githubOwner": "shine-233",
     "repositoryName": "dsh-plugin-debug",
     "visibility": "public",
     "copyrightHolder": "shine-233",
     "remoteConfigured": true,
-    "pushPerformed": true,
+    "pushPerformed": false,
     "remoteUrl": "https://github.com/shine-233/dsh-plugin-debug.git",
     "defaultBranch": "main",
-    "publishedCommit": "f74e06d8ce82d5c9d7b091e9ab000248e166f368"
+    "publishedCommit": null
   },
   "verification": {
     "sourceSnapshotComparedAt": "2026-08-16",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
     "packageFileCount": 96,
-    "publicationVerifierPassedAt": "2026-08-16 06:26:43.6864902Z",
-    "freshCloneVerifiedAt": "2026-08-16 06:26:45.0077274Z"
+    "publicationVerifierPassedAt": null,
+    "freshCloneVerifiedAt": null
   },
   "layout": {
     "packageRoot": "packages/dsh-plugin-debug",
@@ -30,7 +30,7 @@
       "id": "dsh-plugin-debug",
       "path": "packages/dsh-plugin-debug",
       "kind": "dsh-debug-plugin",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "standaloneInstall": true,
       "includes": ["runtime-provenance", "host-diagnostics", "resource-pressure", "incident-capture-and-correlation", "recovery", "constrained-self-repair", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "trace-eval-profile-autopsy", "metadata-only-repro-export", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
       "license": "MIT"

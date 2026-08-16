@@ -7,7 +7,7 @@ for every later version.
 ## Source and boundary
 
 - [x] `packages/dsh-plugin-debug` is the only public package and contains the runtime plus Host-side debug/launcher tools.
-- [x] The package retains runtime ID `dsh-plugin-debug` and version `0.8.1`.
+- [x] The package retains runtime ID `dsh-plugin-debug` and candidate version `0.8.2`.
 - [x] Crash Guard's fake runtime is generated only in a bounded temporary test directory; no independent fixture package is present.
 - [x] Startup incident receipts and the read-only plugin bisect plan are covered by published tests and contain no raw payloads or automatic Profile mutation.
 - [x] Startup health fail-closes unresolved or unavailable plugin failures: safe third-party mappings may be quarantined once, while core/unknown/ambiguous failures produce a `degraded` receipt without arbitrary disable or a second restart.
@@ -78,20 +78,18 @@ proof of a real production DSH or successful GitHub publication.
 - [x] A reviewed local first commit exists.
 - [x] Remote URL is explicitly confirmed before configuration.
 - [x] Push is performed only after staged contents are approved.
-- [x] A fresh clone passes the single-package tests and publication checks; the verified source commit is `f74e06d8ce82d5c9d7b091e9ab000248e166f368` and the release is recorded as `published`.
+- [ ] A fresh clone passes the single-package tests and publication checks for the `0.8.2` candidate; source SHA and evidence are filled only after the remote gates pass.
 
-## Recorded release evidence
+## Current 0.8.2 release evidence
 
-- Source commit pushed to `origin/main`: `f74e06d8ce82d5c9d7b091e9ab000248e166f368`.
-- GitHub Actions run `31930515435`: `node-tests`, `windows-debug-suite` and
-  `Fresh clone publication gate` all completed successfully.
-- Fresh-clone standalone suite: `result=PASS`, `filesChecked=59`,
+- Candidate source commit pushed to `origin/main`: pending.
+- GitHub Actions CI, CodeQL and `Fresh clone publication gate`: pending for
+  the candidate source commit.
+- Fresh-clone standalone suite: pending; the local Windows PowerShell proof
+  before push is `result=PASS`, `filesChecked=59`,
   `powershellFilesParsed=55`, `fixtureChecks=51`.
-- Fresh-clone offline and compatibility integration: `result=PASS`; the
-  integration report keeps `pluginStoreCapability=REMOVED`.
-- Root and fresh-clone `Verify-Publication.ps1`: `result=PASS`,
-  `packageFileCount=96`, `store=removed`, `forbiddenDirectories=absent`,
-  `sensitiveArtifacts=absent`, `json=parseable`.
-- `RELEASE-MANIFEST.json` records the verifier times in UTC. The evidence
-  commit that contains this checklist update is intentionally distinct from
-  the verified source commit above.
+- Root and fresh-clone `Verify-Publication.ps1`: pending for the candidate;
+  the expected package boundary remains 96 files with the store removed.
+- After those gates pass, update this section and `RELEASE-MANIFEST.json` in
+  a separate evidence commit. Keep the previous `0.8.1` evidence in git
+  history rather than copying it into the new release record.
