@@ -1,6 +1,6 @@
 # Source snapshot status
 
-This is the current single-package publication candidate source tree. The public remote is
+This is the current single-package publication release source tree. The public remote is
 `https://github.com/shine-233/dsh-plugin-debug.git`, default branch `main`.
 
 | Component | Files | Notes |
@@ -18,13 +18,15 @@ deleted source trees. Current-state proof is limited to the single package tree,
 the exported entry points, the migration manifest and the regression suites; it
 does not claim that a deleted source directory can be re-diffed in place.
 
-Publication evidence is recorded separately in `RELEASE-MANIFEST.json`:
-`verification.publicationVerifierPassedAt` and
-`verification.freshCloneVerifiedAt` remain `null` until the corresponding
-commands pass against the same commit.
+Publication evidence is recorded separately in `RELEASE-MANIFEST.json`.
+For the 0.8.1 release, both publication-boundary and fresh-clone verification
+passed against source commit
+`f74e06d8ce82d5c9d7b091e9ab000248e166f368`; the recorded UTC times are
+`2026-08-16 06:26:43.6864902Z` and `2026-08-16 06:26:45.0077274Z`.
 
 The previous publication baseline commit was
-`202d4aa6369232a2dc852b5d4e898290efb7cf3b`; the 0.8.1 candidate is currently
-being revalidated locally and must receive a new commit hash after push. A
-fresh clone must pass the same package and publication checks before this
-candidate is called released.
+`202d4aa6369232a2dc852b5d4e898290efb7cf3b`. The 0.8.1 source commit above is
+the commit recorded as `publishedCommit`; the later evidence commit only
+records verification metadata and must not replace that source hash. Future
+functional changes must create a new candidate source commit and repeat the
+same fresh-clone and publication gates.

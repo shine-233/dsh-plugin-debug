@@ -30,7 +30,7 @@ for every later version.
 
 - [x] Root and package MIT copyright holder is recorded as `shine-233`.
 - [x] The public package manifest has a real `repository`, `bugs` and `homepage` field.
-- [x] `RELEASE-MANIFEST.json` records the candidate owner, repository and public visibility, and reserves `publicationVerifierPassedAt`/`freshCloneVerifiedAt` for evidence-backed timestamps.
+- [x] `RELEASE-MANIFEST.json` records the release owner, repository and public visibility, with evidence-backed `publicationVerifierPassedAt`/`freshCloneVerifiedAt` timestamps.
 - [x] Dependency license fields were inventoried against the exact pinned runtime lockfile; this is not legal advice.
 
 ## Verification
@@ -78,4 +78,20 @@ proof of a real production DSH or successful GitHub publication.
 - [x] A reviewed local first commit exists.
 - [x] Remote URL is explicitly confirmed before configuration.
 - [x] Push is performed only after staged contents are approved.
-- [ ] A fresh clone passes the single-package tests and publication checks; until then the release remains `candidate`.
+- [x] A fresh clone passes the single-package tests and publication checks; the verified source commit is `f74e06d8ce82d5c9d7b091e9ab000248e166f368` and the release is recorded as `published`.
+
+## Recorded release evidence
+
+- Source commit pushed to `origin/main`: `f74e06d8ce82d5c9d7b091e9ab000248e166f368`.
+- GitHub Actions run `31930515435`: `node-tests`, `windows-debug-suite` and
+  `Fresh clone publication gate` all completed successfully.
+- Fresh-clone standalone suite: `result=PASS`, `filesChecked=59`,
+  `powershellFilesParsed=55`, `fixtureChecks=51`.
+- Fresh-clone offline and compatibility integration: `result=PASS`; the
+  integration report keeps `pluginStoreCapability=REMOVED`.
+- Root and fresh-clone `Verify-Publication.ps1`: `result=PASS`,
+  `packageFileCount=96`, `store=removed`, `forbiddenDirectories=absent`,
+  `sensitiveArtifacts=absent`, `json=parseable`.
+- `RELEASE-MANIFEST.json` records the verifier times in UTC. The evidence
+  commit that contains this checklist update is intentionally distinct from
+  the verified source commit above.
