@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
   "repositoryRole": "dsh-publication-release",
-  "status": "candidate",
+  "status": "published",
   "publication": {
     "githubOwner": "shine-233",
     "repositoryName": "dsh-plugin-debug",
     "visibility": "public",
     "copyrightHolder": "shine-233",
     "remoteConfigured": true,
-    "pushPerformed": false,
+    "pushPerformed": true,
     "remoteUrl": "https://github.com/shine-233/dsh-plugin-debug.git",
     "defaultBranch": "main",
-    "publishedCommit": null
+    "publishedCommit": "b234e79dfe7b349568f7f3e3c63504979f0e74e0"
   },
   "verification": {
     "sourceSnapshotComparedAt": "2026-08-16",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
     "packageFileCount": 96,
-    "publicationVerifierPassedAt": null,
-    "freshCloneVerifiedAt": null
+    "publicationVerifierPassedAt": "2026-08-16 08:30:15.4171738Z",
+    "freshCloneVerifiedAt": "2026-08-16 08:28:54Z"
   },
   "layout": {
     "packageRoot": "packages/dsh-plugin-debug",
