@@ -2,7 +2,7 @@
 
 这是单包 `dsh-plugin-debug` 的完整中文手册。它把 DSH 检测、调试、来源追踪、日志取证、恢复、崩溃防护（Crash Guard）、插件预检、Trace 分析、任务守护和一键启动能力合并到一起；不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。包内默认的 [`README.md`](README.md) 也是中文简版，GitHub 首页不会要求读者先阅读英文文档。
 
-本手册说明当前源码能做什么、明确不会做什么，以及如何测试、更新和发布。候选版本是否已经推送，以仓库根目录的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准；本地测试通过不等于生产 DSH 已验证。
+本手册说明当前源码能做什么、明确不会做什么，以及如何测试、更新和发布。候选版本是否已经推送，以仓库中的 [`RELEASE-MANIFEST.json`](https://github.com/shine-233/dsh-plugin-debug/blob/main/RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](https://github.com/shine-233/dsh-plugin-debug/blob/main/SOURCE-SNAPSHOT.md) 和远端提交为准；本地测试通过不等于生产 DSH 已验证。
 
 建议环境：Windows PowerShell、Node.js 22 或更高版本。离线核心测试不需要真实 DSH；页面、浏览器和 Host API 测试需要额外的本机运行环境。
 
@@ -27,19 +27,28 @@
 
 ## 安装
 
-使用仓库中的一键入口：
+使用仓库中的一键入口（推荐显式固定诊断默认端口）：
 
 ```powershell
-.\Start-DSH-Debug.ps1 -NoBrowser
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -NoBrowser
 ```
 
-默认使用 `debug` Profile 和 `127.0.0.1:3081`，首次运行把当前目录中的 bundle 离线安装到该 Profile。需要后台运行时使用 `Start-DSH-Debug.vbs`。启动器只读取本地包，不搜索、安装或调用插件商店。
+Debug 包装器默认使用 `debug` Profile 和 `127.0.0.1:3081`，首次运行把当前目录中的 bundle 离线安装到该 Profile。默认 pinned runtime 位于 `tools/runtime`；如果要把 runtime 放到其他本地目录，可在启动前设置 `DSH_RUNTIME_ROOT`。首次启动如果本地还没有 pinned DSH runtime，仍可能先通过 npm 下载 runtime；这里的“离线”只表示 bundle 安装不访问插件商店。需要后台运行时使用 `Start-DSH-Debug.vbs`。
 
 也可以通过 DSH CLI 安装本地包：
 
 ```powershell
 dsh plugin --profile debug add . --offline
 ```
+
+更新已经安装到 Profile 的本地版本时，先停止旧实例，再用 `-ForcePluginInstall` 覆盖已安装 bundle；普通再次启动只会复用已安装版本，不会猜测源码是否变化：
+
+```powershell
+.\tools\Stop-DSH.ps1 -Profile debug -Port 3081
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -ForcePluginInstall -NoBrowser
+```
+
+旧的 provenance Profile 不会自动迁移；请先备份并核对旧 Profile，再按仓库中的 [`MIGRATION-MANIFEST.md`](https://github.com/shine-233/dsh-plugin-debug/blob/main/MIGRATION-MANIFEST.md) 的边界重新安装 canonical `dsh-plugin-debug` bundle。
 
 `Start-DSH-Combined.*` 只在你先运行 `tools\Install-DSH-Agents.vbs` 后才会启用可选的 Kimi/Codex Agent 覆盖层（overlay）；覆盖层不是 Debug 核心依赖。
 
@@ -52,14 +61,14 @@ dsh plugin --profile debug add . --offline
 3. 对启动日志或 `pluginInventory/list` 已观察到的失败插件写入 Guard state 和可逆 patch。
 4. 最多重启一次并重新等待 Web ready；第二次仍失败时进入 `degraded`，不会无限自愈。
 
-因此“有问题就直接禁用”不是无条件删除：它只自动隔离有明确证据的安全第三方候选，无法归因时保留人工复核。
+因此“有问题就直接禁用”不是无条件删除：它只自动隔离有明确证据的安全第三方候选，无法归因时保留人工复核，并把启动状态记为 `degraded`，不会把“拒绝猜测”错误报告成 `healthy`。默认 Debug 启动器最多只做一次受控重启；无法安全隔离的失败不会触发盲目重启。
 
 每次启动还会在当前 `StateRoot` 写入 `startup-incident.json` 启动处置回执。它记录本次启动是 `healthy`、`restarting`、`recovered`、`degraded` 还是 `failed`，以及关联 ID、重启次数、被隔离的插件 ID 和可查看的本地证据文件名。回执不写原始日志、Tool 参数、凭据或完整路径；`incident-capture` 会在存在时把它纳入 `components.startup`，方便后续诊断和复现。
 
 如果目标端口已有其他 DSH 实例，而目标 Profile 尚未安装 Debug bundle，启动器默认自动使用类似 `web-debug-3082` 的隔离 Profile。原实例、原端口和原 Profile 不会被修改。要恢复严格拒绝模式，可传：
 
 ```powershell
-.\tools\Start-DSH.ps1 -NoIsolateOnConflict -NoErrorDialog
+.\tools\Start-DSH.ps1 -Profile debug -Port 3081 -NoIsolateOnConflict -NoErrorDialog
 ```
 
 ## 页面通知和修复 Session
@@ -67,6 +76,8 @@ dsh plugin --profile debug add . --offline
 Web Client 会把 Host inventory 中的 failed plugin、动态插件运行错误和 Slot 渲染错误显示在诊断页，并持续刷新运行时状态。页面提示只报告“发现了什么”，不会伪造因果结论。
 
 诊断页还会显示本地时间线。它是一个固定上限的环形缓冲，事件只有类别、时间、状态、插件/Module/Slot 标识和经过脱敏的短摘要；`getDiagnosticBreadcrumbs()` 与导出的诊断 JSON 会同时返回 `limit`、`dropped` 和 `truncated`，便于判断是否因为事件太多而丢失早期线索。
+
+启动处置完成后，页面 URL 只带有限的 `dsh_debug_guard=isolated` 和脱敏 incident ID，用于显示通知和区分不同故障；它不会携带插件名称、日志、Tool 参数或路径。自动诊断 Session 还有一层独立的 Host 合同：必须同时存在 `diagnosticSessionPolicy.automatic === true`、`mode === 'no-tools'`，以及 Host 提供的 `sessions.createNoTools(request)`（或等价的 `diagnosticSessionPolicy.createNoTools`）工厂。工厂必须接受 `mode: 'no-tools'`、空工具列表和 metadata-only 请求，并返回可验证的 `mode: 'no-tools'`、`tools: false`、`approval: false`、`execution: false` 能力证明。普通 `sessions.create()` 不会被当成安全入口；缺少专用工厂或能力证明时，页面显示 `UNAVAILABLE`，不会创建 Session，也不会发送 prompt。
 
 修复规划默认是只读 dry-run：
 
@@ -146,18 +157,20 @@ $env:DSH_DEBUG_API_ALLOWED_HOSTS = 'debug-host.example'
 
 ```powershell
 # 以下命令从仓库根目录（包含 scripts/ 和 packages/ 的目录）开始
-Set-Location C:\path\to\dsh-open-source
+Push-Location C:\path\to\dsh-open-source
 .\scripts\Verify-Publication.ps1
 
 Set-Location .\packages\dsh-plugin-debug
 npm ci --ignore-scripts
+npm ci --prefix .\tools\runtime --omit=dev --ignore-scripts --no-audit --no-fund
 npm test
 npm run check
 .\Test-DSHStandalone.ps1
-.\tools\Test-DSHPluginIntegration.ps1
+.\tools\Test-DSHPluginIntegration.ps1 -SkipCompatibility
 .\tools\Test-DSHLauncherConflict.ps1
 .\tools\Test-DSHCrashGuard.ps1
 .\tools\Test-DSHRuntimeSupervisor.ps1
+.\tools\Test-DSHRuntimeSupervisor.ps1 -UnresolvedPluginFailure  # 负向：无安全映射时 fail closed，不禁用、不二次重启
 .\tools\Test-DSHGuard.ps1
 .\tools\Test-DSHPluginHealth.ps1
 .\tools\Test-DSHPluginState.ps1
@@ -182,6 +195,8 @@ Pop-Location
 `tools\\fixtures` 中的 JSON/HTML 是合成且脱敏的输入数据，会被 trace 和浏览器契约测试直接引用。Trace fixture 只保存事件类型、调用键名、权限枚举、错误代码和 pending/错误语义，不保存 raw arguments、Tool result 正文、Token 或危险命令。Recovery fixture 会证明 `.env` 只标记为存在但排除，快照和 restore 都不会接触其内容。Crash Guard、启动冲突和 runtime supervisor 的 fake DSH 会在测试运行时创建到临时目录，测试结束后清理；仓库中没有真实 Profile、日志、凭据或崩溃转储。
 
 `Test-DSHPointerBrowser.ps1` 需要 `python.exe`、`npx` 和可用的 Playwright 浏览器 daemon；缺少这些依赖时只报告 `UNAVAILABLE`，不会把静态 HTML 加载冒充成真实 DSH Web 验证。
+
+上面列出的核心命令必须取得退出码 `0`。`Test-DSHPointerBrowser.ps1` 是环境依赖型可选检查，只有它在缺少浏览器运行时而返回退出码 `2` 时才可记录为 `UNAVAILABLE`；其他非零退出码都应视为失败。无论是否运行浏览器检查，`Verify-Publication.ps1` 都必须输出 `result = PASS`，并且不能把 `UNAVAILABLE` 写成“真实 DSH Web 已验证”。
 
 Crash Guard 的测试还会检查启动处置回执：第一次启动失败、生成可逆隔离并受控重启后，回执必须变成 `recovered`，并保留被隔离插件 ID。这样别人不只可以看到“启动成功”，还可以审阅启动异常是如何被处理的。
 
@@ -212,7 +227,7 @@ Crash Guard 的测试还会检查启动处置回执：第一次启动失败、�
 3. 运行 `npm run check`，它会重新构建 `lib`、更新 `bundle-manifest.json` 并运行 Node 测试。
 4. 运行 `Test-DSHStandalone.ps1`、启动冲突夹具和发布验证器；会启动 fake/loopback 测试进程的命令不能当作纯静态检查。
 5. 检查 `npm pack --dry-run --json --ignore-scripts` 的文件数，并同步 `SOURCE-SNAPSHOT.md`、`RELEASE-MANIFEST.json` 和必要的文档。
-6. 先在本地做一次可审阅的 commit，再配置明确的 GitHub remote；新仓库第一次发布或后续版本发布前，都要从 fresh clone 重跑测试，并把两个 UTC 验证时间写入发布清单。
+6. 先在本地做一次可审阅的 candidate source commit 并推送；从远端回读 `sourceCommit` 后，再从该提交创建 fresh clone 重跑测试。只有 fresh clone 通过后，才用单独的 evidence commit 更新发布清单中的 `publishedCommit`、两个 UTC 验证时间和 `status`，再推送 evidence commit。版本变更后用 `npm install --package-lock-only --ignore-scripts` 同步 lockfile，再运行 `Verify-Publication.ps1` 检查四处版本一致。
 
 发布前候选状态、GitHub remote、fresh clone 验证结果会记录在仓库根目录的
 `RELEASE-MANIFEST.json` 和 `SOURCE-SNAPSHOT.md`；本地测试通过不等于真实 DSH
@@ -220,9 +235,11 @@ Crash Guard 的测试还会检查启动处置回执：第一次启动失败、�
 
 ## 研究和吸收边界
 
-本项目参考了公开的 `dsh-doctor`、`dsh-fail-logger`、`dsh-sentinel`、`dsh-turn-rewind`、`dsh-checkpoint-rewind` 和 `dsh-clawrouter` 等项目的公开 README/代码结构，但没有复制它们的源码，也不把它们加入运行时依赖。当前吸收的是可验证的设计形状：只读 doctor、失败去重、可逆 snapshot、执行前安全闸门和 bounded restart。
+本项目参考了公开的 `dsh-doctor`、`dsh-fail-logger`、`dsh-sentinel`、`dsh-turn-rewind`、`dsh-checkpoint-rewind`、`dsh-clawrouter`、`dsh-plugin-doctor`、`dsh-ci-doctor`、`dsh-capability-inspector` 和 `harness-doctor` 等项目的公开 README/代码结构，但没有复制它们的源码，也不把它们加入运行时依赖。当前吸收的是可验证的设计形状：只读 doctor、失败去重、可逆 snapshot、执行前安全闸门、bounded restart、分层 readiness、能力矩阵和 schema 化 support bundle。
 
-尚未默认加入的能力包括：常驻文件/HTTP watcher、模型二次审查危险命令、真正的 durable rewind、自动安装依赖和任意进程清理。这些功能会扩大权限或运行时边界，必须先有 DSH 官方 API、明确的安全策略和独立回归测试。
+本轮新增的研究结论也明确写入仓库根目录的 [`RESEARCH-ECOSYSTEM.md`](https://github.com/shine-233/dsh-plugin-debug/blob/main/RESEARCH-ECOSYSTEM.md)：`npm pack --ignore-scripts` 隔离安装、临时 `DSH_HOME`、Web readiness、rollback receipt、失败签名 ledger、单项降级和显式 allowlist 都只是设计参考。当前已经实现的是离线 metadata-only 检查、发布边界验证、可逆 Guard、页面通知和受限诊断 Session；真实 DSH Web readiness、runtime/native 模块隔离、持久 CI ledger 和完整 support bundle 仍是未验证能力，不能从研究结果推断为已支持。
+
+尚未默认加入的能力包括：常驻文件/HTTP watcher、模型二次审查危险命令、真正的 durable rewind、自动安装依赖、任意进程清理、自动 Git bisect、外部 telemetry、持久 CI ledger 和无 allowlist 的 support bundle。这些功能会扩大权限或运行时边界，必须先有 DSH 官方 API、明确的安全策略和独立回归测试。
 
 ## 发布边界
 

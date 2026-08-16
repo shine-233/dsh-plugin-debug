@@ -79,7 +79,7 @@ try {
   if ($TimeoutSec -lt 10 -or $TimeoutSec -gt 120) { throw 'TimeoutSec must be between 10 and 120' }
   $step = 'stage-package'
   New-Item -ItemType Directory -Path $fixtureTools, $fixtureDshHome, $fixtureWorkspace, $fixtureState -Force | Out-Null
-  foreach ($relative in @('package.json', 'cordis.patch.yml', 'bundle-manifest.json', 'lib', 'tools\DSH-Guard.psm1', 'tools\Start-DSH.ps1')) {
+  foreach ($relative in @('package.json', 'cordis.patch.yml', 'bundle-manifest.json', 'lib', 'tools\DSH-State.psm1', 'tools\DSH-Guard.psm1', 'tools\Start-DSH.ps1')) {
     $source = Join-Path $packageRoot $relative
     $destination = Join-Path $stagedRoot $relative
     Copy-Item -LiteralPath $source -Destination $destination -Recurse -Force

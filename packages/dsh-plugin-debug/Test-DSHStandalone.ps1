@@ -349,6 +349,7 @@ try {
   $installDsh = Join-Path $tempRoot 'install-fixture-dsh-home'
   New-Item -ItemType Directory -Path (Split-Path -Parent $installRuntimeEntry),$installTools -Force | Out-Null
   Copy-Item -LiteralPath (Join-Path $toolRoot 'Start-DSH.ps1') -Destination (Join-Path $installTools 'Start-DSH.ps1') -Force
+  Copy-Item -LiteralPath (Join-Path $toolRoot 'DSH-State.psm1') -Destination (Join-Path $installTools 'DSH-State.psm1') -Force
   Copy-Item -LiteralPath (Join-Path $packageRoot 'package.json') -Destination (Join-Path $installRoot 'package.json') -Force
   Copy-Item -LiteralPath (Join-Path $packageRoot 'cordis.patch.yml') -Destination (Join-Path $installRoot 'cordis.patch.yml') -Force
   Copy-Item -LiteralPath (Join-Path $packageRoot 'lib') -Destination (Join-Path $installRoot 'lib') -Recurse -Force
@@ -388,6 +389,22 @@ fs.cpSync(source, installedRoot, { recursive: true });
   $installManifest = if (Test-Path -LiteralPath $installManifestPath -PathType Leaf) { Get-Content -LiteralPath $installManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null }
   Assert-Standalone ($installResult.exitCode -eq 0) "standalone launcher auto-install fixture failed: $($installResult.text)"
   Assert-Standalone ($null -ne $installManifest -and @($installManifest.dsh.profile.bundles) -contains 'dsh-plugin-debug') 'standalone launcher did not install its own bundle into an empty Profile'
+  $fixtureChecks++
+
+  $previousUpdateDshHome = $env:DSH_HOME
+  try {
+    $env:DSH_HOME = $installDsh
+    $updateResult = Invoke-PowerShellJson -ScriptPath (Join-Path $installTools 'Start-DSH.ps1') -Arguments @{
+      Profile = 'debug'
+      StateRoot = (Join-Path $tempRoot 'install-fixture-state')
+      InstallOnly = $true
+      ForcePluginInstall = $true
+      NoInstall = $true
+    }
+  } finally {
+    if ($null -eq $previousUpdateDshHome) { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue } else { $env:DSH_HOME = $previousUpdateDshHome }
+  }
+  Assert-Standalone ($updateResult.exitCode -eq 0) "standalone launcher forced bundle update failed: $($updateResult.text)"
   $fixtureChecks++
 
   $launcherConflict = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHLauncherConflict.ps1') -Arguments @{}
@@ -551,6 +568,17 @@ fs.cpSync(source, installedRoot, { recursive: true });
   Assert-Standalone ($runtimeSupervisorFixture.value.bootCount -eq 2 -and $runtimeSupervisorFixture.value.quarantinedPlugin -eq 'test-dsh-plugin') 'runtime supervisor did not perform exactly one plugin quarantine restart'
   Assert-Standalone ($runtimeSupervisorFixture.value.reversiblePatchPresent -eq $true -and $runtimeSupervisorFixture.value.webReadyAfterRestart -eq $true) 'runtime supervisor fixture did not prove reversible patch and second Web readiness'
   Assert-Standalone ($runtimeSupervisorFixture.value.supervisorStatus -eq 'healthy' -and $runtimeSupervisorFixture.value.supervisorRestartCount -eq 1) 'runtime supervisor did not finish in healthy state after one restart'
+  $fixtureChecks++
+
+  $unresolvedSupervisorFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHRuntimeSupervisor.ps1') -Arguments @{
+    TimeoutSec = 40
+    UnresolvedPluginFailure = $true
+  }
+  Assert-Standalone ($unresolvedSupervisorFixture.exitCode -eq 0 -and $unresolvedSupervisorFixture.value.result -eq 'PASS') 'unresolved plugin supervisor fixture did not return PASS'
+  Assert-Standalone ($unresolvedSupervisorFixture.value.scenario -eq 'unresolved-plugin-fail-closed' -and $unresolvedSupervisorFixture.value.startupBlocked -eq $true) 'unresolved plugin failure was not fail-closed'
+  Assert-Standalone ($unresolvedSupervisorFixture.value.bootCount -eq 1 -and $unresolvedSupervisorFixture.value.quarantineCount -eq 0) 'unresolved plugin failure caused a quarantine or a second restart'
+  Assert-Standalone ($unresolvedSupervisorFixture.value.startupIncidentStatus -eq 'degraded') 'unresolved plugin failure did not preserve a degraded startup incident receipt'
+  Assert-Standalone ($unresolvedSupervisorFixture.value.supervisorStatus -eq 'degraded' -and $unresolvedSupervisorFixture.value.supervisorReason -eq 'runtime-plugin-failed-unresolved') 'unresolved plugin failure did not produce the expected degraded supervisor receipt'
   $fixtureChecks++
 
   $guardianStatusFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'guardian-status-fixture' }

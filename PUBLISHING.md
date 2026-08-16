@@ -23,6 +23,12 @@ repository metadata and MIT notices are filled before the first commit. If the
 target changes later, update those fields and review the staged diff before
 creating a new remote or pushing.
 
+For the existing `shine-233/dsh-plugin-debug` maintenance path, do not rerun
+`git init` or replace `origin`: first read `git status --short --branch`,
+`git log`, `git remote get-url origin` and `git ls-remote origin`. The
+candidate source commit, the remote `sourceCommit`, and the later release
+evidence commit are separate gates.
+
 ## Local staging sequence
 
 From the candidate root, after those decisions are confirmed:
@@ -40,11 +46,62 @@ git commit -m "chore: prepare DSH Debug Plugin"
 
 Review the staged list before configuring any remote. Never stage `.dsh`,
 `.codex`, logs, state, credentials, coverage, runtime `node_modules` or the
-excluded store. A local commit is not a GitHub publication.
+excluded store. `git add -A` stages every current worktree change, including
+unrelated user edits; inspect `git status --short` first and stop if the list
+is not exactly the candidate you intend to publish. A local commit is not a
+GitHub publication.
 
 Before staging, run `git diff --check` and inspect `npm pack --dry-run --json
 --ignore-scripts`. The package must not contain `.env` content, raw Tool
 arguments/results, credentials, state, logs, coverage or `node_modules`.
+
+## 中文上传步骤
+
+从候选仓库根目录执行。下面的 `Verify-Publication.ps1`、Node 测试和
+PowerShell 测试必须保留真实退出码；不要把当前工作区的历史输出复制成新的
+证据。
+
+```powershell
+Push-Location C:\path\to\dsh-open-source
+git status --short --branch
+.\scripts\Verify-Publication.ps1
+
+Push-Location .\packages\dsh-plugin-debug
+npm ci --ignore-scripts
+npm ci --prefix .\tools\runtime --omit=dev --ignore-scripts --no-audit --no-fund
+npm run check
+.\Test-DSHStandalone.ps1
+.\tools\Test-DSHPluginIntegration.ps1 -SkipCompatibility
+Pop-Location
+
+gh auth status --hostname github.com
+git remote get-url origin
+git diff --check
+git diff --stat
+```
+
+如果使用辅助脚本，先确认 `gh auth status` 的账号、仓库名和可见性正确，再
+在干净且已审阅的工作树中运行：
+
+```powershell
+Push-Location .\packages\dsh-plugin-debug
+.\Publish-GitHub.ps1 -Visibility public -RepositoryName dsh-plugin-debug -SkipPush
+Pop-Location
+```
+
+该脚本会运行 `npm run check`，随后执行 `git add -A`、提交，并在未提供
+`-SkipPush` 时推送；它不会自动完成完整 PowerShell 套件、fresh clone 或
+凭据人工审阅。因此工作树含有无关修改时不能直接运行它。确认 staged 列表、
+`Verify-Publication.ps1` 和测试结果后，才执行：
+
+```powershell
+git push -u origin main
+git ls-remote origin refs/heads/main
+```
+
+GitHub CLI 不可用时，先用 `gh auth login --hostname github.com --git-protocol
+https --web` 完成认证；如果 `origin` 指向的账号、仓库或可见性不是预期值，
+停止，不要覆盖远端。
 
 ## Post-push verification
 
@@ -53,17 +110,20 @@ configure the remote and push. Then verify the default branch and clone into a
 fresh temporary directory. Run the single package Node/PowerShell suites and
 publication-boundary checks from that fresh clone.
 
-After the remote hash is read back, update `RELEASE-MANIFEST.json` only from the
-same candidate commit:
+推送后先把回读到的提交记为 `sourceCommit`，在 fresh clone 中验证这个提交。
+验证通过后，再单独提交一次“release evidence”更新 `RELEASE-MANIFEST.json`：
+`publishedCommit` 记录已经验证的 `sourceCommit`，而不是试图让一个提交记录
+自身的 SHA；随后对这个 evidence commit 再运行一次发布验证。这样不会产生
+自引用哈希，也能保留“代码提交”和“证据提交”的区别。
 
 | Field | Meaning | Allowed before the gates pass |
 | --- | --- | --- |
 | `publication.pushPerformed` | The exact candidate commit was pushed to the configured remote | `false` |
-| `publication.publishedCommit` | The 40-character commit hash read back from `origin/main` | `null` |
+| `publication.publishedCommit` | The 40-character source commit that was pushed and passed fresh-clone verification | `null` |
 | `verification.publicationVerifierPassedAt` | UTC timestamp from a real `Verify-Publication.ps1` exit code 0 | `null` |
 | `verification.freshCloneVerifiedAt` | UTC timestamp after the fresh clone passes the agreed suite | `null` |
 
-Keep `status: candidate` until both timestamps exist, the remote hash matches
-`publishedCommit`, and the fresh clone has passed. Only then may the status be
-changed to `published`. Never fill a timestamp from an earlier run, a static
-parser result, or an uncommitted worktree.
+Keep `status: candidate` until both timestamps exist, the recorded source commit
+was read from the remote, and the fresh clone has passed. Only then may the
+evidence commit change the status to `published`. Never fill a timestamp from an
+earlier run, a static parser result, or an uncommitted worktree.

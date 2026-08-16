@@ -11,6 +11,7 @@ if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
 
 $forwarded = @($args)
 $hasProfile = $false
+$hasPort = $false
  $profile = 'debug'
  $explicitAgents = $false
  $explicitAgentsPatch = $false
@@ -21,6 +22,8 @@ $hasProfile = $false
      if ($index + 1 -lt $forwarded.Count -and -not [string]::IsNullOrWhiteSpace([string]$forwarded[$index + 1])) {
        $profile = [string]$forwarded[$index + 1]
      }
+   } elseif ($argument -ieq '-Port' -or $argument -match '^-Port=') {
+     $hasPort = $true
    } elseif ($argument -match '^-Profile=(.+)$') {
      $hasProfile = $true
      $profile = $Matches[1]
@@ -52,8 +55,9 @@ $enableAgents = $explicitAgents -or $explicitAgentsPatch -or $agentsReady
 $defaults = if ($hasProfile) {
   @('-EnableCrashGuard', '-KeepAlive')
 } else {
-  @('-Profile', $profile, '-EnableCrashGuard', '-KeepAlive')
+  @('-Profile', $profile, '-Port', '3081', '-EnableCrashGuard', '-KeepAlive')
 }
+if ($hasProfile -and -not $hasPort) { $defaults = @($defaults + '-Port' + '3081') }
 if ($enableAgents) {
   $defaults = @($defaults + '-EnableAgents')
 } elseif (-not $explicitAgents -and -not $explicitAgentsPatch) {

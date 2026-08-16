@@ -86,6 +86,9 @@ try {
   $launcherText = Get-Content -LiteralPath (Join-Path $toolRoot 'Start-DSH.ps1') -Raw -Encoding UTF8
   Assert-PluginIntegration ($launcherText -notmatch '(?i)plugin.?store' -and $launcherText -notmatch '(?i)dsh-one-click') 'combined launcher still contains removed store or old one-click coupling'
   Assert-PluginIntegration ($launcherText -match '\[switch\]\$EnableAgents' -and $launcherText -match '\$AgentsPatch') 'combined launcher does not expose the Agent overlay boundary'
+  $debugLauncherText = Get-Content -LiteralPath (Join-Path $packageRoot 'Start-DSH-Debug.ps1') -Raw -Encoding UTF8
+  $combinedLauncherText = Get-Content -LiteralPath (Join-Path $packageRoot 'Start-DSH-Combined.ps1') -Raw -Encoding UTF8
+  Assert-PluginIntegration ($debugLauncherText -match "'-Port', '3081'" -and $combinedLauncherText -match "'-Port', '3081'") 'debug launchers do not keep the documented default diagnostics port'
 
   # Stage only the public package shape and use a fake offline DSH CLI. This
   # proves the package installs as itself without a registry or real Profile.
@@ -94,11 +97,17 @@ try {
   foreach ($relative in @('package.json', 'bundle-manifest.json', 'cordis.patch.yml', 'lib', 'tools', 'DSH-Provenance.ps1', 'Start-DSH-Combined.ps1')) {
     Copy-Item -LiteralPath (Join-Path $packageRoot $relative) -Destination (Join-Path $stagedRoot $relative) -Recurse -Force
   }
+  $stagedRuntimeModules = Join-Path $stagedRoot 'tools\runtime\node_modules'
+  if (Test-Path -LiteralPath $stagedRuntimeModules -PathType Container) {
+    Remove-Item -LiteralPath $stagedRuntimeModules -Recurse -Force
+  }
   $runtimeEntry = Join-Path $stagedRoot 'tools\runtime\node_modules\@deepseek-ai\dsh\lib\bin.js'
+  $runtimePackageRoot = Split-Path -Parent (Split-Path -Parent $runtimeEntry)
   New-Item -ItemType Directory -Path (Split-Path -Parent $runtimeEntry) -Force | Out-Null
+  [IO.File]::WriteAllText((Join-Path $runtimePackageRoot 'package.json'), '{"name":"@deepseek-ai/dsh","type":"module"}', [Text.UTF8Encoding]::new($false))
   $fakeDsh = @'
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
 const args = process.argv.slice(2);
 if (args.includes('--dump-config')) { console.log('{}'); process.exit(0); }
 if (!args.includes('plugin') || !args.includes('add')) process.exit(9);

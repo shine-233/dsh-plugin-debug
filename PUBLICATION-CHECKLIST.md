@@ -10,6 +10,7 @@ for every later version.
 - [x] The package retains runtime ID `dsh-plugin-debug` and version `0.8.1`.
 - [x] Crash Guard's fake runtime is generated only in a bounded temporary test directory; no independent fixture package is present.
 - [x] Startup incident receipts and the read-only plugin bisect plan are covered by published tests and contain no raw payloads or automatic Profile mutation.
+- [x] Startup health fail-closes unresolved or unavailable plugin failures: safe third-party mappings may be quarantined once, while core/unknown/ambiguous failures produce a `degraded` receipt without arbitrary disable or a second restart.
 - [x] Diagnostics-report diffing is covered by a Windows PowerShell regression; sensitive or invalid inputs fail closed to `MANUAL_REVIEW`/`FAIL`.
 - [x] Static plugin preflight is covered by a Windows PowerShell regression; it is offline/read-only, never executes plugin code, and routes dynamic access to `MANUAL_REVIEW`.
 - [x] Dependency graph inspection is covered by a Windows PowerShell regression; missing packages, cycles and unreferenced local packages fail closed without install or execution.
@@ -21,9 +22,9 @@ for every later version.
 - [x] The diagnostics-diff action compares only bounded metadata and routes sensitive inputs to `MANUAL_REVIEW`.
 - [x] The plugin-store source and capability are absent from the candidate and have been removed locally.
 - [x] No `.dsh`, `.codex`, Profile state, logs, state, temporary directory, node_modules or coverage output is present.
-- [ ] Recovery regression proves sensitive files such as `.env` are recorded as excluded and are never copied or restored.
-- [ ] Published trace fixtures contain metadata only: no raw Tool arguments, result bodies, credentials or dangerous command text.
-- [ ] Guard API rejects non-loopback BaseUrl values unless an explicit host allowlist is configured.
+- [x] Recovery regression proves sensitive files such as `.env` are recorded as excluded and are never copied or restored.
+- [x] Published trace fixtures contain metadata only: no raw Tool arguments, result bodies, credentials or dangerous command text.
+- [x] Guard API rejects non-loopback BaseUrl values unless an explicit host allowlist is configured.
 
 ## Metadata and licensing
 
@@ -35,7 +36,14 @@ for every later version.
 ## Verification
 
 ```powershell
-Set-Location .\packages\dsh-plugin-debug
+# Start from the candidate repository root. Verify before npm ci because the
+# verifier intentionally rejects generated node_modules/state/log directories.
+Set-Location C:\path\to\dsh-open-source
+.\scripts\Verify-Publication.ps1
+
+Push-Location .\packages\dsh-plugin-debug
+npm ci --ignore-scripts
+npm ci --prefix .\tools\runtime --omit=dev --ignore-scripts --no-audit --no-fund
 npm test
 npm run check
 .\Test-DSHStandalone.ps1
@@ -56,11 +64,11 @@ npm run check
 .\tools\Test-DSHRecovery.ps1
 .\tools\Test-DSHPointerBrowser.ps1  # optional; exit 2 means browser runtime unavailable
 Pop-Location
-
-Set-Location .
-.\scripts\Verify-Publication.ps1
 ```
 
+After dependency-backed checks, remove only the generated dependency folders
+from this candidate checkout, or use a clean/fresh clone for the final boundary
+check. Then run `scripts\Verify-Publication.ps1` again from that clean tree.
 Classify any intentional fixture markers; never treat a green static check as
 proof of a real production DSH or successful GitHub publication.
 

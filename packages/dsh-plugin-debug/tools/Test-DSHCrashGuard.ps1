@@ -54,6 +54,7 @@ try {
   if ($TimeoutSec -lt 10 -or $TimeoutSec -gt 180) { throw 'TimeoutSec must be between 10 and 180' }
   New-Item -ItemType Directory -Path $fixtureTools,$fixtureRuntime,$fixtureProfile,$fixtureWorkspace,$fixtureState -Force | Out-Null
   Copy-Item -LiteralPath (Join-Path $packageRoot 'Start-DSH.ps1') -Destination $launcher -Force
+  Copy-Item -LiteralPath (Join-Path $packageRoot 'DSH-State.psm1') -Destination (Join-Path $fixtureTools 'DSH-State.psm1') -Force
   Copy-Item -LiteralPath (Join-Path $packageRoot 'DSH-Guard.psm1') -Destination $guardModule -Force
 
   Write-FixtureText -Path (Join-Path $fixtureRuntime 'package.json') -Text '{"name":"dsh-provenance-crash-fixture-runtime","private":true}'

@@ -15,6 +15,7 @@ window.__ModuleLoader__.load({
     const POINTER_EVENT = `${PLUGIN_ID}:pointer`
     const STARTUP_GUARD_EVENT = `${PLUGIN_ID}:startup-guard`
     const STARTUP_GUARD_QUERY = 'dsh_debug_guard'
+    const STARTUP_GUARD_INCIDENT_QUERY = 'dsh_debug_incident'
     const STARTUP_DIAGNOSTIC_STORAGE_PREFIX = `${PLUGIN_ID}.startup-diagnostic.v1`
     const DEBUG_GLOBAL = '__DSH_PLUGIN_DEBUG__'
     const LEGACY_PROVENANCE_GLOBAL = '__DSH_PLUGIN_PROVENANCE__'
@@ -73,7 +74,14 @@ window.__ModuleLoader__.load({
           return match ? decodeURIComponent(match[1]) : null
         })()
         if (value !== 'isolated') return null
-        return { kind: 'isolated', source: 'standalone-crash-guard' }
+        const incidentValue = params ? params.get(STARTUP_GUARD_INCIDENT_QUERY) : (() => {
+          const match = rawSearch.match(new RegExp(`[?&]${STARTUP_GUARD_INCIDENT_QUERY}=([^&]*)`, 'u'))
+          return match ? decodeURIComponent(match[1]) : null
+        })()
+        const incidentId = typeof incidentValue === 'string' && /^[A-Za-z0-9._:-]{1,128}$/u.test(incidentValue)
+          ? incidentValue
+          : null
+        return { kind: 'isolated', source: 'standalone-crash-guard', incidentId }
       } catch {
         return null
       }
@@ -107,7 +115,7 @@ window.__ModuleLoader__.load({
         .slice(0, 8)
         .map(entry => ({
           moduleName: startupDiagnosticLabel(entry.moduleName),
-          fiberPhase: typeof entry.fiberPhase === 'string' ? entry.fiberPhase : null,
+          fiberPhase: typeof entry.fiberPhase === 'string' ? startupDiagnosticLabel(entry.fiberPhase) : null,
           enabled: entry.enabled === true,
         }))
     }
@@ -128,13 +136,19 @@ window.__ModuleLoader__.load({
     function startupDiagnosticMarker(notice, entries) {
       const names = entries.map(entry => entry.moduleName || 'unknown').sort().join(',')
       const page = typeof location !== 'undefined' && typeof location.pathname === 'string' ? location.pathname : '/'
-      return `${STARTUP_DIAGNOSTIC_STORAGE_PREFIX}:${page}:${notice?.kind || 'unknown'}:${names}`.slice(0, 700)
+      const incident = notice?.incidentId || 'unscoped'
+      return `${STARTUP_DIAGNOSTIC_STORAGE_PREFIX}:${page}:${notice?.kind || 'unknown'}:${incident}:${names}`.slice(0, 700)
     }
 
     function startupDiagnosticPrompt(entries) {
       const facts = entries.length === 0
         ? '安全隔离已发生，但当前页面没有可读取的插件清单。'
-        : entries.map(entry => `${startupDiagnosticLabel(entry.moduleName)} (${entry.fiberPhase || (entry.enabled ? 'enabled' : 'disabled')})`).join(', ')
+        : entries.map(entry => {
+          const phase = typeof entry.fiberPhase === 'string'
+            ? startupDiagnosticLabel(entry.fiberPhase)
+            : (entry.enabled ? 'enabled' : 'disabled')
+          return `${startupDiagnosticLabel(entry.moduleName)} (${phase})`
+        }).join(', ')
       return [
         'DSH Debug 启动故障诊断摘要。只使用下面的元数据，不读取原始日志、Tool 参数、Tool 结果、凭据或文件内容。',
         `Crash Guard 已隔离一个明确映射的第三方插件；可见条目：${facts}。`,
@@ -148,10 +162,42 @@ window.__ModuleLoader__.load({
         try {
           const url = new URL(location.href)
           url.searchParams.delete(STARTUP_GUARD_QUERY)
+          url.searchParams.delete(STARTUP_GUARD_INCIDENT_QUERY)
           history.replaceState(null, '', url.toString())
         } catch { /* a restricted browser URL must not break the diagnostics UI */ }
       }
       emitStartupGuardEvent()
+    }
+
+    const STARTUP_DIAGNOSTIC_REQUEST = Object.freeze({
+      purpose: 'dsh-plugin-debug.startup',
+      mode: 'no-tools',
+      tools: Object.freeze([]),
+      capabilities: Object.freeze({ tools: false, approval: false, execution: false }),
+      metadataOnly: true,
+    })
+
+    function resolveNoToolsSessionFactory(sessions, policy) {
+      if (typeof sessions?.createNoTools === 'function') return sessions.createNoTools.bind(sessions)
+      if (typeof policy?.createNoTools === 'function') return policy.createNoTools.bind(policy)
+      return null
+    }
+
+    function createdDiagnosticSessionId(created) {
+      if (typeof created === 'string' || typeof created === 'number') return String(created)
+      if (!created || typeof created !== 'object') return null
+      for (const key of ['id', 'sessionId']) {
+        if (typeof created[key] === 'string' || typeof created[key] === 'number') return String(created[key])
+      }
+      return null
+    }
+
+    function hasNoToolsCapability(...values) {
+      return values.some(value => value && typeof value === 'object'
+        && value.mode === 'no-tools'
+        && value.tools === false
+        && value.approval === false
+        && value.execution === false)
     }
 
     async function maybeCreateStartupDiagnosticSession(ctx, notice = startupGuardNotice) {
@@ -167,22 +213,27 @@ window.__ModuleLoader__.load({
 
       const sessions = optionalService(ctx, 'sessions')
       const policy = optionalService(ctx, 'diagnosticSessionPolicy')
-      if (policy?.automatic !== true || policy?.mode !== 'no-tools' || typeof sessions?.create !== 'function') {
-        setStartupDiagnosticState({ status: 'unavailable', error: 'Host did not advertise an automatic no-tools diagnostic-session policy.' })
+      const createNoTools = resolveNoToolsSessionFactory(sessions, policy)
+      if (policy?.automatic !== true || policy?.mode !== 'no-tools' || typeof createNoTools !== 'function') {
+        setStartupDiagnosticState({ status: 'unavailable', error: 'Host did not advertise an automatic no-tools diagnostic-session factory.' })
         return getStartupDiagnosticState()
       }
 
       setStartupDiagnosticState({ status: 'creating', error: null })
       try {
-        const sessionId = await sessions.create({})
-        const binding = typeof sessions.binding === 'function' ? sessions.binding(sessionId) : null
-        const session = binding?.session
+        const created = await createNoTools(STARTUP_DIAGNOSTIC_REQUEST)
+        const sessionId = createdDiagnosticSessionId(created)
+        const binding = sessionId && typeof sessions.binding === 'function' ? sessions.binding(sessionId) : null
+        const session = created?.session || binding?.session
+        if (!hasNoToolsCapability(created, created?.capabilities, binding, binding?.capabilities, session, session?.capabilities)) {
+          throw new Error('Host no-tools diagnostic-session factory did not prove a no-tools session.')
+        }
         if (typeof session?.rename === 'function') await session.rename('DSH Debug 启动诊断')
         if (typeof session?.prompt !== 'function') throw new Error('created diagnostic session does not expose prompt')
         const result = await session.prompt([{ type: 'text', text: startupDiagnosticPrompt(entries) }], 'queue')
         if (!result?.ok) throw new Error(result?.error?.message || 'diagnostic prompt was not accepted')
         try { if (typeof localStorage !== 'undefined') localStorage.setItem(marker, 'created') } catch { /* best effort dedup */ }
-        setStartupDiagnosticState({ status: 'created', sessionId: String(sessionId), error: null })
+        setStartupDiagnosticState({ status: 'created', sessionId, error: null })
       } catch (error) {
         setStartupDiagnosticState({ status: 'error', error: redactSensitiveText(error?.message || String(error)).slice(0, 300) })
       }
@@ -643,7 +694,10 @@ window.__ModuleLoader__.load({
     }
 
     const BREADCRUMB_KINDS = new Set(['startup', 'dom', 'slot', 'client-error', 'plugin-inventory', 'session', 'runtime', 'recovery'])
-    const BREADCRUMB_FIELDS = ['status', 'source', 'kind', 'pluginId', 'moduleName', 'slot', 'code', 'severity', 'hash', 'correlationId', 'sessionId', 'message', 'durationMs', 'httpStatus', 'count', 'enabled']
+    // Session IDs remain available to the in-memory startup state so the Host can
+    // finish a permitted diagnostic handoff, but they must not enter the
+    // shareable breadcrumb/report surface.
+    const BREADCRUMB_FIELDS = ['status', 'source', 'kind', 'pluginId', 'moduleName', 'slot', 'code', 'severity', 'hash', 'correlationId', 'durationMs', 'httpStatus', 'count', 'enabled']
     const BREADCRUMB_NUMBER_FIELDS = new Set(['durationMs', 'httpStatus', 'count'])
     const BREADCRUMB_BOOLEAN_FIELDS = new Set(['enabled'])
 
@@ -971,10 +1025,40 @@ window.__ModuleLoader__.load({
     function summarizeError(value) {
       if (value === null || value === undefined) return null
       const record = value && typeof value === 'object' ? value : null
-      const name = typeof record?.name === 'string' ? record.name : null
-      const code = typeof record?.code === 'string' ? record.code : null
-      const message = redactSensitiveText(record?.message ?? readableError(value)).slice(0, 1000)
-      return { name, code, message: message || null }
+      return {
+        name: safeDiagnosticToken(record?.name),
+        code: safeDiagnosticToken(record?.code),
+        messagePresent: typeof record?.message === 'string' || typeof value === 'string',
+        stackPresent: typeof record?.stack === 'string',
+      }
+    }
+
+    function safeDiagnosticToken(value) {
+      if (typeof value !== 'string') return null
+      const text = value.trim()
+      return /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/u.test(text) ? text : null
+    }
+
+    function projectPublicError(value) {
+      const record = value && typeof value === 'object' ? value : null
+      return {
+        kind: safeDiagnosticToken(record?.kind),
+        name: safeDiagnosticToken(record?.name),
+        code: safeDiagnosticToken(record?.code),
+        capturePhase: safeDiagnosticToken(record?.capturePhase),
+        filenamePresent: typeof record?.filename === 'string' && record.filename.length > 0,
+        messagePresent: typeof record?.message === 'string' || typeof value === 'string',
+        stackPresent: typeof record?.stack === 'string',
+        timePresent: typeof record?.time === 'string',
+      }
+    }
+
+    function publicDiagnosticSessionState() {
+      return {
+        status: startupDiagnosticState.status,
+        sessionIdPresent: typeof startupDiagnosticState.sessionId === 'string' && startupDiagnosticState.sessionId.length > 0,
+        errorPresent: typeof startupDiagnosticState.error === 'string' && startupDiagnosticState.error.length > 0,
+      }
     }
 
     function snapshotHostStatus() {
@@ -1039,7 +1123,6 @@ window.__ModuleLoader__.load({
 
     function projectRunningCall(call) {
       return {
-        callId: typeof call?.callId === 'string' ? call.callId : null,
         name: typeof call?.name === 'string' ? call.name : null,
         turn: Number.isFinite(call?.turn) ? call.turn : null,
         step: Number.isFinite(call?.step) ? call.step : null,
@@ -1075,7 +1158,6 @@ window.__ModuleLoader__.load({
         current: null,
         toolCalls: {
           status: sessions?.list ? 'unavailable' : 'missing',
-          sessionId: null,
           running: [],
           resultErrors: [],
           turnErrors: [],
@@ -1092,7 +1174,7 @@ window.__ModuleLoader__.load({
       const currentId = typeof list.current === 'string' ? list.current : null
       const row = currentId && list.byId && typeof list.byId === 'object' ? list.byId[currentId] : null
       const current = currentId ? {
-        sessionId: currentId,
+        present: true,
         title: null,
         titlePresent: typeof row?.displayTitle === 'string' && row.displayTitle.length > 0,
         running: row?.running === true,
@@ -1103,17 +1185,17 @@ window.__ModuleLoader__.load({
           ...empty,
           status: 'present',
           current,
-          toolCalls: { ...empty.toolCalls, status: 'no-session', sessionId: currentId },
+          toolCalls: { ...empty.toolCalls, status: 'no-session' },
         }
       }
       let snapshot
       try {
         snapshot = sessions.binding(currentId)?.session?.getSnapshot?.()
       } catch (error) {
-        return { ...empty, status: 'present', current, toolCalls: { ...empty.toolCalls, status: 'unavailable', sessionId: currentId }, error: summarizeError(error) }
+        return { ...empty, status: 'present', current, toolCalls: { ...empty.toolCalls, status: 'unavailable' }, error: summarizeError(error) }
       }
       if (!snapshot || typeof snapshot !== 'object') {
-        return { ...empty, status: 'present', current, toolCalls: { ...empty.toolCalls, status: 'unavailable', sessionId: currentId } }
+        return { ...empty, status: 'present', current, toolCalls: { ...empty.toolCalls, status: 'unavailable' } }
       }
       const toolResults = []
       const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : []
@@ -1125,7 +1207,6 @@ window.__ModuleLoader__.load({
         .filter(node => node.isError === true || node.error)
         .slice(0, MAX_RUNTIME_ITEMS)
         .map(node => ({
-          callId: typeof node.callId === 'string' ? node.callId : null,
           time: Number.isFinite(node.time) ? node.time : null,
           callTime: Number.isFinite(node.callTime) ? node.callTime : null,
           isError: node.isError === true,
@@ -1137,8 +1218,8 @@ window.__ModuleLoader__.load({
           time: Number.isFinite(node.time) ? node.time : null,
           turn: Number.isFinite(node.turn) ? node.turn : null,
           step: Number.isFinite(node.step) ? node.step : null,
-          code: typeof node.code === 'string' ? node.code : null,
-          message: redactSensitiveText(node.message || '').slice(0, 1000),
+          code: safeDiagnosticToken(node.code),
+          messagePresent: typeof node.message === 'string' && node.message.length > 0,
         }))
       const truncated = {
         any: runningCalls.length > MAX_RUNTIME_ITEMS || traversalState.outputTruncated || traversalState.truncated || turnErrorNodes.length > MAX_RUNTIME_ITEMS,
@@ -1153,7 +1234,6 @@ window.__ModuleLoader__.load({
         current,
         toolCalls: {
           status: 'present',
-          sessionId: currentId,
           running,
           resultErrors,
           turnErrors,
@@ -1170,7 +1250,7 @@ window.__ModuleLoader__.load({
             op: typeof snapshot.promptError.op === 'string' ? snapshot.promptError.op : null,
             error: summarizeError(snapshot.promptError.error || snapshot.promptError),
           } : null,
-          lastAgentError: snapshot.lastAgentError ? redactSensitiveText(snapshot.lastAgentError).slice(0, 1000) : null,
+          lastAgentError: snapshot.lastAgentError ? { present: true } : null,
         },
         error: null,
       }
@@ -1198,7 +1278,6 @@ window.__ModuleLoader__.load({
         loaded = typeof runner.getSnapshot === 'function' ? runner.getSnapshot().slice(0, MAX_RUNTIME_ITEMS).map(item => ({
           pluginId: String(item.pluginId),
           packageId: String(item.packageId),
-          pluginRunId: String(item.pluginRunId),
           name: typeof item.name === 'string' ? item.name : null,
           slots: boundedStrings(item.slots, 20),
           styleCount: Number.isFinite(item.styleCount) ? item.styleCount : null,
@@ -1210,12 +1289,11 @@ window.__ModuleLoader__.load({
         pluginId,
         phase: typeof value?.phase === 'string' ? value.phase : null,
         packageId: value?.packageId ? String(value.packageId) : null,
-        agentId: value?.agentId ? String(value.agentId) : null,
       }))
       const runErrors = mapObservableEntries(runner.lastRunError, (pluginId, value) => ({
         pluginId,
         packageId: value?.packageId ? String(value.packageId) : null,
-        reason: typeof value?.reason === 'string' ? value.reason : null,
+        reasonPresent: typeof value?.reason === 'string' || typeof value?.message === 'string',
         error: summarizeError(value),
       }))
       const renderFailures = mapObservableEntries(runner.renderFailures, (pluginId, value) => ({
@@ -1289,7 +1367,13 @@ window.__ModuleLoader__.load({
         time: new Date().toISOString(),
       }
       const previous = slotErrors.at(-1)
-      if (previous && previous.slot === item.slot && previous.registrant === item.registrant && previous.error?.message === item.error?.message) return
+      if (previous
+        && previous.slot === item.slot
+        && previous.registrant === item.registrant
+        && previous.error?.name === item.error?.name
+        && previous.error?.code === item.error?.code
+        && previous.error?.messagePresent === item.error?.messagePresent
+        && previous.error?.stackPresent === item.error?.stackPresent) return
       slotErrors.push(item)
       if (slotErrors.length > 100) slotErrors.splice(0, slotErrors.length - 100)
       recordDiagnosticBreadcrumb('slot', {
@@ -1589,7 +1673,7 @@ window.__ModuleLoader__.load({
         slotErrors: slotErrors.slice(-MAX_REPORTED_ERRORS),
         startupGuard: {
           notice: startupGuardNotice,
-          diagnosticSession: getStartupDiagnosticState(),
+          diagnosticSession: publicDiagnosticSessionState(),
         },
       }
       return { ...diagnostics, capabilities: buildCapabilityStatus(diagnostics) }
@@ -1646,7 +1730,7 @@ window.__ModuleLoader__.load({
 
     function scanDiagnostics(documentObject, errors = getClientErrors()) {
       const errorCount = Array.isArray(errors) ? errors.length : 0
-      const errorItems = Array.isArray(errors) ? errors.slice(-MAX_REPORTED_ERRORS) : []
+      const errorItems = Array.isArray(errors) ? errors.slice(-MAX_REPORTED_ERRORS).map(projectPublicError) : []
       const breadcrumbs = getDiagnosticBreadcrumbs()
       const runtimeDiagnostics = collectRuntimeDiagnostics()
       const empty = {
@@ -2179,18 +2263,26 @@ window.__ModuleLoader__.load({
           : t('unavailable')
     }
 
+    function publicErrorLabel(error) {
+      const label = error?.code || error?.name || error?.kind || 'error'
+      const hidden = []
+      if (error?.messagePresent) hidden.push('message hidden')
+      if (error?.stackPresent) hidden.push('stack hidden')
+      return hidden.length > 0 ? `${label} (${hidden.join(', ')})` : label
+    }
+
     function runtimeItemText(item) {
       if (item.kind === 'permission-default-full-access') return `permission default=${item.defaultPreset || 'unknown'}, sandbox=${item.sandboxMode || 'unknown'}, approval=${item.approvalPolicy || 'unknown'}; review whether the model is requesting escalation before a real denial`
       if (item.kind === 'runtime-plugin-failed') return `${item.moduleName || item.entryId}: ${item.fiberPhase || 'failed'}`
       if (item.kind === 'runtime-plugin-disabled') return `${item.moduleName || item.entryId}: disabled`
-      if (item.kind === 'slot-entry-render-error') return `${item.slot}: ${item.registrant || 'unknown registrant'} — ${item.error?.message || 'render error'}`
-      if (item.kind === 'tool-result-error') return `${item.callId || 'unknown call'}: ${item.error?.code || item.error?.message || 'tool result error'}`
-      if (item.kind === 'turn-error') return `turn ${item.turn ?? '?'} / step ${item.step ?? '?'}: ${item.message || 'turn error'}`
-      if (item.kind === 'dynamic-plugin-run-error') return `${item.pluginId}: ${item.error?.message || item.reason || 'run error'}`
-      if (item.kind === 'dynamic-plugin-render-error') return `${item.pluginId} / ${item.slot || 'unknown slot'}: ${item.error?.message || 'render error'}`
+      if (item.kind === 'slot-entry-render-error') return `${item.slot}: ${item.registrant || 'unknown registrant'} — ${publicErrorLabel(item.error)}`
+      if (item.kind === 'tool-result-error') return `${item.error?.code || item.error?.name || 'tool result error'}${item.error?.messagePresent ? ' (message hidden)' : ''}`
+      if (item.kind === 'turn-error') return `turn ${item.turn ?? '?'} / step ${item.step ?? '?'}: ${item.code || 'turn error'}${item.messagePresent ? ' (message hidden)' : ''}`
+      if (item.kind === 'dynamic-plugin-run-error') return `${item.pluginId}: ${publicErrorLabel(item.error)}${item.reasonPresent ? ' (reason hidden)' : ''}`
+      if (item.kind === 'dynamic-plugin-render-error') return `${item.pluginId} / ${item.slot || 'unknown slot'}: ${publicErrorLabel(item.error)}`
       if (item.kind === 'slot-single-multiple-occupants') return `${item.name}: ${item.occupants.length} occupants in a single Slot`
       if (item.kind === 'slot-duplicate-cell') return `${item.name} / ${item.cell}: ${item.occupants.length} occupants at the same priority`
-      if (item.error?.message) return `${item.kind}: ${item.error.message}`
+      if (item.error) return `${item.kind}: ${publicErrorLabel(item.error)}`
       return item.kind || 'runtime clue'
     }
 
@@ -2198,8 +2290,7 @@ window.__ModuleLoader__.load({
       const details = item?.details || {}
       const identity = details.pluginId || details.moduleName || details.slot || details.source || ''
       const status = details.status || details.kind || ''
-      const message = details.message ? `: ${details.message}` : ''
-      return `${item?.time || 'unknown time'} [${item?.kind || 'runtime'}] ${status}${identity ? ` (${identity})` : ''}${message}`.trim()
+      return `${item?.time || 'unknown time'} [${item?.kind || 'runtime'}] ${status}${identity ? ` (${identity})` : ''}`.trim()
     }
 
     function DiagnosticsPanel({ t, report, onRescan, onCopy, onDownload, onClear, copyState, downloadState }) {
@@ -2305,7 +2396,7 @@ window.__ModuleLoader__.load({
         createElement('h4', { style: styles.sectionLabel }, t('clientErrors')),
         report.errors.length === 0
           ? createElement('p', { style: styles.muted }, t('noErrors'))
-          : createElement('ul', { style: styles.diagnosticsList }, report.errors.map((error, index) => createElement('li', { key: `${error.time}-${index}` }, `${error.time} [${error.kind}] ${error.message}`))),
+          : createElement('ul', { style: styles.diagnosticsList }, report.errors.map((error, index) => createElement('li', { key: `${error.time}-${index}` }, `${error.time || 'unknown time'} [${error.kind || 'error'}] ${publicErrorLabel(error)}`))),
         createElement('p', { style: styles.muted }, t('clientErrorHint')),
         createElement('h4', { style: styles.sectionLabel }, t('toolCallBoundary')),
         toolItems.length === 0

@@ -96,8 +96,8 @@
       "sha256": "cddbf73374dbcdefaf15e53f866de5a19aa3454445eac7dbb1ff86e801ba3db8"
     },
     "lib/client.js": {
-      "bytes": 120581,
-      "sha256": "2c0f747868e2e42257a88c6cd86142193da5e954c6121b5423501318243521ff"
+      "bytes": 124590,
+      "sha256": "e862ce14c67a8c557ee2cc2958ab0085cc683c59cede58f4049cf0db17699c7e"
     }
   }
 }

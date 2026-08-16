@@ -51,13 +51,13 @@ The current worktree has changed since the historical baseline, so the
 following commands are required before claiming publication:
 
 ```text
+Verify-Publication.ps1  # run from a clean candidate tree, before npm ci
 npm ci --ignore-scripts
 npm test
 npm run check
 Test-DSHStandalone.ps1
 Test-DSHPluginIntegration.ps1 -SkipCompatibility
-Verify-Publication.ps1
-fresh clone verification
+fresh clone verification of the pushed source commit
 ```
 
 Each command must retain its real exit code. Crash Guard's intentionally

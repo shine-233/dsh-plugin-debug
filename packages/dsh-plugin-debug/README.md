@@ -2,7 +2,7 @@
 
 这是 npm 和 GitHub 默认显示的中文说明。它把 DSH 检测、调试、恢复、插件健康检查、崩溃隔离、事故取证、Trace 分析、任务守护和一键启动能力合并到一起，运行时只有一个包：`dsh-plugin-debug`。更长的逐项中文手册见 [`README.zh-CN.md`](README.zh-CN.md)；两份文档都以当前源码和测试为准，不把英文术语当成额外组件。
 
-本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。候选发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库根目录的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准。
+本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。候选发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库中的 [`RELEASE-MANIFEST.json`](https://github.com/shine-233/dsh-plugin-debug/blob/main/RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](https://github.com/shine-233/dsh-plugin-debug/blob/main/SOURCE-SNAPSHOT.md) 和远端提交为准。
 
 ## 适用范围
 
@@ -21,14 +21,23 @@
 从本目录运行：
 
 ```powershell
-.\Start-DSH-Debug.ps1 -NoBrowser
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -NoBrowser
 ```
 
-默认使用 `debug` Profile、`127.0.0.1:3081`，并离线安装本地 bundle。也可以直接使用 DSH CLI：
+Debug 包装器默认使用 `debug` Profile、`127.0.0.1:3081`，并离线安装本地 bundle。首次启动如果本地还没有 pinned DSH runtime，仍可能先通过 npm 下载 runtime；这里的“离线”只表示 bundle 安装不访问插件商店。默认 runtime 位于 `tools/runtime`；需要把它放在别处时，可以在启动前设置 `DSH_RUNTIME_ROOT`。也可以直接使用 DSH CLI（要求 `dsh` 已经在 `PATH`）：
 
 ```powershell
 dsh plugin --profile debug add . --offline
 ```
+
+更新已经安装到 Profile 的本地版本时，先停止旧实例，再用 `-ForcePluginInstall` 覆盖已安装 bundle；普通再次启动只会复用已安装版本，不会猜测源码是否变化：
+
+```powershell
+.\tools\Stop-DSH.ps1 -Profile debug -Port 3081
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -ForcePluginInstall -NoBrowser
+```
+
+旧的 provenance Profile 不会自动迁移；请先备份并核对旧 Profile，再按仓库根目录 [`MIGRATION-MANIFEST.md`](https://github.com/shine-233/dsh-plugin-debug/blob/main/MIGRATION-MANIFEST.md) 的边界重新安装 canonical `dsh-plugin-debug` bundle。
 
 `Start-DSH-Combined.*` 是可选的 Agent 覆盖层（overlay）入口。只有显式运行 `tools\Install-DSH-Agents.vbs` 后才会安装覆盖层；它不是 Debug 运行时依赖，也不是插件商店。
 
@@ -205,8 +214,8 @@ Node 测试中的 `tests/task-guardian.test.js` 覆盖循环检测、递归深�
 3. 按语义化版本（SemVer）更新 `package.json`，同步 `package-lock.json`；README、变更说明和实际行为必须一致。
 4. 运行 `npm test`、`npm run check`、`npm run check:standalone`、`npm run check:integration`、`Test-DSHStandalone.ps1` 及相关工具测试。
 5. 回到仓库根目录运行 `scripts/Verify-Publication.ps1`，确认只公开单包；再运行 `npm pack --dry-run --json --ignore-scripts`，把实际文件数量同步到 `RELEASE-MANIFEST.json` 和 `SOURCE-SNAPSHOT.md`。
-6. 检查 `git diff --check`、敏感文件和待提交内容；先做本地可审阅提交，从 fresh clone（全新克隆）重跑测试后再 push。
-7. push 后读取远端提交哈希，更新发布清单的发布字段；如果仍是候选状态，不要在 README 中宣称正式发布。
+6. 检查 `git diff --check`、敏感文件和待提交内容；先做本地可审阅的 candidate source commit 并 push，再读取远端提交哈希，从该远端提交创建 fresh clone（全新克隆）重跑测试。
+7. 只有 fresh clone 通过后，才用单独的 evidence commit 更新发布清单的 `publishedCommit`、UTC 验证时间和 `status`，然后再 push evidence commit；如果仍是候选状态，不要在 README 中宣称正式发布。
 
 不要提交 `node_modules`、`.dsh`、`.codex`、Profile state、logs、coverage、credentials、临时 fake runtime 或测试输出。新功能必须继续保持默认离线、仅元数据（metadata-only）和失败即停止（fail-closed）安全契约；如果需要更高权限、联网或自动执行，先增加独立的安全评审和回归测试。
 

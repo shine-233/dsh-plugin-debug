@@ -11,13 +11,16 @@ if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
 
 $forwarded = @($args)
 $hasProfile = $false
+$hasPort = $false
 foreach ($argument in $forwarded) {
-  if ([string]$argument -ieq '-Profile') { $hasProfile = $true; break }
+  if ([string]$argument -ieq '-Profile' -or [string]$argument -match '^-Profile=') { $hasProfile = $true }
+  if ([string]$argument -ieq '-Port' -or [string]$argument -match '^-Port=') { $hasPort = $true }
 }
 $defaults = if ($hasProfile) {
   @('-EnableCrashGuard', '-KeepAlive')
 } else {
-  @('-Profile', 'debug', '-EnableCrashGuard', '-KeepAlive')
+  @('-Profile', 'debug', '-Port', '3081', '-EnableCrashGuard', '-KeepAlive')
 }
+if ($hasProfile -and -not $hasPort) { $defaults = @($defaults + '-Port' + '3081') }
 & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $target @defaults @forwarded
 exit $LASTEXITCODE

@@ -49,6 +49,9 @@ foreach ($repo in $repos) { gh api "repos/$repo" }
 | [PerryLink/dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind) | 本轮未重新核对 | 变更前 checkpoint、三阶段事务、配额、恢复日志、Session fork | 吸收 checkpoint/receipt 的安全形状；真实 durable rewind 事件未在 DSH rc.6 验证，因此不伪造该能力 |
 | [BiBoyang/dsh-eval-harness](https://github.com/BiBoyang/dsh-eval-harness) | 本轮未重新核对 | 隔离 workspace/session、JSONL trace、baseline PASS/WARN/FAIL 门禁 | 已有脱敏 Trace/Eval/baseline；zstd 解码和真实 headless LLM 回归仍标为未完成 |
 | [akira399/dsh-guardian](https://github.com/akira399/dsh-guardian) | MIT；本轮只读复核的 `main` 提交为 `5bf7ef3ad56d5e0b78e40071ac99d94b697e468b` | 插件预检、重复 Tool Call 循环、Agent/Workflow 递归、中断感知、`safeToRestart` 和实际安全重启助手 | 单包已独立实现预检、运行时循环/递归观察、冷却提示、事件上报和只读状态检查；不复制源码，不并入实际重启脚本 |
+| [jkrandom-sudo/dsh-ci-doctor](https://github.com/jkrandom-sudo/dsh-ci-doctor) | 本轮用 GitHub 公共 API 只读核对 | 只读 Actions watch、失败签名归一化、重复失败 ledger | 吸收失败签名和可追踪 ledger 的数据形状；当前只在 CI artifact/receipt 中保留本次运行元数据，不创建常驻 watcher 或外部服务 |
+| [tree201/dsh-capability-inspector](https://github.com/tree201/dsh-capability-inspector) | 本轮用 GitHub 公共 API 只读核对 | 能力矩阵、workspace/session health、单项失败降级 | 吸收分层 capability matrix 和“单项失败不拖垮整份报告”；未知 Host 能力仍输出 `UNAVAILABLE`，不猜测可用 API |
+| [dongsheng123132/harness-doctor](https://github.com/dongsheng123132/harness-doctor) | 本轮用 GitHub 公共 API 只读核对 | 只读 support bundle、schema 版本、显式 allowlist 修复、无 `fix-all` | 吸收 schema/allowlist/support-bundle 边界；拒绝全自动修复、任意文件打包和隐式 Profile 变更 |
 
 ## 已经进入单包的能力
 
@@ -91,16 +94,20 @@ Session。无法明确归因、缺少 evidence、目标是核心包或 receipt �
 | 公开项目/文档 | 本次直接看到的信号 | 本项目的具体决定 |
 | --- | --- | --- |
 | [akira399/dsh-guardian](https://github.com/akira399/dsh-guardian) | README 明确记录滑动窗口循环、Agent/Workflow 递归、中断和 `safeToRestart`；GitHub API 返回 MIT | 已独立实现这些 observer-only 观察边界；本轮继续吸收它暴露出的“长期事件文件必须有界”问题，新增 `eventLogMaxBytes`/`eventLogMaxFiles` 轮转和旧归档清理；不复制源码或实际重启脚本 |
-| [zoahdev/dsh-plugin-doctor](https://github.com/zoahdev/dsh-plugin-doctor) | README 说明 manifest/patch/entry、pack/install/config、fresh-profile、BOM、大文件和入口检查，并提供 JSON CI 输出；API 返回 MIT | 当前单包已有离线 repository check、plugin preflight、dependency graph、fake offline install、publication verifier 和 standalone 测试；不把 DSH 官方尚未提供的 `dsh plugin check` 入口冒充成已存在 |
+| [zoahdev/dsh-plugin-doctor](https://github.com/zoahdev/dsh-plugin-doctor) | README 说明 manifest/patch/entry、`npm pack --ignore-scripts`、临时 `DSH_HOME`、fresh-profile、BOM、大文件、入口检查和 Web readiness/rollback，并提供 JSON CI 输出；API 返回 MIT | 当前单包已有离线 repository check、plugin preflight、dependency graph、fake offline install、publication verifier 和 standalone 测试；吸收 pack 隔离、分层 readiness 和 rollback receipt 的设计形状，但不把真实 DSH Web readiness 或 runtime/native 隔离冒充已验证，也不把 DSH 官方尚未提供的 `dsh plugin check` 入口冒充成已存在 |
 | [jorinyang/dsh-doctor](https://github.com/jorinyang/dsh-doctor) | README 将诊断、分级修复、LIFO undo 和运行时服务分开，并保留 Web 不可用时的 CLI 方向；API 返回 MIT | 保留只读 doctor、receipt、known-good 和显式恢复边界；恢复快照现在明确排除 `.env`/敏感内容，回滚不会覆盖它们 |
-| [PangYiMing/dsh-bisect-debug](https://github.com/PangYiMing/dsh-bisect-debug) | README 提供代码、边界和 Git commit 三种二分，并要求干净工作树、退出码和显式 reset | 已吸收为只读 `plugin-bisect-plan`；不自动切换工作树、reset、删除文件或执行用户命令 |
+| [PangYiMing/dsh-bisect-debug](https://github.com/PangYiMing/dsh-bisect-debug) | README 提供代码、边界和 Git commit 三种二分，并要求干净工作树、退出码和显式 reset | 已吸收为只读 `plugin-bisect-plan` 的 inventory/evidence 计划；当前没有验证真实代码/边界/commit 二分，不自动切换工作树、reset、删除文件或执行用户命令 |
 | [Areium/dsh-fail-logger](https://github.com/Areium/dsh-fail-logger) | README 说明只记录 `isError=true` 的 Tool failure，做去重、计数、确定性排序、TTL 清理和脱敏；API 返回 MIT | 吸收“失败证据应可控留存”的设计形状，但不把原始失败正文写入 skill；Guardian 事件只保存指纹/类别，并以有界文件轮转替代无限追加 |
 | [VS Code Extension Bisect](https://code.visualstudio.com/docs/editor/extension-marketplace) | 官方文档把 Extension Bisect 定义为通过启停扩展缩小问题范围 | DSH 的 `plugin-bisect-plan` 保留同样的缩小搜索空间思路，但使用安全候选、保护核心包和人工步骤；不在用户工作树上自动做破坏性切换 |
+| [jkrandom-sudo/dsh-ci-doctor](https://github.com/jkrandom-sudo/dsh-ci-doctor) | 只读 Actions 失败签名、重复失败 ledger 和诊断输出 | 吸收失败签名归一化和 ledger 字段；当前只发布单次 CI 的 machine-readable artifact，未实现持久远端 ledger 或后台 watcher |
+| [tree201/dsh-capability-inspector](https://github.com/tree201/dsh-capability-inspector) | 能力矩阵、workspace/session health，以及单项失败降级 | 吸收 capability matrix/report degradation 形状；未知或缺失 Host API 仍保持 `UNAVAILABLE`，不伪造 runtime readiness |
+| [dongsheng123132/harness-doctor](https://github.com/dongsheng123132/harness-doctor) | support bundle schema、显式 allowlist 修复、默认没有 `fix-all` | 吸收 support-bundle schema 和显式 allowlist 原则；未验证完整 bundle 兼容性，不允许任意路径、凭据或原始 Session 内容进入导出 |
 
 本轮没有把“看过这些项目”写成“已经完成生产兼容”。真正新增到代码的是 Guardian
 事件日志的有界轮转/过期归档清理，以及恢复快照的敏感文件排除；两者都配有回归
-断言。网络导出、常驻 watcher、自动 Git bisect、durable rewind 和模型自行执行
-修复仍保持明确的未吸收状态。
+断言。pack 隔离安装、真实 DSH Web readiness、runtime/native 模块隔离、完整
+support bundle、持久 CI ledger、网络导出、常驻 watcher、自动 Git bisect、durable
+rewind 和模型自行执行修复仍保持明确的未吸收或未验证状态。
 
 ## 许可证和归属
 
@@ -123,3 +130,25 @@ Session。无法明确归因、缺少 evidence、目标是核心包或 receipt �
 
 许可证信息只用于决定是否需要进一步人工复核；本项目没有把这些仓库作为
 依赖，也没有复制其源码、测试 fixture 或发布脚本。
+
+## 其他生态的设计参考（2026-08-16）
+
+本轮还只读核对了几类非 DSH 项目，用来判断 Debug 插件下一步可以吸收什么，
+而不是把它们的运行时引入本包。许可证判断以仓库或发布文件为准，README
+徽章本身不作为法律依据。
+
+| 项目 | 公开许可证线索 | 可吸收的设计 | 本包的边界决定 |
+| --- | --- | --- | --- |
+| [langchain-ai/langgraph](https://github.com/langchain-ai/langgraph) | MIT | checkpoint round-trip、namespace 隔离、metadata 保留、恢复/分支/prune 的契约测试 | 只吸收 recovery conformance 的测试模型；不引入数据库或 LangGraph runtime |
+| [OpenHands/OpenHands](https://github.com/OpenHands/OpenHands) | MIT | 将 `failed`、`connectivity-only`、`verified`、`unavailable` 分层；区分连接失败和凭据失败 | 插件健康检查保持默认只读，安装、启停和授权必须是显式动作 |
+| [modelcontextprotocol/inspector](https://github.com/modelcontextprotocol/inspector) | package metadata 声明 MIT；仓库 API 的 license 字段需单独复核 | Web/CLI/TUI 共用一套 inspector 和 session 检查面 | 不把“能连接”当成“能安全执行”；继续保持 loopback、allowlist、动作白名单和脱敏 |
+| [open-telemetry/opentelemetry-collector](https://github.com/open-telemetry/opentelemetry-collector) 与 [healthcheck extension](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension) | Apache-2.0 | liveness/readiness/functional verification 分离、机器可读 component status、生命周期顺序 | 只吸收状态协议；保留 `UNAVAILABLE/PARTIAL/WARN/FAIL`，不把探针当作恢复证明 |
+| [temporalio/temporal](https://github.com/temporalio/temporal) | MIT | retry/replay、durable execution 的状态机和结构化 health check 类型 | 仅用于设计 known-good/recovery 的状态语义，不引入 Temporal 服务 |
+| [backstage/backstage](https://github.com/backstage/backstage) | Apache-2.0 | 稳定 plugin ID、显式 service/dependency contract、生命周期和健康状态分层 | 不引入微服务；把能力矩阵、manifest、依赖图和 preflight 保持在本地包内 |
+| [getsentry/sentry](https://github.com/getsentry/sentry) / [langfuse/langfuse](https://github.com/langfuse/langfuse) | 当前仓库元数据并不足以直接作完整依赖许可结论 | incident、trace、breadcrumb、evaluation 的关联键和 replay fixture 组织方式 | 只吸收数据模型；不保存 raw prompt、Tool 参数/结果、凭据或完整路径，也不接入外部 telemetry |
+
+因此下一阶段的候选顺序是：先补 LangGraph 风格的 recovery round-trip/冲突
+契约，再将 OpenHands 风格的 plugin health verdict 统一到 CLI、JSON 和页面，
+最后评估 OpenTelemetry 风格的 readiness 状态。真实 durable rewind、远端
+ledger、网络 telemetry、自动安装/启停和无 allowlist support bundle 仍不属于
+当前发布候选；每一项都需要新的 Host 合同、隐私审查和独立回归测试。

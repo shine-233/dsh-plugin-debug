@@ -12,6 +12,7 @@ param(
   [switch]$EnableAgents,
   [string]$AgentsPatchPath = '',
   [switch]$InstallOnly,
+  [switch]$ForcePluginInstall,
   [switch]$KeepAlive,
   [int]$SupervisorIntervalSec = 2,
   [int]$SupervisorMaxWebMisses = 3,
@@ -25,7 +26,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $LauncherRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BundleRoot = Split-Path -Parent $LauncherRoot
-$RuntimeDir = Join-Path $LauncherRoot 'runtime'
+$runtimeOverride = [Environment]::GetEnvironmentVariable('DSH_RUNTIME_ROOT')
+$RuntimeDir = if ([string]::IsNullOrWhiteSpace($runtimeOverride)) {
+  Join-Path $LauncherRoot 'runtime'
+} else {
+  [IO.Path]::GetFullPath($runtimeOverride)
+}
 $StateModulePath = Join-Path $LauncherRoot 'DSH-State.psm1'
 Import-Module $StateModulePath -Force
 $DefaultDshHome = Resolve-DshDebugHome
@@ -146,6 +152,8 @@ $script:LaunchMutex = $null
 $script:LaunchMutexHeld = $false
 $script:BrowserOpened = $false
 $script:StartupIncidentId = [guid]::NewGuid().ToString('N')
+$script:StartupFailureStatus = 'failed'
+$script:StartupFailureReason = 'startup-failure'
 
 function Get-DshLaunchMutexName {
   $identity = "$LauncherRoot|$Profile|$HostName|$Port"
@@ -325,6 +333,7 @@ function Wait-RecordedDshWebReady {
 $GuardAvailable = $false
 $GuardState = $null
 $GuardManifest = $null
+$script:LastGuardReadyResult = $null
 $process = $null
 
 function Initialize-DshCrashGuard {
@@ -420,18 +429,50 @@ function Try-DshGuardStartupRecovery {
 }
 
 function Invoke-DshGuardReadyCheck {
-  if (-not $script:GuardAvailable -or $null -eq $script:GuardManifest) { return $false }
+  if (-not $script:GuardAvailable -or $null -eq $script:GuardManifest) {
+    return [ordered]@{
+      restartRequested = $false
+      status = 'unavailable'
+      reason = 'crash-guard-unavailable'
+      inventoryObserved = $false
+      failedCount = 0
+      candidateCount = 0
+    }
+  }
   try {
     $entries = @(Get-DshPluginInventory -BaseUrl $Url -TimeoutSec 5)
     $failed = @($entries | Where-Object { $_.fiberPhase -eq 'failed' })
     Write-LauncherLog "crash guard inventory observed: entries=$($entries.Count) failed=$($failed.Count)"
     $candidates = @(Get-DshGuardCandidates -Entries $entries -Manifest $script:GuardManifest)
-    if ($candidates.Count -eq 0) { return $false }
-    return Register-DshGuardCandidates -Candidates $candidates -Source 'plugin-inventory'
+    $changed = if ($candidates.Count -eq 0) { $false } else { Register-DshGuardCandidates -Candidates $candidates -Source 'plugin-inventory' }
+    $status = if ($changed) { 'restart-requested' } elseif ($failed.Count -gt 0) { 'degraded' } else { 'healthy' }
+    $reason = if ($changed) {
+      'runtime-plugin-inventory-quarantine'
+    } elseif ($failed.Count -gt 0 -and $candidates.Count -eq 0) {
+      'runtime-plugin-failed-unresolved'
+    } elseif ($failed.Count -gt 0) {
+      'runtime-plugin-failed-after-quarantine'
+    } else {
+      'web-and-plugin-inventory-healthy'
+    }
+    return [ordered]@{
+      restartRequested = $changed
+      status = $status
+      reason = $reason
+      inventoryObserved = $true
+      failedCount = $failed.Count
+      candidateCount = $candidates.Count
+    }
   } catch {
-    # Guard failure must not make a healthy DSH unusable.
     Write-LauncherLog "crash guard inventory probe skipped: $($_.Exception.Message)"
-    return $false
+    return [ordered]@{
+      restartRequested = $false
+      status = 'degraded'
+      reason = 'runtime-plugin-inventory-unavailable'
+      inventoryObserved = $false
+      failedCount = 0
+      candidateCount = 0
+    }
   }
 }
 
@@ -627,6 +668,19 @@ function Invoke-DshRuntimeSupervisor {
           return [ordered]@{ restartRequested = $AllowRestart; reason = 'runtime-plugin-inventory'; status = $status }
         }
       }
+      if ($null -ne $snapshot.inventoryError) {
+        Write-DshSupervisorState -Status 'degraded' -Reason 'runtime-plugin-inventory-unavailable' -Snapshot $snapshot -RestartCount $RestartCount | Out-Null
+        return [ordered]@{ restartRequested = $false; reason = 'runtime-plugin-inventory-unavailable'; status = 'degraded' }
+      }
+      if (-not $snapshot.inventoryObserved) {
+        Write-DshSupervisorState -Status 'degraded' -Reason 'runtime-plugin-inventory-unavailable' -Snapshot $snapshot -RestartCount $RestartCount | Out-Null
+        return [ordered]@{ restartRequested = $false; reason = 'runtime-plugin-inventory-unavailable'; status = 'degraded' }
+      }
+      if ($snapshot.failedCount -gt 0) {
+        $reason = if ($snapshot.candidateCount -gt 0) { 'runtime-plugin-failed-after-quarantine' } else { 'runtime-plugin-failed-unresolved' }
+        Write-DshSupervisorState -Status 'degraded' -Reason $reason -Snapshot $snapshot -RestartCount $RestartCount | Out-Null
+        return [ordered]@{ restartRequested = $false; reason = $reason; status = 'degraded' }
+      }
       Write-DshSupervisorState -Status 'healthy' -Reason 'web-and-plugin-inventory-healthy' -Snapshot $snapshot -RestartCount $RestartCount | Out-Null
     }
     Start-Sleep -Seconds $SupervisorIntervalSec
@@ -697,12 +751,20 @@ function Get-WebProbe {
 }
 
 function Get-DshBrowserLaunchUrl {
-  param([switch]$StartupGuardNotice)
+  param(
+    [switch]$StartupGuardNotice,
+    [string]$IncidentId = ''
+  )
   if (-not $StartupGuardNotice) { return $Url }
   # Pass only a bounded event marker to the client. Plugin names, logs,
   # arguments, and error text remain in local guarded state and never enter
   # the browser URL or an automatically created Session.
-  return "$Url`?dsh_debug_guard=isolated"
+  $query = 'dsh_debug_guard=isolated'
+  if ($IncidentId -match '^[A-Za-z0-9._:-]{1,128}$') {
+    $query += "&dsh_debug_incident=$IncidentId"
+  }
+  $separator = if ($Url.Contains('?')) { '&' } else { '?' }
+  return "$Url$separator$query"
 }
 
 function Get-DshStartupFailureDetail {
@@ -808,7 +870,7 @@ function Resolve-ProvenanceBundle {
 
 function Ensure-ProvenancePlugin {
   param([Parameter(Mandatory = $true)][PSCustomObject]$Invocation)
-  if (Test-ProvenanceInstalled) {
+  if (-not $ForcePluginInstall -and (Test-ProvenanceInstalled)) {
     Write-LauncherLog "当前 Profile 已包含 dsh-plugin-debug bundle：$Profile"
     return
   }
@@ -826,7 +888,8 @@ function Ensure-ProvenancePlugin {
   $installArguments += $bundlePath
   $installArguments += '--offline'
   Ensure-Directory $LogDir
-  Write-LauncherLog "首次启动自动安装 dsh-plugin-debug bundle：Profile=$Profile source=$bundlePath"
+  $operation = if ($ForcePluginInstall) { '更新' } else { '首次启动自动安装' }
+  Write-LauncherLog "$operation dsh-plugin-debug bundle：Profile=$Profile source=$bundlePath"
   $previousErrorAction = $ErrorActionPreference
   try {
     $ErrorActionPreference = 'Continue'
@@ -942,7 +1005,7 @@ try {
 
   $existing = Get-WebProbe
   if ($existing.Reachable -and $existing.IsDsh) {
-    if (-not $NoPluginInstall -and -not (Test-ProvenanceInstalled)) {
+    if (-not $NoPluginInstall -and ($ForcePluginInstall -or -not (Test-ProvenanceInstalled))) {
       if (-not (Try-IsolateDshConflict -Reason 'external-web-instance')) {
         throw '检测到已有 DSH 正在运行，但当前 Profile 尚未安装 dsh-plugin-debug；请先关闭当前 DSH，或去掉 -NoIsolateOnConflict 后重新启动。'
       }
@@ -960,7 +1023,7 @@ try {
 
   $recorded = Get-RecordedDshProcess
   if ($null -ne $recorded) {
-    if (-not $NoPluginInstall -and -not (Test-ProvenanceInstalled)) {
+    if (-not $NoPluginInstall -and ($ForcePluginInstall -or -not (Test-ProvenanceInstalled))) {
       if (-not (Try-IsolateDshConflict -Reason 'recorded-web-instance')) {
         throw '检测到本启动器记录的 DSH 正在运行，但当前 Profile 尚未安装 dsh-plugin-debug；请等待该实例停止，或去掉 -NoIsolateOnConflict 后重新启动。'
       }
@@ -1129,7 +1192,9 @@ try {
     }
 
     Write-LauncherLog "DSH Web ready: $Url"
-    if (-not $guardRestarted -and (Invoke-DshGuardReadyCheck)) {
+    $guardReadyResult = Invoke-DshGuardReadyCheck
+    $script:LastGuardReadyResult = $guardReadyResult
+    if (-not $guardRestarted -and $guardReadyResult.restartRequested) {
       $guardRestarted = $true
       Write-LauncherLog "guard will restart once with the generated quarantine patch."
       Write-DshStartupIncident -Status 'restarting' -Reason 'runtime-plugin-inventory-quarantine' -RestartCount 1 | Out-Null
@@ -1144,6 +1209,12 @@ try {
       if (Test-Path -LiteralPath $PidFile -PathType Leaf) { Remove-Item -LiteralPath $PidFile -Force }
       Wait-DshPortReleasedOrThrow -Reason 'crash guard ready-check restart'
       continue
+    }
+
+    if ($script:GuardAvailable -and -not $KeepAlive -and [string]$guardReadyResult.status -ne 'healthy') {
+      $script:StartupFailureStatus = 'degraded'
+      $script:StartupFailureReason = [string]$guardReadyResult.reason
+      throw "DSH startup health check entered $($guardReadyResult.status): $($guardReadyResult.reason); see $SupervisorStateFile"
     }
 
     if ($KeepAlive) {
@@ -1167,6 +1238,8 @@ try {
         continue
       }
       if ([string]$supervisorResult.status -ne 'healthy') {
+        $script:StartupFailureStatus = if ([string]$supervisorResult.status -eq 'degraded') { 'degraded' } else { 'failed' }
+        $script:StartupFailureReason = [string]$supervisorResult.reason
         throw "DSH runtime supervisor entered degraded state: $($supervisorResult.reason); see $SupervisorStateFile"
       }
     }
@@ -1175,10 +1248,10 @@ try {
 
   $finalStartupStatus = if ($guardRestarted) { 'recovered' } else { 'healthy' }
   $finalStartupReason = if ($guardRestarted) { 'quarantine-and-controlled-restart' } else { 'web-ready' }
-  Write-DshStartupIncident -Status $finalStartupStatus -Reason $finalStartupReason -RestartCount ([int]$guardRestarted) | Out-Null
+  $startupReceipt = Write-DshStartupIncident -Status $finalStartupStatus -Reason $finalStartupReason -RestartCount ([int]$guardRestarted)
 
   if (-not $NoBrowser) {
-    Start-Process (Get-DshBrowserLaunchUrl -StartupGuardNotice:$guardRestarted) | Out-Null
+    Start-Process (Get-DshBrowserLaunchUrl -StartupGuardNotice:$guardRestarted -IncidentId ([string]$startupReceipt.incidentId)) | Out-Null
   }
   if ($ShowWindow) {
     Write-Host "DSH Web 已打开：$Url"
@@ -1204,7 +1277,7 @@ try {
     $restartCount = 0
     $guardVariable = Get-Variable -Name guardRestarted -ErrorAction SilentlyContinue
     if ($null -ne $guardVariable -and [bool]$guardVariable.Value) { $restartCount = 1 }
-    Write-DshStartupIncident -Status 'failed' -Reason 'startup-failure' -RestartCount $restartCount | Out-Null
+    Write-DshStartupIncident -Status $script:StartupFailureStatus -Reason $script:StartupFailureReason -RestartCount $restartCount | Out-Null
     Write-LauncherLog "ERROR $message"
   } catch {
     # Preserve the original failure if logging itself is unavailable.

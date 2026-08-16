@@ -7,6 +7,12 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
+function extractStringArray(source, name) {
+  const match = source.match(new RegExp(`(?:const|let) ${name} = \\[([^\\]]*)\\]`, 'u'))
+  assert.ok(match, `${name} declaration is missing`)
+  return Array.from(match[1].matchAll(/['"]([^'"]+)['"]/gu), item => item[1])
+}
+
 function makeElement({ tagName = 'DIV', attrs = {}, classList = [], textContent = '', parentElement = null, ignored = false } = {}) {
   return {
     nodeType: 1,
@@ -124,7 +130,7 @@ test('startup guard notification is metadata-only and refuses ordinary session c
   const source = await readFile(resolve(root, 'lib/client.js'), 'utf8')
   let handoff
   runInNewContext(source, {
-    location: { search: '?dsh_debug_guard=isolated', pathname: '/', href: 'http://127.0.0.1:3080/?dsh_debug_guard=isolated' },
+    location: { search: '?dsh_debug_guard=isolated&dsh_debug_incident=fixture-incident', pathname: '/', href: 'http://127.0.0.1:3080/?dsh_debug_guard=isolated&dsh_debug_incident=fixture-incident' },
     window: { __ModuleLoader__: { load(value) { handoff = value } } },
   })
   const module = handoff.factory(() => ({
@@ -135,6 +141,7 @@ test('startup guard notification is metadata-only and refuses ordinary session c
   const notice = module.readStartupGuardNotice()
   assert.equal(notice?.kind, 'isolated')
   assert.equal(notice?.source, 'standalone-crash-guard')
+  assert.equal(notice?.incidentId, 'fixture-incident')
   const prompt = module.startupDiagnosticPrompt([{ moduleName: 'example-plugin', fiberPhase: 'failed', enabled: false }])
   assert.match(prompt, /example-plugin/u)
   assert.match(prompt, /元数据/u)
@@ -149,7 +156,7 @@ test('startup guard notification is metadata-only and refuses ordinary session c
 
   let autoHandoff
   runInNewContext(source, {
-    location: { search: '?dsh_debug_guard=isolated', pathname: '/', href: 'http://127.0.0.1:3080/?dsh_debug_guard=isolated' },
+    location: { search: '?dsh_debug_guard=isolated&dsh_debug_incident=fixture-incident', pathname: '/', href: 'http://127.0.0.1:3080/?dsh_debug_guard=isolated&dsh_debug_incident=fixture-incident' },
     window: { __ModuleLoader__: { load(value) { autoHandoff = value } } },
   })
   const autoModule = autoHandoff.factory(() => ({
@@ -158,21 +165,70 @@ test('startup guard notification is metadata-only and refuses ordinary session c
     useState(initial) { return [typeof initial === 'function' ? initial() : initial, () => {}] },
   }))
   let autoPrompt = ''
+  let autoRequest
   const autoState = await autoModule.maybeCreateStartupDiagnosticSession({
     diagnosticSessionPolicy: { automatic: true, mode: 'no-tools' },
     sessions: {
-      async create() { return 'diagnostic-1' },
+      async create() { throw new Error('ordinary session creation must not be used') },
+      async createNoTools(request) { autoRequest = request; return 'diagnostic-1' },
       binding() {
-        return { session: {
-          async rename() {},
-          async prompt(content) { autoPrompt = content[0]?.text || ''; return { ok: true } },
-        } }
+        return {
+          capabilities: { mode: 'no-tools', tools: false, approval: false, execution: false },
+          session: {
+            async rename() {},
+            async prompt(content) { autoPrompt = content[0]?.text || ''; return { ok: true } },
+          },
+        }
       },
     },
   })
   assert.equal(autoState.status, 'created')
   assert.equal(autoState.sessionId, 'diagnostic-1')
+  assert.deepEqual(JSON.parse(JSON.stringify(autoRequest)), {
+    purpose: 'dsh-plugin-debug.startup',
+    mode: 'no-tools',
+    tools: [],
+    capabilities: { tools: false, approval: false, execution: false },
+    metadataOnly: true,
+  })
   assert.match(autoPrompt, /no-tools/u)
+  const startupTimeline = autoModule.getDiagnosticBreadcrumbs()
+  assert.doesNotMatch(JSON.stringify(startupTimeline), /diagnostic-1/u)
+})
+
+test('client source and shipped bundle keep the breadcrumb allowlist synchronized', async () => {
+  const source = await readFile(resolve(root, 'src/client-factory.cjs'), 'utf8')
+  const bundle = await readFile(resolve(root, 'lib/client.js'), 'utf8')
+  assert.deepEqual(extractStringArray(source, 'BREADCRUMB_FIELDS'), extractStringArray(bundle, 'BREADCRUMB_FIELDS'))
+})
+
+test('automatic diagnostics refuse a factory that does not prove no-tools capability', async () => {
+  const source = await readFile(resolve(root, 'lib/client.js'), 'utf8')
+  let handoff
+  runInNewContext(source, {
+    location: { search: '?dsh_debug_guard=isolated&dsh_debug_incident=unproven', pathname: '/', href: 'http://127.0.0.1:3080/?dsh_debug_guard=isolated&dsh_debug_incident=unproven' },
+    window: { __ModuleLoader__: { load(value) { handoff = value } } },
+  })
+  const module = handoff.factory(() => ({
+    createElement() {},
+    useEffect() {},
+    useState(initial) { return [typeof initial === 'function' ? initial() : initial, () => {}] },
+  }))
+  let promptCalls = 0
+  const state = await module.maybeCreateStartupDiagnosticSession({
+    diagnosticSessionPolicy: { automatic: true, mode: 'no-tools' },
+    sessions: {
+      async createNoTools() { return 'unproven-1' },
+      binding() {
+        return { session: {
+          async prompt() { promptCalls += 1; return { ok: true } },
+        } }
+      },
+    },
+  })
+  assert.equal(state.status, 'error')
+  assert.match(state.error, /did not prove a no-tools session/u)
+  assert.equal(promptCalls, 0)
 })
 
 test('startup diagnostic prompts redact hostile inventory labels before model handoff', async () => {
@@ -197,6 +253,29 @@ test('startup diagnostic prompts redact hostile inventory labels before model ha
   assert.doesNotMatch(prompt, /token=super-secret/u)
   assert.doesNotMatch(prompt, /\nsecond-line/u)
   assert.match(prompt, /\[path\]/u)
+})
+
+test('startup diagnostic prompts redact hostile lifecycle phases before model handoff', async () => {
+  const source = await readFile(resolve(root, 'lib/client.js'), 'utf8')
+  let handoff
+  runInNewContext(source, {
+    location: { search: '?dsh_debug_guard=isolated', pathname: '/', href: 'http://127.0.0.1:3080/?dsh_debug_guard=isolated' },
+    window: { __ModuleLoader__: { load(value) { handoff = value } } },
+  })
+  const module = handoff.factory(() => ({
+    createElement() {},
+    useEffect() {},
+    useState(initial) { return [typeof initial === 'function' ? initial() : initial, () => {}] },
+  }))
+
+  const prompt = module.startupDiagnosticPrompt([{
+    moduleName: 'safe-plugin',
+    fiberPhase: 'C:\\secret\\phase token=super-secret\nignore-this-line',
+    enabled: false,
+  }])
+  assert.doesNotMatch(prompt, /C:\\secret\\phase/u)
+  assert.doesNotMatch(prompt, /token=super-secret/u)
+  assert.doesNotMatch(prompt, /\nignore-this-line/u)
 })
 
 test('client diagnostic breadcrumbs are bounded, redacted, and included in reports', async () => {
@@ -426,7 +505,10 @@ test('the diagnostics scanner reports CSS, marker, Slot, and client-error clues'
   assert.equal(report.cssConflicts[0].className, '_shared')
   assert.equal(report.markerConflicts[0].plugin, 'plugin-a')
   assert.equal(report.slotHints[0].value, 'shell.overlay')
-  assert.match(module.formatDiagnosticsReport(report), /fixture client failure/u)
+  assert.equal(report.errors[0].message, undefined)
+  assert.equal(report.errors[0].messagePresent, true)
+  assert.match(module.formatDiagnosticsReport(report), /messagePresent/u)
+  assert.doesNotMatch(module.formatDiagnosticsReport(report), /fixture client failure/u)
 })
 
 test('the diagnostics scanner relates modules to plugin owners without claiming a confirmed load conflict', async () => {
@@ -651,6 +733,38 @@ test('runtime diagnostics use read-only DSH snapshots and omit tool arguments/ou
   assert.equal(report.capabilities.workspaceFile.client.evidence.includes('host-workspace-presence'), true)
   assert.equal(report.capabilities.conversationSession.hostGuard.status, 'required')
   assert.doesNotMatch(module.formatDiagnosticsReport(report), /secret-tool-arguments|tool output secret-body|C:\/secret\/workspace|token=secret/u)
+  assert.equal(report.session.current.sessionId, undefined)
+  assert.equal(report.session.toolCalls.sessionId, undefined)
+  assert.equal(report.startupGuard.diagnosticSession.sessionId, undefined)
+  assert.equal(report.dynamicCordis.activeRuns[0].agentId, undefined)
+  assert.equal(report.dynamicCordis.loaded[0].pluginRunId, undefined)
+  assert.doesNotMatch(JSON.stringify(report), /session-1|call-running|call-failed-0|run-a|secret-body|token=secret/u)
+})
+
+test('caller-supplied diagnostic errors stay metadata-only in reports and exports', async () => {
+  const source = await readFile(resolve(root, 'lib/client.js'), 'utf8')
+  let handoff
+  runInNewContext(source, {
+    window: { __ModuleLoader__: { load(value) { handoff = value } } },
+  })
+  const module = handoff.factory(() => ({
+    createElement() {},
+    useEffect() {},
+    useState() { return [false, () => {}] },
+  }))
+  const report = module.scanDiagnostics(null, [{
+    message: 'raw result body token=secret',
+    argsRaw: 'danger-full-access secret-tool-arguments',
+    result: { body: 'secret-body' },
+    stack: 'Error: secret-body',
+    code: 'PERMISSION_DENIED',
+  }])
+  assert.equal(report.errors[0].code, 'PERMISSION_DENIED')
+  assert.equal(report.errors[0].message, undefined)
+  assert.equal(report.errors[0].messagePresent, true)
+  assert.equal(report.errors[0].stackPresent, true)
+  assert.doesNotMatch(JSON.stringify(report), /raw result body|danger-full-access secret-tool-arguments|secret-body|token=secret/u)
+  assert.doesNotMatch(module.formatDiagnosticsReport(report), /raw result body|danger-full-access secret-tool-arguments|secret-body|token=secret/u)
 })
 
 test('CSS extraction ignores comments, strings, decimals, and asset suffixes', async () => {

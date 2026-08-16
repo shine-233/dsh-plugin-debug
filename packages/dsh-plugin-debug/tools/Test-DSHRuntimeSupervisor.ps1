@@ -1,7 +1,8 @@
 ﻿[CmdletBinding()]
 param(
   [int]$TimeoutSec = 30,
-  [int]$Port = 0
+  [int]$Port = 0,
+  [switch]$UnresolvedPluginFailure
 )
 
 Set-StrictMode -Version Latest
@@ -21,6 +22,7 @@ $guardModule = Join-Path $fixtureTools 'DSH-Guard.psm1'
 $manifestPath = Join-Path $fixtureProfile 'package.json'
 $guardStatePath = Join-Path $fixtureState 'guard-state.json'
 $guardPatchPath = Join-Path $fixtureState 'guard.patch.yml'
+$startupIncidentPath = Join-Path $fixtureState 'startup-incident.json'
 $launcherLogPath = Join-Path $fixtureState 'logs\launcher.log'
 $pidRecordPath = Join-Path $fixtureState 'dsh-web.pid.json'
 $previousDshHome = $env:DSH_HOME
@@ -104,6 +106,7 @@ try {
   $fixturePort = if ($Port -eq 0) { Get-FreeLoopbackPort } else { $Port }
   New-Item -ItemType Directory -Path $fixtureTools,$fixtureRuntime,$fixtureProfile,$fixtureWorkspace,$fixtureState -Force | Out-Null
   Copy-Item -LiteralPath (Join-Path $packageRoot 'Start-DSH.ps1') -Destination $launcher -Force
+  Copy-Item -LiteralPath (Join-Path $packageRoot 'DSH-State.psm1') -Destination (Join-Path $fixtureTools 'DSH-State.psm1') -Force
   Copy-Item -LiteralPath (Join-Path $packageRoot 'DSH-Guard.psm1') -Destination $guardModule -Force
   Write-FixtureText -Path (Join-Path $fixtureRuntime 'package.json') -Text '{"name":"dsh-provenance-runtime-supervisor-fixture","private":true}'
   Write-FixtureText -Path $manifestPath -Text (@{
@@ -124,9 +127,11 @@ const argument = (name) => {
 const bootFile = process.env.DSH_RUNTIME_SUPERVISOR_BOOT_FILE;
 const priorBoots = fs.existsSync(bootFile) ? Number(fs.readFileSync(bootFile, 'utf8')) || 0 : 0;
 fs.writeFileSync(bootFile, String(priorBoots + 1), 'utf8');
+const unresolvedPlugin = process.env.DSH_RUNTIME_SUPERVISOR_UNRESOLVED === '1';
+const failingModule = unresolvedPlugin ? 'unmapped-plugin' : 'test-dsh-plugin';
 const patchPath = argument('--patch');
 const patch = patchPath && fs.existsSync(patchPath) ? fs.readFileSync(patchPath, 'utf8') : '';
-if (priorBoots > 0 && (!/id:\s*'test-dsh-plugin'/.test(patch) || !/disabled:\s*true/.test(patch))) {
+if (priorBoots > 0 && !unresolvedPlugin && (!/id:\s*'test-dsh-plugin'/.test(patch) || !/disabled:\s*true/.test(patch))) {
   process.stderr.write('Error: runtime supervisor fixture refused to start without quarantine patch\n');
   process.exit(48);
 }
@@ -135,7 +140,7 @@ const port = Number(argument('--port'));
 const server = http.createServer((request, response) => {
   if (request.url === '/api/pluginInventory/list') {
     response.setHeader('content-type', 'application/json');
-    const entries = failed ? [{ entryId: 'test-dsh-plugin', moduleName: 'test-dsh-plugin', enabled: true, fiberPhase: 'failed' }] : [];
+    const entries = failed ? [{ entryId: failingModule, moduleName: failingModule, enabled: true, fiberPhase: 'failed' }] : [];
     response.end(JSON.stringify({ result: { ok: true, value: { entries } } }));
     return;
   }
@@ -147,7 +152,7 @@ if (priorBoots === 0) {
   setTimeout(() => {
     failed = true;
     process.stderr.write('Error: test-dsh-plugin runtime failed after Web ready\n');
-    setTimeout(() => process.exit(47), 350);
+    if (!unresolvedPlugin) setTimeout(() => process.exit(47), 350);
   }, 1000);
 }
 const close = () => server.close(() => process.exit(0));
@@ -157,18 +162,20 @@ process.on('SIGINT', close);
 
   $env:DSH_HOME = $fixtureDshHome
   $env:DSH_RUNTIME_SUPERVISOR_BOOT_FILE = $bootFile
+  $env:DSH_RUNTIME_SUPERVISOR_UNRESOLVED = if ($UnresolvedPluginFailure) { '1' } else { '0' }
   $powerShellCommand = Get-Command powershell.exe -ErrorAction SilentlyContinue
   if ($null -eq $powerShellCommand) { throw 'Windows PowerShell executable is required for the runtime supervisor fixture' }
   $argumentList = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $launcher,
     '-Port', [string]$fixturePort, '-HostName', '127.0.0.1', '-Profile', 'fixture',
     '-Workspace', $fixtureWorkspace, '-StateRoot', $fixtureState,
-    '-EnableCrashGuard', '-GuardThreshold', '1', '-NoBrowser', '-NoInstall',
+    '-EnableCrashGuard', '-GuardThreshold', '1', '-NoBrowser', '-NoErrorDialog', '-NoInstall',
     '-NoPluginInstall', '-KeepAlive', '-SupervisorIntervalSec', '1', '-StartupTimeoutSec', '10'
   )
   $launcherProcess = Start-Process -FilePath $powerShellCommand.Source -ArgumentList $argumentList -WorkingDirectory $fixtureWorkspace -WindowStyle Hidden -PassThru
   $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
   $recovered = $false
+  $blockedAsDegraded = $false
   while ([DateTime]::UtcNow -lt $deadline) {
     if (Test-Path -LiteralPath $pidRecordPath -PathType Leaf) {
       try { $record = Get-Content -LiteralPath $pidRecordPath -Raw -Encoding UTF8 | ConvertFrom-Json; $fixtureProcess = Get-Process -Id ([int]$record.pid) -ErrorAction SilentlyContinue } catch { }
@@ -184,13 +191,65 @@ process.on('SIGINT', close);
       else { @($guardState.quarantined | Where-Object { [string]$_.moduleName -eq 'test-dsh-plugin' }) }
     )
     $log = Read-FixtureText -Path $launcherLogPath
-    if ((Read-BootCount) -ge 2 -and $quarantine.Count -eq 1 -and
+    if ($UnresolvedPluginFailure -and
+        $null -ne $supervisorState -and [string]$supervisorState.status -eq 'degraded' -and
+        (Read-BootCount) -eq 1) {
+      $blockedAsDegraded = $true
+      break
+    }
+    if (-not $UnresolvedPluginFailure -and (Read-BootCount) -ge 2 -and $quarantine.Count -eq 1 -and
         @($log -split "`r?`n" | Where-Object { $_ -match 'DSH Web ready' }).Count -ge 2 -and
         $null -ne $supervisorState -and [string]$supervisorState.status -eq 'healthy') {
       $recovered = $true
       break
     }
     Start-Sleep -Milliseconds 250
+  }
+  if ($UnresolvedPluginFailure) {
+    if (-not $blockedAsDegraded) {
+      throw "unresolved plugin failure was not blocked as degraded within ${TimeoutSec}s; boots=$(Read-BootCount); log=$log"
+    }
+    $launcherProcess.Refresh()
+    $launcherExitDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    while (-not $launcherProcess.HasExited -and [DateTime]::UtcNow -lt $launcherExitDeadline) {
+      Start-Sleep -Milliseconds 100
+      $launcherProcess.Refresh()
+    }
+    if (-not $launcherProcess.HasExited) {
+      throw 'launcher remained alive after an unresolved plugin failure was marked degraded'
+    }
+    $launcherExitCode = [int]$launcherProcess.ExitCode
+    if ($launcherExitCode -eq 0) {
+      throw 'launcher returned success after an unresolved plugin failure'
+    }
+    $finalGuardState = $null
+    if (Test-Path -LiteralPath $guardStatePath -PathType Leaf) {
+      try { $finalGuardState = Get-Content -LiteralPath $guardStatePath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+    }
+    $finalSupervisorState = $null
+    if (Test-Path -LiteralPath (Join-Path $fixtureState 'supervisor-state.json') -PathType Leaf) {
+      try { $finalSupervisorState = Get-Content -LiteralPath (Join-Path $fixtureState 'supervisor-state.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+    }
+    $finalStartupIncident = $null
+    if (Test-Path -LiteralPath $startupIncidentPath -PathType Leaf) {
+      try { $finalStartupIncident = Get-Content -LiteralPath $startupIncidentPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+    }
+    $finalQuarantineCount = if ($null -eq $finalGuardState) { 0 } else { @($finalGuardState.quarantined).Count }
+    if ($finalQuarantineCount -ne 0) {
+      throw "unresolved plugin failure unexpectedly quarantined $finalQuarantineCount plugin(s)"
+    }
+    [ordered]@{
+      result = 'PASS'
+      scenario = 'unresolved-plugin-fail-closed'
+      bootCount = Read-BootCount
+      launcherExitCode = $launcherExitCode
+      quarantineCount = $finalQuarantineCount
+      startupBlocked = $true
+      startupIncidentStatus = if ($null -eq $finalStartupIncident) { $null } else { [string]$finalStartupIncident.status }
+      supervisorStatus = if ($null -eq $finalSupervisorState) { $null } else { [string]$finalSupervisorState.status }
+      supervisorReason = if ($null -eq $finalSupervisorState) { $null } else { [string]$finalSupervisorState.reason }
+    } | ConvertTo-Json -Depth 12
+    exit 0
   }
   if (-not $recovered) {
     $log = Read-FixtureText -Path $launcherLogPath
@@ -229,6 +288,7 @@ process.on('SIGINT', close);
   Stop-FixtureProcesses
   if ($null -eq $previousDshHome) { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue } else { $env:DSH_HOME = $previousDshHome }
   Remove-Item Env:DSH_RUNTIME_SUPERVISOR_BOOT_FILE -ErrorAction SilentlyContinue
+  Remove-Item Env:DSH_RUNTIME_SUPERVISOR_UNRESOLVED -ErrorAction SilentlyContinue
   if (Test-Path -LiteralPath $tempRoot) {
     $cleanupDeadline = [DateTime]::UtcNow.AddSeconds(5)
     do {
