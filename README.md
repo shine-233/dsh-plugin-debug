@@ -220,6 +220,8 @@ npm run check:integration
 - `CodeQL`：扫描 JavaScript/TypeScript 和 GitHub Actions workflow；它只报告安全问题，不会改变插件运行时。
 - `Dependabot`：每月检查插件依赖、固定 runtime 依赖和 Actions 版本，生成可审阅的更新 PR。
 - GitHub 依赖漏洞告警和自动安全修复：已在仓库设置中打开。
+- `main` 分支保护：普通 PR 必须通过 Node、Windows 调试套件、fresh-clone 发布门禁和两项 CodeQL 检查；单人维护的管理员紧急直推仍保留。
+- 合并 PR 后自动删除临时分支，避免 Dependabot 和功能分支长期堆积。
 - Issue/PR 模板：诊断报告、功能建议和隐私/测试检查都放在仓库根目录的 `.github/` 下，GitHub 页面会真正读取这些文件。
 
 这些自动化也不能替代本地测试、真实 DSH/浏览器验证或人工审阅；看到 CI 变绿时，仍要看它覆盖的是哪一层。
