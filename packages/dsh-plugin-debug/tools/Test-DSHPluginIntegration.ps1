@@ -94,7 +94,7 @@ try {
   # proves the package installs as itself without a registry or real Profile.
   $stagedRoot = Join-Path $tempRoot 'package'
   New-Item -ItemType Directory -Path $stagedRoot -Force | Out-Null
-  foreach ($relative in @('package.json', 'bundle-manifest.json', 'cordis.patch.yml', 'lib', 'tools', 'DSH-Provenance.ps1', 'Start-DSH-Combined.ps1')) {
+  foreach ($relative in @('package.json', 'bundle-manifest.json', 'cordis.patch.yml', 'lib', 'tools', 'DSH-Provenance.ps1', 'Start-DSH-Debug.ps1', 'Start-DSH-Combined.ps1')) {
     Copy-Item -LiteralPath (Join-Path $packageRoot $relative) -Destination (Join-Path $stagedRoot $relative) -Recurse -Force
   }
   $stagedRuntimeModules = Join-Path $stagedRoot 'tools\runtime\node_modules'
