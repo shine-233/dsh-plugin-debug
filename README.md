@@ -26,7 +26,7 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 | 事故取证 | 多层组件、启动回执、指针证据、Trace、完整性哈希 | `tools/DSH-Incident.ps1` |
 | 客户端诊断时间线 | 有界 breadcrumb 环形缓冲、事件去重、丢弃计数和脱敏导出 | `lib/client.js`、`__DSH_PLUGIN_DEBUG__.getDiagnosticBreadcrumbs()` |
 | 崩溃防护（Crash Guard）与监督器（Supervisor） | 启动失败识别、明确安全候选隔离、一次受控重启、页面通知 | `tools/Start-DSH.ps1`、`tools/DSH-Guard.psm1` |
-| 快照与恢复（Snapshot/Recovery） | Profile/Workspace 快照、known-good 检查点、追加式会话分支 | `tools/DSH-Recovery.psm1`、`tools/DSH-KnownGood.psm1` |
+| 快照与恢复（Snapshot/Recovery） | Profile/Workspace 快照、known-good 检查点、追加式会话分支；敏感条目和 `.env` 只记录排除原因、不复制内容 | `tools/DSH-Recovery.psm1`、`tools/DSH-KnownGood.psm1` |
 | 受限修复（Repair） | 受限计划、receipt、pre/post hash、冲突时 `ROLLBACK_CONFLICT` | `tools/DSH-Repair.psm1`、`tools/DSH-SelfRepair.ps1` |
 | 追踪与复现（Trace/Repro） | 仅元数据 Trace、baseline、autopsy、脱敏 repro 导出 | `tools/DSH-Trace*.psm1`、`tools/DSH-Repro.ps1` |
 | 插件二分定位 | 只读生成安全第三方候选顺序和人工复核步骤 | `tools/DSH-Bisect.ps1`、`-Action plugin-bisect-plan` |
@@ -35,7 +35,7 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 | 依赖图检查 | 离线读取 Profile/package metadata，识别缺失依赖、循环和未引用本地包 | `tools/DSH-DependencyGraph.ps1`、`-Action plugin-dependency-graph` |
 | Trace 循环分析 | 在有限窗口内识别重复工具调用/事件指纹，输出脱敏的事后复核线索 | `tools/DSH-TraceLoop.ps1`、`-Action trace-loop` |
 | Trace 递归分析 | 按有限生命周期深度识别 Agent/Workflow 嵌套过深、未闭合和错配事件 | `tools/DSH-TraceRecursion.ps1`、`-Action trace-recursion` |
-| 任务守护（Guardian） | 运行时观察工具调用循环、子任务递归和中断，并发送一次脱敏提示 | `lib/task-guardian.js`、`/api/dsh-plugin-debug/guardian/status` |
+| 任务守护（Guardian） | 运行时观察工具调用循环、子任务递归和中断，发送一次脱敏提示，并对事件日志做有界轮转 | `lib/task-guardian.js`、`/api/dsh-plugin-debug/guardian/status` |
 | 一键启动 | PowerShell/CMD/VBS 入口、端口冲突隔离、启动处置回执 | `Start-DSH-Debug.*`、`Start-DSH-Combined.*` |
 
 ## 安装与启动
@@ -91,7 +91,7 @@ dsh plugin --profile debug add . --offline
 Invoke-RestMethod http://127.0.0.1:3081/api/dsh-plugin-debug/guardian/status
 ```
 
-事件文件默认位于 `$DSH_HOME/guardian/events.jsonl`。内存中的最近事件窗口和每条事件元数据有界；该文件当前按行追加且没有自动轮转，因此 Guardian 不保证整个文件大小有界。工具参数中的敏感字段会被替换，原始 Session ID 不会返回；长期运行时请按自己的保留策略管理该本地日志，不要把它提交或上传。若 Host 没有 `agent` 或 `session/event` 事件服务，守护会保持可加载但不报告，不会阻塞插件启动。
+事件文件默认位于 `$DSH_HOME/guardian/events.jsonl`。内存中的最近事件窗口、单条事件元数据和磁盘事件日志均有界：默认保留当前文件加两个轮转文件，每个文件最多 256 KiB；可通过 Guardian 设置中的 `eventLogMaxBytes`（1 KiB–4 MiB）和 `eventLogMaxFiles`（2–10）调整。轮转只处理 Debug 自己的 `guardian/events.jsonl*` 文件，不读取或清理其他 DSH 数据。工具参数中的敏感字段会被替换，原始 Session ID 不会返回；长期运行时仍不要把本地日志提交或上传。若 Host 没有 `agent` 或 `session/event` 事件服务，守护会保持可加载但不报告，不会阻塞插件启动。
 
 也可以用统一入口检查是否适合重启；离线输入和真实接口都走同一份边界：
 
@@ -108,10 +108,13 @@ Invoke-RestMethod http://127.0.0.1:3081/api/dsh-plugin-debug/guardian/status
 
 - 默认离线；不上传日志，不连接 Langfuse/OpenTelemetry，也不创建插件市场（marketplace）。
 - 默认只收集元数据（metadata-only）；不保存 Tool 参数、Tool 结果正文、会话正文、Cookie、Authorization、API key、`.env` 内容或完整工作目录。
+- Guardian 本身是 observer-only，但整个包不是无副作用工具：Crash Guard/Runtime Supervisor 可能停止已确认的 DSH 子进程、写入可逆 Guard state/patch，并最多执行一次受控重启；底层 `Start-DSH.ps1` 默认关闭该处置能力，公开 Debug 启动器才会显式开启。
+- Host API 默认只接受 loopback；远端 Host 必须通过 `DSH_DEBUG_API_ALLOWED_HOSTS` 明确列入主机白名单，禁止把不可信 `BaseUrl` 直接用于 session/history 查询。
+- Recovery 对敏感文件只记录“存在但排除”，不会复制或恢复 `.env` 内容；公开 trace fixture 只保留调用键名、权限枚举、错误代码和事件顺序等元数据。
 - 受限修复（Repair）只允许经过允许列表（allowlist）的本地 Guard 状态；递归危险字段、核心包、Profile/workspace 路径和未观察候选都会被拒绝。
 - 回滚前校验修改前哈希（pre-image hash），回滚时校验修改后哈希（post-image hash）；用户改过文件就返回 `ROLLBACK_CONFLICT`，不覆盖改动。
 - `UNAVAILABLE`（不可用）、`PARTIAL`（部分结果）、`WARN`（警告）和 `FAIL`（失败）都是有意保留的证据状态；生成报告不等于 DSH 已恢复，发现失败插件也不等于已经证明因果。
-- 工作区恢复不删除快照之后新建的文件，不跟随 junction/symlink；会话分支（Session fork）保留原会话，不撤销已经执行的外部副作用。
+- 工作区恢复不删除快照之后新建的文件，不跟随 junction/symlink；敏感条目和 `.env` 不进入快照，也不会被恢复覆盖；会话分支（Session fork）保留原会话，不撤销已经执行的外部副作用。
 
 ## 测试程序
 
@@ -151,6 +154,8 @@ npm run check:integration
 .\tools\Test-DSHSelfRepair.ps1
 ```
 
+其中 Crash Guard、Runtime Supervisor、启动冲突和集成回归会启动受控的临时 fake 进程或 loopback fixture；它们不会操作真实 DSH，但也不能称为纯静态检查。若只做无服务的安全回归，可先运行 `Test-DSHGuard.ps1 -SkipApi`、`Test-DSHRecovery.ps1`、`Test-DSHGuardianStatus.ps1` 和 Node `npm test`。
+
 下面这些测试覆盖更完整的恢复、取证和 API 分支；如果本机没有对应服务，会返回 `UNAVAILABLE` 或按脚本说明跳过，不得把静态 fixture 当成真实线上验证：
 
 ```powershell
@@ -174,8 +179,8 @@ npm run check:integration
 
 1. 先在 `src/`、`tools/`、入口脚本和测试中修改源码；不要手工编辑 `lib/` 和 `bundle-manifest.json`。
 2. 每个新能力同时加入一个可脱敏的回归 fixture、一个正常路径断言和一个失败路径断言，写清楚它不会执行什么、不会写什么。
-3. 运行 `npm test`、`npm run check`、`npm run check:standalone`、`npm run check:integration`，再运行相关 PowerShell 测试和根目录 `scripts/Verify-Publication.ps1`。
-4. 按语义化版本（SemVer）修改 `package.json`，同步 `package-lock.json`；构建脚本会更新 `lib/` 和 `bundle-manifest.json`。
+3. 如果功能改变了公开行为，先按语义化版本（SemVer）修改 `package.json`，同步 `package-lock.json`；不要在构建完成后才改版本。
+4. 运行 `npm test`、`npm run check`、`npm run check:standalone`、`npm run check:integration`，再运行相关 PowerShell 测试和根目录 `scripts/Verify-Publication.ps1`。
 5. 运行 `npm pack --dry-run --json --ignore-scripts`，把实际文件数同步到 `RELEASE-MANIFEST.json` 和 `SOURCE-SNAPSHOT.md`。
 6. 先检查 `git diff --check`、敏感文件和待提交文件；完成一次本地可审阅提交后，从 fresh clone（全新克隆）重跑测试，最后才 push 到 `main`。
 7. 发布后再读取远端提交哈希，并把 `RELEASE-MANIFEST.json` 的发布字段和 `SOURCE-SNAPSHOT.md` 更新为事实；不能用旧提交哈希冒充新版本。

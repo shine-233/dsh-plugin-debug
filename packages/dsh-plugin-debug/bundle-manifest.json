@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-plugin-debug",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "bundleType": "dsh-npm-bundle",
   "independentRuntime": true,
   "features": {
@@ -50,6 +50,18 @@
       "liveLoopGuidance": true,
       "liveRecursionGuidance": true,
       "interruptionAwareness": true,
+      "boundedEventLog": {
+        "defaultMaxBytes": 262144,
+        "defaultMaxFiles": 3,
+        "configurableMaxBytes": [
+          1024,
+          4194304
+        ],
+        "configurableMaxFiles": [
+          2,
+          10
+        ]
+      },
       "taskTermination": false,
       "processTermination": false,
       "profileMutation": false
@@ -69,7 +81,7 @@
   "files": {
     "package.json": {
       "bytes": 2930,
-      "sha256": "c0e227769fa256523d50322250ff98670406b52f7db5c0b3f5cbe7ca223db6ed"
+      "sha256": "65974b09363bc3ae2ca8152eed457eae8741b3a99b3c64437c6d63fdf91938c5"
     },
     "cordis.patch.yml": {
       "bytes": 242,
@@ -80,8 +92,8 @@
       "sha256": "425f3269aa33c1017ede6908d7bf6077d37a0c3e2c11cc3bcb77197450349e2a"
     },
     "lib/task-guardian.js": {
-      "bytes": 16146,
-      "sha256": "666c8003fd8f172320acef7c7d722b7288593c424ce7a3ccebf4f4b3a4c50bac"
+      "bytes": 18375,
+      "sha256": "cddbf73374dbcdefaf15e53f866de5a19aa3454445eac7dbb1ff86e801ba3db8"
     },
     "lib/client.js": {
       "bytes": 120581,

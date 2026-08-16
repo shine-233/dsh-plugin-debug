@@ -19,10 +19,13 @@ tree after this review. None is a package dependency. The disabled
 
 ## Intentional name changes and exclusions
 
-The migration was checked by function-name inventory. Every function from the
-provenance and debug-suite source inputs is present in the combined source
-under the same name or as an exported/shared helper. The old one-click source
-has ten names that do not appear verbatim in the combined package:
+The migration review used a function-name inventory while the source inputs
+were available. It recorded each provenance/debug-suite function as retained
+under the same name or as an exported/shared helper, and recorded the ten
+one-click names that were intentionally renamed or removed below. Because the
+old source directories are no longer present, this document is an audit record,
+not a claim that a fresh source-to-source diff can still be reproduced from the
+current projects tree.
 
 | Old name | Decision |
 | --- | --- |
@@ -43,18 +46,23 @@ depend on the disabled plugin-store.
 
 ## Publication checks
 
-The current candidate is verified by:
+This manifest records the migration boundary, not a permanent test result.
+The current worktree has changed since the historical baseline, so the
+following commands are required before claiming publication:
 
 ```text
-npm run check                         37 passed
-Test-DSHStandalone.ps1               PASS
-Test-DSHProvenanceIntegration.ps1    PASS
-Verify-Publication.ps1               PASS, 95 npm-pack entries
-PowerShell parser                    62 files, 0 errors
+npm ci --ignore-scripts
+npm test
+npm run check
+Test-DSHStandalone.ps1
+Test-DSHPluginIntegration.ps1 -SkipCompatibility
+Verify-Publication.ps1
+fresh clone verification
 ```
 
-Crash Guard's intentionally failing runtime is generated inside a bounded
-temporary directory by the regression harness; no standalone fixture package
-remains in the candidate or npm tarball. The migration report does not claim
-real production DSH or GitHub runtime verification; those require a fresh
-clone after publication.
+Each command must retain its real exit code. Crash Guard's intentionally
+failing runtime must remain inside a bounded temporary directory; no standalone
+fixture package, raw Tool payload, `.env` content or store source may enter the
+candidate or npm tarball. This report does not claim real production DSH or
+GitHub runtime verification until the fresh-clone and remote-hash gates are
+recorded.

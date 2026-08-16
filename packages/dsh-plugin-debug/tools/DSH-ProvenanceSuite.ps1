@@ -18,21 +18,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $suiteRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+Import-Module (Join-Path $suiteRoot 'DSH-State.psm1') -Force
 
 function Resolve-DshHome {
   param([string]$Value)
-  if ([string]::IsNullOrWhiteSpace($Value)) {
-    $Value = if ([string]::IsNullOrWhiteSpace($env:DSH_HOME)) { Join-Path $env:USERPROFILE '.dsh' } else { $env:DSH_HOME }
-  }
-  return [IO.Path]::GetFullPath($Value)
+  return Resolve-DshDebugHome -DshHome $Value
 }
 
 function Resolve-StateRoot {
   param([string]$Value)
-  if ([string]::IsNullOrWhiteSpace($Value)) {
-    return Join-Path $suiteRoot 'state\suite'
-  }
-  return [IO.Path]::GetFullPath($Value)
+  return Resolve-DshDebugStateRoot -StateRoot $Value -DshHome (Resolve-DshHome -Value $DshHome) -Profile $Profile -Port $Port
 }
 
 function Get-ProvenancePropertyValue {

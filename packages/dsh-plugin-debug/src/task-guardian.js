@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -39,6 +39,8 @@ export function normalizeGuardianConfig(input = {}) {
     maxSessions: boundedInteger(source.maxSessions, 256, 16, 1024),
     maxRecentEvents: boundedInteger(source.maxRecentEvents, 50, 10, 100),
     eventLog: source.eventLog !== false,
+    eventLogMaxBytes: boundedInteger(source.eventLogMaxBytes, 262144, 1024, 4 * 1024 * 1024),
+    eventLogMaxFiles: boundedInteger(source.eventLogMaxFiles, 3, 2, 10),
     loopMessage: boundedMessage(source.loopMessage, DEFAULT_LOOP_MESSAGE),
     recursionMessage: boundedMessage(source.recursionMessage, DEFAULT_RECURSION_MESSAGE),
   }
@@ -57,6 +59,8 @@ export const guardianConfigSchema = Object.assign(
         maxSubagentDepth: { type: 'number' },
        cooldownMs: { type: 'number' },
        eventLog: { type: 'boolean' },
+       eventLogMaxBytes: { type: 'number' },
+       eventLogMaxFiles: { type: 'number' },
        loopMessage: { type: 'string' },
        recursionMessage: { type: 'string' },
         maxSessions: { type: 'number' },
@@ -156,14 +160,66 @@ function sessionKey(value) {
 
 function makeEventWriter(configProvider, options, log) {
   const home = options.home ?? process.env.DSH_HOME ?? join(homedir(), '.dsh')
-  const file = join(home, 'guardian', 'events.jsonl')
+  const guardianRoot = join(home, 'guardian')
+  const file = join(guardianRoot, 'events.jsonl')
+  const archive = index => `${file}.${index}`
+
+  const pruneArchives = maxFiles => {
+    // Remove archives that exceed a newly lowered retention limit before
+    // shifting the remaining files. This keeps the total file count bounded
+    // even when configuration changes while an installation is running.
+    for (const name of readdirSync(guardianRoot)) {
+      const match = /^events\.jsonl\.(\d+)$/u.exec(name)
+      if (match && Number(match[1]) >= maxFiles) {
+        unlinkSync(join(guardianRoot, name))
+      }
+    }
+  }
+
+  const rotate = maxFiles => {
+    pruneArchives(maxFiles)
+    for (let index = maxFiles - 1; index >= 1; index -= 1) {
+      const target = archive(index)
+      const source = index === 1 ? file : archive(index - 1)
+      try {
+        unlinkSync(target)
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error
+      }
+      try {
+        renameSync(source, target)
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error
+      }
+    }
+  }
+
   return {
     file,
+    retention() {
+      const config = configProvider()
+      return { maxBytes: config.eventLogMaxBytes, maxFiles: config.eventLogMaxFiles }
+    },
     write(event) {
-      if (!configProvider().eventLog) return
+      const config = configProvider()
+      if (!config.eventLog) return
       try {
-        mkdirSync(join(home, 'guardian'), { recursive: true })
-        appendFileSync(file, `${JSON.stringify(event)}\n`, 'utf8')
+        mkdirSync(guardianRoot, { recursive: true })
+        const line = `${JSON.stringify(event)}\n`
+        const incomingBytes = Buffer.byteLength(line, 'utf8')
+        let currentBytes = 0
+        try { currentBytes = statSync(file).size } catch (error) {
+          if (error?.code !== 'ENOENT') throw error
+        }
+        pruneArchives(config.eventLogMaxFiles)
+        if (incomingBytes > config.eventLogMaxBytes) {
+          log(`Guardian event dropped because its redacted record exceeds eventLogMaxBytes (${incomingBytes} > ${config.eventLogMaxBytes})`)
+          return
+        }
+        if (currentBytes > 0 && currentBytes + incomingBytes > config.eventLogMaxBytes) {
+          rotate(config.eventLogMaxFiles)
+        }
+        appendFileSync(file, line, 'utf8')
       } catch (error) {
         log(`Guardian event report could not be written: ${String(error?.message ?? error)}`)
       }
@@ -398,6 +454,7 @@ export function registerTaskGuardian(ctx, input = {}, options = {}) {
         rawToolArgumentsReturned: false,
         fingerprintsAreEncryption: false,
         eventStore: '$DSH_HOME/guardian/events.jsonl',
+        eventLogRetention: writer.retention(),
       },
     }
   }

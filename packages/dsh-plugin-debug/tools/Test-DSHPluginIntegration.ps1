@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param([switch]$KeepTemp)
+param(
+  [switch]$KeepTemp,
+  [switch]$SkipCompatibility
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -129,7 +132,7 @@ fs.cpSync(source, installedRoot, { recursive: true });
   $correlation = Invoke-JsonChild -ScriptPath (Join-Path $stagedRoot 'tools\Test-DSHIncidentCorrelation.ps1') -Arguments @{}
   Assert-PluginIntegration ($correlation.exitCode -eq 0 -and $correlation.value.result -eq 'PASS' -and $correlation.value.networkAccessed -eq $false) 'offline incident-correlation fixture failed or crossed the network boundary'
 
-  if ($env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION -ne '1') {
+  if (-not $SkipCompatibility -and $env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION -ne '1') {
     # The compatibility entry points back to this canonical script. Set the
     # guard only for that child so the staged wrapper proves its forwarding
     # contract once instead of recursively staging and invoking itself.

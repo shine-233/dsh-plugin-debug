@@ -6,7 +6,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $LauncherRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LogDir = Join-Path $LauncherRoot 'logs'
+$StateModulePath = Join-Path $LauncherRoot 'DSH-State.psm1'
+Import-Module $StateModulePath -Force
+$LogDir = Resolve-DshDebugLogRoot
 $AgentsLog = Join-Path $LogDir 'agents-install.log'
 $ProfileInitLog = Join-Path $LogDir 'agents-profile-init.log'
 $PluginLog = Join-Path $LogDir 'agents-plugin-install.log'

@@ -41,7 +41,7 @@ dsh plugin --profile debug add . --offline
 | 崩溃防护（Crash Guard） | 启动日志和 inventory 识别安全第三方候选，写入可逆 patch，最多重启一次 | DSH 核心包、runtime include、未知或歧义项不自动禁用 |
 | 启动回执 | 写入 startup-incident.json，记录启动状态、关联 ID、重启次数和隔离插件 | 不写原始日志、Tool 参数、凭据或完整路径 |
 | 客户端诊断时间线 | 80 条上限的脱敏 breadcrumb 环形缓冲，记录启动、鼠标来源、插件清单、Slot 和客户端错误顺序 | 超出上限记录 dropped；不保存 Tool 参数、正文、DOM 文本或凭据 |
-| 快照/恢复（Snapshot/Recovery） | Profile、Workspace、known-good 检查点和追加式会话分支 | 不删除快照之后新文件，不重写原会话 |
+| 快照/恢复（Snapshot/Recovery） | Profile、Workspace、known-good 检查点和追加式会话分支；敏感条目与 `.env` 只记录排除原因 | 不删除快照之后新文件，不重写原会话，不复制或覆盖敏感内容 |
 | 受限修复（Repair） | 受限计划、allowlist、pre/post-image hash、receipt 和冲突回滚 | 用户改过文件时返回 ROLLBACK_CONFLICT，不覆盖改动 |
 | 追踪/事故（Trace/Incident） | 仅元数据 Trace、baseline、autopsy、跨层事故包和 repro 导出 | 不保留 Tool 参数、结果正文、会话正文、Cookie 或 token |
 | 插件二分定位 | 根据脱敏 inventory、失败证据和 manifest 生成候选顺序与人工步骤 | 只读计划，不自动禁用、不写 Profile、不执行命令 |
@@ -49,7 +49,7 @@ dsh plugin --profile debug add . --offline
 | 插件静态预检 | 离线扫描 JS/MJS/CJS 的静态 `inject` 声明和 `ctx.*` 服务使用 | 不执行插件代码；动态访问和超出扫描上限转 `MANUAL_REVIEW` |
 | 依赖图检查 | 读取 Profile/package manifest 和已有 package metadata，报告缺失依赖、循环和未引用本地包 | 不安装、不执行 package code、不修改 Profile；核心 DSH 包受保护 |
 | Trace 循环与递归分析 | 在有界窗口/深度内识别重复调用和 Agent/Workflow 嵌套；输出脱敏事后线索 | 不阻塞运行时、不创建 Session、不执行 Tool；非法或不完整输入失败即停止 |
-| 任务守护（Guardian） | 观察运行中的 Tool Call、子任务递归和中断，必要时发送一次短提示并提供状态接口 | observer-only：不终止任务、不杀进程、不重启 Host、不禁用插件、不修改 Profile |
+| 任务守护（Guardian） | 观察运行中的 Tool Call、子任务递归和中断，必要时发送一次短提示，提供状态接口并有界轮转事件日志 | observer-only：不终止任务、不杀进程、不重启 Host、不禁用插件、不修改 Profile |
 
 ## 启动故障处理和页面通知
 
@@ -114,7 +114,7 @@ Trace 递归分析按生命周期事件计算有限嵌套深度。它只接受�
 .\tools\Test-DSHTraceRecursion.ps1
 ```
 
-任务守护是包内的运行时观察器。默认 `policy=auto` 时，在冷却窗口内最多给同一 Session 发送一次脱敏指导；`policy=report` 只记录发现，不发送指导。它使用 Tool 名称和经过敏感字段替换的参数形状生成 SHA-256 指纹，状态接口为 `/api/dsh-plugin-debug/guardian/status`。内存中的最近事件窗口和每条事件元数据有界；`$DSH_HOME/guardian/events.jsonl` 当前按行追加且没有自动轮转，因此不保证整个事件文件大小有界。状态和事件报告不会返回原始 Session ID、原始 Tool 参数或正文；长期运行时请按自己的保留策略管理本地日志。如果 Host 没有 `agents` 服务或对应事件服务，插件仍可启动但守护保持空闲。
+任务守护是包内的运行时观察器。默认 `policy=auto` 时，在冷却窗口内最多给同一 Session 发送一次脱敏指导；`policy=report` 只记录发现，不发送指导。它使用 Tool 名称和经过敏感字段替换的参数形状生成 SHA-256 指纹，状态接口为 `/api/dsh-plugin-debug/guardian/status`。内存中的最近事件窗口、每条事件元数据和磁盘事件日志均有界：默认保留当前 `events.jsonl` 加两个轮转文件，每个文件最多 256 KiB；可通过 `eventLogMaxBytes`（1 KiB–4 MiB）和 `eventLogMaxFiles`（2–10）调整。轮转只处理 Debug 自己的 `guardian/events.jsonl*` 文件，不读取或清理其他 DSH 数据。状态和事件报告不会返回原始 Session ID、原始 Tool 参数或正文；长期运行时仍不要把本地日志提交或上传。如果 Host 没有 `agents` 服务或对应事件服务，插件仍可启动但守护保持空闲。
 
 重启前可用统一入口读取状态；空闲返回 0 和 `SAFE_TO_RESTART`，有活动 Session 或未完成操作返回 2 和 `BUSY_DO_NOT_RESTART`，不会替你执行重启：
 

@@ -74,7 +74,7 @@ repositories without a standard LICENSE file are not copied into this package.
 - `trace-baseline` 比较两份脱敏 trace；错误结果、dispatch error、turn error 或 pending Tool Call 增加时门禁失败，模型路由、工具名和权限枚举变化会留下 warning。
 - `incident-capture` 将跨层诊断组合成一份可哈希的本地 evidence bundle；只读采集与本地报告写入分开标记，最终结果使用 `COMPLETE`、`PARTIAL`、`UNAVAILABLE` 或 `FAIL`，避免用“报告文件写成功”冒充“DSH 已恢复”。
 - Guardian 运行时观察器已经合入单包：它对短窗口内重复 Tool Call、Agent lineage、Workflow 深度和取消/失败中断做有界检测；`policy=auto` 只发送一次冷却提示，`policy=report` 只上报，不终止任务。
-- Guardian 状态接口和 `Get-DSHGuardianStatus.ps1` 只读 `safeToRestart`；状态不安全时返回 `BUSY_DO_NOT_RESTART`，不会执行第三方项目中的实际重启流程。事件内存窗口和单条事件元数据有界，但 `events.jsonl` 当前按行追加、没有自动轮转，文档不把整个文件声明为有界。
+- Guardian 状态接口和 `Get-DSHGuardianStatus.ps1` 只读 `safeToRestart`；状态不安全时返回 `BUSY_DO_NOT_RESTART`，不会执行第三方项目中的实际重启流程。事件内存窗口、单条事件元数据和 `events.jsonl` 当前文件加轮转文件均有界；默认每个文件 256 KiB、最多 3 个文件，配置范围经过限制，只处理 Debug 自己的 guardian 日志。
 - 模型辅助修复仍然是受限 advisory JSON：当前 DSH Host 没有明确的 no-tools planner 能力时直接 `UNAVAILABLE`；即使 Host 将来提供该能力，计划也必须绑定 incident/evidence/Profile/候选/有效期，并经过执行事件拒绝、schema/allowlist、人工 `-Force` 和 receipt 回滚流程。
 
 ## 2026-08-16 公共仓库补充核对
@@ -109,6 +109,21 @@ import、browser 和多 Agent 项目，但它们与本 Debug 包的故障证据�
 
 这个分层保留了用户想要的“启动后自动处理”体验，同时避免 Debug 插件在不知情
 的情况下获得执行权限或制造新的会话副作用。
+
+### 2026-08-16 在线复核后的新增吸收
+
+本轮直接读取了 [dsh-guardian](https://github.com/akira399/dsh-guardian)、
+[dsh-plugin-doctor](https://github.com/zoahdev/dsh-plugin-doctor)、
+[dsh-doctor](https://github.com/jorinyang/dsh-doctor)、
+[dsh-bisect-debug](https://github.com/PangYiMing/dsh-bisect-debug)、
+[dsh-fail-logger](https://github.com/Areium/dsh-fail-logger) 的公开 README 和
+GitHub API 元数据，并核对了 [VS Code Extension Bisect 文档](https://code.visualstudio.com/docs/editor/extension-marketplace)。
+没有复制第三方源码或测试输入，也没有把它们加入运行时依赖。
+
+- Guardian 事件落盘现在默认是当前文件加两个轮转文件、每个最多 256 KiB；`eventLogMaxBytes` 和 `eventLogMaxFiles` 有硬上限，配置降低后会清理超出范围的旧归档。原始 Tool 参数仍只参与不可逆指纹，不进入事件文件。
+- 恢复快照会把标记为敏感的条目和 `.env` 文件记录为 excluded，但不复制内容；恢复动作也不会覆盖这些文件。这样“可回滚”不会变成“把凭据复制进快照”。
+- VS Code 的 Extension Bisect 只吸收“缩小搜索空间”的产品形状；当前 `plugin-bisect-plan` 仍只给人工执行顺序，拒绝自动切换 Git 工作树或 Profile。
+- `dsh-fail-logger` 的去重/TTL 思路转化为本地日志保留门，而不是把失败正文持久化到 skill 或外部服务。
 
 ## 未宣称完成的部分
 

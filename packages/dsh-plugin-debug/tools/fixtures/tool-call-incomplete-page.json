@@ -1,6 +1,5 @@
 {
   "source": "fixture-incomplete-page",
-  "sessionId": "fixture-session-page-1",
   "hasMore": true,
   "events": [
     {
@@ -13,7 +12,6 @@
           "name": "bash",
           "callId": "pending-call-1",
           "arguments": {
-            "command": "redacted",
             "sandbox_permissions": "danger-full-access"
           }
         }

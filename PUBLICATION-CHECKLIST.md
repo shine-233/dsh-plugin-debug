@@ -7,7 +7,7 @@ for every later version.
 ## Source and boundary
 
 - [x] `packages/dsh-plugin-debug` is the only public package and contains the runtime plus Host-side debug/launcher tools.
-- [x] The package retains runtime ID `dsh-plugin-debug` and version `0.8.0`.
+- [x] The package retains runtime ID `dsh-plugin-debug` and version `0.8.1`.
 - [x] Crash Guard's fake runtime is generated only in a bounded temporary test directory; no independent fixture package is present.
 - [x] Startup incident receipts and the read-only plugin bisect plan are covered by published tests and contain no raw payloads or automatic Profile mutation.
 - [x] Diagnostics-report diffing is covered by a Windows PowerShell regression; sensitive or invalid inputs fail closed to `MANUAL_REVIEW`/`FAIL`.
@@ -21,12 +21,15 @@ for every later version.
 - [x] The diagnostics-diff action compares only bounded metadata and routes sensitive inputs to `MANUAL_REVIEW`.
 - [x] The plugin-store source and capability are absent from the candidate and have been removed locally.
 - [x] No `.dsh`, `.codex`, Profile state, logs, state, temporary directory, node_modules or coverage output is present.
+- [ ] Recovery regression proves sensitive files such as `.env` are recorded as excluded and are never copied or restored.
+- [ ] Published trace fixtures contain metadata only: no raw Tool arguments, result bodies, credentials or dangerous command text.
+- [ ] Guard API rejects non-loopback BaseUrl values unless an explicit host allowlist is configured.
 
 ## Metadata and licensing
 
 - [x] Root and package MIT copyright holder is recorded as `shine-233`.
 - [x] The public package manifest has a real `repository`, `bugs` and `homepage` field.
-- [ ] `RELEASE-MANIFEST.json` records the candidate owner, repository and public visibility; it will be marked published only after the candidate commit is pushed and fresh-clone verified.
+- [x] `RELEASE-MANIFEST.json` records the candidate owner, repository and public visibility, and reserves `publicationVerifierPassedAt`/`freshCloneVerifiedAt` for evidence-backed timestamps.
 - [x] Dependency license fields were inventoried against the exact pinned runtime lockfile; this is not legal advice.
 
 ## Verification
@@ -36,7 +39,7 @@ Set-Location .\packages\dsh-plugin-debug
 npm test
 npm run check
 .\Test-DSHStandalone.ps1
-.\tools\Test-DSHProvenanceIntegration.ps1
+.\tools\Test-DSHPluginIntegration.ps1 -SkipCompatibility
 .\tools\Test-DSHResourcePressure.ps1
 .\tools\Test-DSHIncidentRuntimeEvidence.ps1
 .\tools\Test-DSHBisect.ps1
@@ -46,7 +49,7 @@ npm run check
 .\tools\Test-DSHTraceLoop.ps1
 .\tools\Test-DSHTraceRecursion.ps1
 .\tools\Test-DSHGuardianStatus.ps1
-.\tools\Test-DSHPluginIntegration.ps1
+.\tools\Test-DSHPluginIntegration.ps1  # compatibility wrapper; the earlier -SkipCompatibility run is the canonical contract path
 .\tools\Test-DSHGuard.ps1
 .\tools\Test-DSHPluginHealth.ps1
 .\tools\Test-DSHPluginState.ps1
@@ -67,4 +70,4 @@ proof of a real production DSH or successful GitHub publication.
 - [x] A reviewed local first commit exists.
 - [x] Remote URL is explicitly confirmed before configuration.
 - [x] Push is performed only after staged contents are approved.
-- [ ] A fresh clone passes the single-package tests and publication checks.
+- [ ] A fresh clone passes the single-package tests and publication checks; until then the release remains `candidate`.

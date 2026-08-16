@@ -3,33 +3,21 @@
   "events": [
     {
       "seq": 1,
-      "type": "agent-start",
-      "data": {
-        "agentId": "fixture-agent-secret",
-        "sessionId": "fixture-session-secret"
-      }
+      "type": "agent-start"
     },
     {
       "seq": 2,
-      "type": "tool-workflow/run-start",
-      "data": {
-        "message": "fixture-message-secret"
-      }
+      "type": "tool-workflow/run-start"
     },
     {
       "seq": 3,
-      "type": "tool-workflow/agent-start",
-      "data": {
-        "arguments": {
-          "token": "fixture-token-secret"
-        }
-      }
+      "type": "tool-workflow/agent-start"
     },
     {
       "seq": 4,
       "type": "tool-workflow/run-start",
       "data": {
-        "name": "nested-fixture"
+        "phase": "nested"
       }
     },
     {

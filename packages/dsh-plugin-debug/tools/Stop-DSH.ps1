@@ -8,9 +8,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $LauncherRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$StateModulePath = Join-Path $LauncherRoot 'DSH-State.psm1'
+Import-Module $StateModulePath -Force
 $explicitStateRoot = -not [string]::IsNullOrWhiteSpace($StateRoot)
 if (-not $explicitStateRoot) {
-  $StateRoot = Join-Path $LauncherRoot "state\$Profile-$Port"
+  $StateRoot = Resolve-DshDebugStateRoot -Profile $Profile -Port $Port
 }
 
 function Select-PidFile {
@@ -24,8 +26,14 @@ function Select-PidFile {
   $legacy = Join-Path $LauncherRoot 'dsh-web.pid.json'
   if (Test-Path -LiteralPath $legacy -PathType Leaf) { return $legacy }
 
+  $stateRoots = @(
+    (Join-Path (Resolve-DshDebugHome) 'dsh-plugin-debug\state'),
+    (Join-Path $LauncherRoot 'state')
+  ) | Select-Object -Unique
   $stateFiles = @(
-    Get-ChildItem -LiteralPath (Join-Path $LauncherRoot 'state') -Filter 'dsh-web.pid.json' -File -Recurse -ErrorAction SilentlyContinue |
+    $stateRoots |
+      Where-Object { Test-Path -LiteralPath $_ -PathType Container } |
+      ForEach-Object { Get-ChildItem -LiteralPath $_ -Filter 'dsh-web.pid.json' -File -Recurse -ErrorAction SilentlyContinue } |
       Sort-Object LastWriteTime -Descending |
       Select-Object -ExpandProperty FullName
   )

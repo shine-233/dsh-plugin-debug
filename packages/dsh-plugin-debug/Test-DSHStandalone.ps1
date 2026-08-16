@@ -108,10 +108,13 @@ function Invoke-PowerShellJson {
     $startInfo.EnvironmentVariables['PATH'] = [Environment]::GetEnvironmentVariable('PATH')
     $startInfo.EnvironmentVariables['DSH_STANDALONE_CHILD_SCRIPT'] = [IO.Path]::GetFullPath($ScriptPath)
     $startInfo.EnvironmentVariables['DSH_STANDALONE_CHILD_ARGS'] = (ConvertTo-Json -InputObject $argumentMap -Compress -Depth 12)
-    # Pass a JSON object and splat a parameter hashtable in the child.  An
-    # array of strings such as `-Action`, `plan`, `-Force` is positional when
-    # splatted in PowerShell and silently shifts mandatory parameters.
-    $childCommand = '$parsedArgs = ConvertFrom-Json -InputObject $env:DSH_STANDALONE_CHILD_ARGS; $invokeArgs = @{}; if ($null -ne $parsedArgs) { foreach ($property in $parsedArgs.PSObject.Properties) { $invokeArgs[$property.Name] = $property.Value } }; & $env:DSH_STANDALONE_CHILD_SCRIPT @invokeArgs; $childExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }; exit $childExit'
+    # JSON is parsed in the child, then converted to real command-line tokens
+    # for an external PowerShell process.  Splatting a hashtable directly into
+    # an external process serializes switch values as strings (for example
+    # `-Force True`), which Windows PowerShell cannot bind to SwitchParameter.
+    # A token array is safe here because the target is the external host, not a
+    # PowerShell function or script with positional parameter binding.
+    $childCommand = '$parsedArgs = ConvertFrom-Json -InputObject $env:DSH_STANDALONE_CHILD_ARGS; $rawArgs = [System.Collections.Generic.List[string]]::new(); if ($null -ne $parsedArgs) { foreach ($property in $parsedArgs.PSObject.Properties) { $name = [string]$property.Name; $value = $property.Value; if ($value -is [bool]) { if ([bool]$value) { [void]$rawArgs.Add("-$name") }; continue }; if ($null -eq $value) { continue }; if ($value -is [System.Array]) { foreach ($item in $value) { if ($null -ne $item) { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$item) } } } else { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$value) } } }; & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $env:DSH_STANDALONE_CHILD_SCRIPT @rawArgs; $invocationSucceeded = $LASTEXITCODE -eq 0; $childExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } elseif ($invocationSucceeded) { 0 } else { 1 }; exit $childExit'
     $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCommand))
     $startInfo.Arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand"
     $process = [Diagnostics.Process]::new()

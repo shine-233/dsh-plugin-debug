@@ -26,9 +26,13 @@ $ErrorActionPreference = 'Stop'
 $LauncherRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BundleRoot = Split-Path -Parent $LauncherRoot
 $RuntimeDir = Join-Path $LauncherRoot 'runtime'
+$StateModulePath = Join-Path $LauncherRoot 'DSH-State.psm1'
+Import-Module $StateModulePath -Force
+$DefaultDshHome = Resolve-DshDebugHome
+$DefaultStateBase = Join-Path $DefaultDshHome 'dsh-plugin-debug\state'
 $StateRootWasExplicit = -not [string]::IsNullOrWhiteSpace($StateRoot)
 if (-not $StateRootWasExplicit) {
-  $StateRoot = Join-Path $LauncherRoot "state\$Profile-$Port"
+  $StateRoot = Resolve-DshDebugStateRoot -DshHome $DefaultDshHome -Profile $Profile -Port $Port
 }
 $LogDir = Join-Path $StateRoot 'logs'
 $LauncherLog = Join-Path $LogDir 'launcher.log'
@@ -96,7 +100,7 @@ function Set-DshLaunchTarget {
   if ($StateRootWasExplicit) {
     $script:StateRoot = Join-Path $previousStateRoot "isolated-$NewProfile-$NewPort"
   } else {
-    $script:StateRoot = Join-Path $LauncherRoot "state\$NewProfile-$NewPort"
+    $script:StateRoot = Resolve-DshDebugStateRoot -DshHome $DefaultDshHome -Profile $NewProfile -Port $NewPort
   }
   $script:LogDir = Join-Path $script:StateRoot 'logs'
   $script:LauncherLog = Join-Path $script:LogDir 'launcher.log'
@@ -929,7 +933,7 @@ try {
   Enter-DshLaunchLock -TimeoutSec $lockWaitSec
 
   if ([string]::IsNullOrWhiteSpace($env:DSH_HOME)) {
-    $env:DSH_HOME = Join-Path $env:USERPROFILE '.dsh'
+    $env:DSH_HOME = $DefaultDshHome
   }
   Ensure-Directory $env:DSH_HOME
   if ($EnableCrashGuard) {

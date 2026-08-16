@@ -154,8 +154,14 @@ try {
       InputPath = if ($InputPath.Count -gt 0) { $InputPath[0] } else { '' }
     }
     $LASTEXITCODE = 0
-    & $guardianStatusScript @guardianStatusArguments
+    $guardianOutput = @(& $guardianStatusScript @guardianStatusArguments)
+    $guardianOutput | ForEach-Object { $_ }
     $nestedSucceeded = $?
+    $guardianText = ($guardianOutput | ForEach-Object { [string]$_ }) -join "`n"
+    $guardianResult = $null
+    try { $guardianResult = $guardianText | ConvertFrom-Json -ErrorAction Stop } catch { }
+    if ($null -ne $guardianResult -and $guardianResult.result -eq 'SAFE_TO_RESTART') { exit 0 }
+    if ($null -ne $guardianResult -and $guardianResult.result -eq 'BUSY_DO_NOT_RESTART') { exit 2 }
     exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
   }
   if ($Action -eq 'plugin-bisect-plan') {

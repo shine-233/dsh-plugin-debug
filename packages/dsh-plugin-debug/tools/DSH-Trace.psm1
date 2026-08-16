@@ -165,10 +165,21 @@ function ConvertTo-DshTrace {
       'tool/call' {
         $rawCallId = [string](Get-DshTraceProperty -Object $data -Name 'callId')
         if (-not [string]::IsNullOrWhiteSpace($rawCallId)) { $calls[$rawCallId] = $true }
-        $argumentExists = Test-DshTraceProperty -Object $data -Name 'arguments'
+        $rawArgumentsPresent = Test-DshTraceProperty -Object $data -Name 'arguments'
+        $metadataKeysPresent = Test-DshTraceProperty -Object $data -Name 'argumentKeysObserved'
+        $metadataPermissionPresent = Test-DshTraceProperty -Object $data -Name 'sandboxPermissionObserved'
+        $argumentExists = $rawArgumentsPresent -or $metadataKeysPresent -or $metadataPermissionPresent
         $arguments = Get-DshTraceProperty -Object $data -Name 'arguments'
-        $argumentKeys = if ($argumentExists) { @(Get-DshTraceArgumentKeys -Arguments $arguments) } else { @() }
-        $permission = Get-DshTracePermission -Arguments $arguments
+        $argumentKeys = if ($rawArgumentsPresent) {
+          @(Get-DshTraceArgumentKeys -Arguments $arguments)
+        } elseif ($metadataKeysPresent) {
+          @(Get-DshTraceProperty -Object $data -Name 'argumentKeysObserved' | ForEach-Object { Protect-DshTraceText -Value ([string]$_) -MaxLength 100 } | Sort-Object -Unique)
+        } else { @() }
+        $permission = if ($rawArgumentsPresent) {
+          Get-DshTracePermission -Arguments $arguments
+        } elseif ($metadataPermissionPresent) {
+          Protect-DshTraceText -Value ([string](Get-DshTraceProperty -Object $data -Name 'sandboxPermissionObserved')) -MaxLength 80
+        } else { $null }
         $name = Protect-DshTraceText -Value ([string](Get-DshTraceProperty -Object $data -Name 'name')) -MaxLength 180
         $call = [ordered]@{
           seq = $seq
@@ -192,19 +203,28 @@ function ConvertTo-DshTrace {
         $message = Get-DshTraceProperty -Object $data -Name 'message'
         $messageSource = Get-DshTraceProperty -Object $message -Name 'source'
         $rawCallId = [string](Get-DshTraceProperty -Object $messageSource -Name 'callId')
+        if ([string]::IsNullOrWhiteSpace($rawCallId)) { $rawCallId = [string](Get-DshTraceProperty -Object $data -Name 'callId') }
         if (-not [string]::IsNullOrWhiteSpace($rawCallId)) { $results[$rawCallId] = $true }
         $content = Get-DshTraceProperty -Object $message -Name 'content'
         $blocks = @($content | Where-Object { [string](Get-DshTraceProperty -Object $_ -Name 'type') -eq 'tool-result' })
-        $isError = @($blocks | Where-Object { (Get-DshTraceProperty -Object $_ -Name 'isError') -eq $true }).Count -gt 0
+        $isError = @($blocks | Where-Object { (Get-DshTraceProperty -Object $_ -Name 'isError') -eq $true }).Count -gt 0 -or
+          (Get-DshTraceProperty -Object $data -Name 'isError') -eq $true -or
+          (Get-DshTraceProperty -Object $data -Name 'isErrorObserved') -eq $true
         $error = Get-DshTraceProperty -Object $data -Name 'error'
+        $errorObserved = ($null -ne $error) -or ((Get-DshTraceProperty -Object $data -Name 'errorObjectObserved') -eq $true)
+        $errorCode = if ($null -ne $error) {
+          Get-DshTraceProperty -Object $error -Name 'code'
+        } else {
+          Get-DshTraceProperty -Object $data -Name 'errorCodeObserved'
+        }
         $result = [ordered]@{
           seq = $seq
           turn = $turn
           step = $step
           callId = Get-DshTraceSafeCallId -Value $rawCallId
           isError = $isError
-          errorObjectObserved = $null -ne $error
-          errorCodeObserved = Protect-DshTraceText -Value ([string](Get-DshTraceProperty -Object $error -Name 'code')) -MaxLength 100
+          errorObjectObserved = $errorObserved
+          errorCodeObserved = Protect-DshTraceText -Value ([string]$errorCode) -MaxLength 100
         }
         if ($null -ne $timeOffsetMs) { $result.timeOffsetMs = $timeOffsetMs }
         [void]$toolResults.Add($result)

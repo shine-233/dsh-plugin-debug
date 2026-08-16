@@ -85,6 +85,22 @@ try {
   $singleFallback = Get-DshSingleStartupGuardCandidate -Manifest $manifest -ErrorText 'fatal plugin startup failure'
   Assert-Guard ($null -eq $singleFallback) 'single-candidate fallback must not apply when the fixture has multiple dependencies'
 
+  $remoteApiError = $null
+  try {
+    Invoke-DshGuardApi -BaseUrl 'https://example.com/' -Method 'session.history' -Arguments @{ sessionId = 'fixture' } -TimeoutSec 1 | Out-Null
+  } catch {
+    $remoteApiError = $_.Exception.Message
+  }
+  Assert-Guard ($remoteApiError -match 'not loopback|DSH_DEBUG_API_ALLOWED_HOSTS') 'remote API BaseUrl must be rejected before any request'
+
+  $credentialUrlError = $null
+  try {
+    Invoke-DshGuardApi -BaseUrl 'http://user:password@127.0.0.1:3081/' -Method 'session.history' -Arguments @{} -TimeoutSec 1 | Out-Null
+  } catch {
+    $credentialUrlError = $_.Exception.Message
+  }
+  Assert-Guard ($credentialUrlError -match 'userinfo|credentials') 'API BaseUrl must reject embedded credentials'
+
   $apiStatus = 'skipped'
   if (-not $SkipApi) {
     try {
@@ -101,6 +117,8 @@ try {
     candidate = $candidates[0].moduleName
     patch = $patchPath
     api = $apiStatus
+    remoteBaseUrlRejected = $true
+    credentialBaseUrlRejected = $true
   }
 } finally {
   if (Test-Path -LiteralPath $fixtureRoot -PathType Container) {

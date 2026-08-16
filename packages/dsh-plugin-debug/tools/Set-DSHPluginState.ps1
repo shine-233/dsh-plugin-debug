@@ -13,6 +13,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Import-Module (Join-Path $root 'DSH-Guard.psm1') -Force
+Import-Module (Join-Path $root 'DSH-State.psm1') -Force
 
 function Write-PluginStateResult {
   param([string]$Result, [string]$Message, $State = $null)
@@ -29,9 +30,9 @@ function Write-PluginStateResult {
 try {
   if ($PluginId -match '^(?i:include):') { throw 'PluginId must be the Profile dependency id, not a runtime include:<id> inventory id.' }
   if ([string]::IsNullOrWhiteSpace($DshHome)) {
-    $DshHome = if ([string]::IsNullOrWhiteSpace($env:DSH_HOME)) { Join-Path $env:USERPROFILE '.dsh' } else { $env:DSH_HOME }
+    $DshHome = Resolve-DshDebugHome
   }
-  if ([string]::IsNullOrWhiteSpace($StateRoot)) { $StateRoot = Join-Path $root "state\$Profile-$Port" }
+  if ([string]::IsNullOrWhiteSpace($StateRoot)) { $StateRoot = Resolve-DshDebugStateRoot -DshHome $DshHome -Profile $Profile -Port $Port }
   $manifestPath = Join-Path $DshHome "profiles\$Profile\package.json"
   $statePath = Join-Path $StateRoot 'guard-state.json'
   $patchPath = Join-Path $StateRoot 'guard.patch.yml'

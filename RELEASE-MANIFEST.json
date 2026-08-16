@@ -16,7 +16,9 @@
   "verification": {
     "sourceSnapshotComparedAt": "2026-08-16",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
-    "packageFileCount": 95
+    "packageFileCount": 96,
+    "publicationVerifierPassedAt": null,
+    "freshCloneVerifiedAt": null
   },
   "layout": {
     "packageRoot": "packages/dsh-plugin-debug",
@@ -28,9 +30,9 @@
       "id": "dsh-plugin-debug",
       "path": "packages/dsh-plugin-debug",
       "kind": "dsh-debug-plugin",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "standaloneInstall": true,
-      "includes": ["runtime-provenance", "host-diagnostics", "recovery", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
+      "includes": ["runtime-provenance", "host-diagnostics", "resource-pressure", "incident-capture-and-correlation", "recovery", "constrained-self-repair", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "trace-eval-profile-autopsy", "metadata-only-repro-export", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
       "license": "MIT"
     }
   ],

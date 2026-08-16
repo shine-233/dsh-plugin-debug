@@ -17,6 +17,7 @@ $LauncherRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $guardModulePath = Join-Path $LauncherRoot 'DSH-Guard.psm1'
 Import-Module $guardModulePath -Force
 Import-Module (Join-Path $LauncherRoot 'DSH-ResourcePressure.psm1') -Force
+Import-Module (Join-Path $LauncherRoot 'DSH-State.psm1') -Force
 
 function Sanitize-Text {
   param([AllowNull()][string]$Value)
@@ -359,7 +360,8 @@ if (-not [string]::IsNullOrWhiteSpace($DshHome)) {
   $dshHome = $env:DSH_HOME
 }
 if ([string]::IsNullOrWhiteSpace($BaseUrl)) { $BaseUrl = "http://127.0.0.1:$Port/" }
-if ([string]::IsNullOrWhiteSpace($StateRoot)) { $StateRoot = Join-Path $LauncherRoot "state\$Profile-$Port" }
+if ([string]::IsNullOrWhiteSpace($DshHome)) { $DshHome = Resolve-DshDebugHome }
+if ([string]::IsNullOrWhiteSpace($StateRoot)) { $StateRoot = Resolve-DshDebugStateRoot -DshHome $DshHome -Profile $Profile -Port $Port }
 $runtimeRootsChecked = @(Get-DiagnosticsRuntimeRoots -ExplicitRuntimeRoot $RuntimeRoot)
 $resourcePressure = Get-DshResourcePressure
 

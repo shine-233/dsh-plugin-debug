@@ -26,6 +26,16 @@ function Get-JsonPropertyValue {
   return $property.Value
 }
 
+function Test-JsonPropertyPresent {
+  param(
+    [AllowNull()][object]$InputObject,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Name
+  )
+  if ($null -eq $InputObject) { return $false }
+  if ($InputObject -is [System.Collections.IDictionary]) { return $InputObject.Contains($Name) }
+  return $null -ne $InputObject.PSObject.Properties[$Name]
+}
+
 function ConvertTo-PublicationMap {
   param([AllowNull()][object]$Value)
   if ($null -eq $Value) { return $null }
@@ -95,6 +105,30 @@ $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | Convert
 $packageManifest = Get-Content -LiteralPath $packageManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $packageLock = Read-PublicationPackageLock -Path $packageLockPath
 $bundleManifest = Get-Content -LiteralPath $bundleManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$verification = Get-JsonPropertyValue -InputObject $manifest -Name 'verification'
+$publication = Get-JsonPropertyValue -InputObject $manifest -Name 'publication'
+Assert-Publication (Test-JsonPropertyPresent -InputObject $verification -Name 'publicationVerifierPassedAt') 'RELEASE-MANIFEST.json verification.publicationVerifierPassedAt is missing'
+Assert-Publication (Test-JsonPropertyPresent -InputObject $verification -Name 'freshCloneVerifiedAt') 'RELEASE-MANIFEST.json verification.freshCloneVerifiedAt is missing'
+$publicationVerifierPassedAt = Get-JsonPropertyValue -InputObject $verification -Name 'publicationVerifierPassedAt'
+$freshCloneVerifiedAt = Get-JsonPropertyValue -InputObject $verification -Name 'freshCloneVerifiedAt'
+foreach ($timestamp in @(
+    [PSCustomObject]@{ Name = 'verification.publicationVerifierPassedAt'; Value = $publicationVerifierPassedAt },
+    [PSCustomObject]@{ Name = 'verification.freshCloneVerifiedAt'; Value = $freshCloneVerifiedAt }
+  )) {
+  if ($null -eq $timestamp.Value -or [string]::IsNullOrWhiteSpace([string]$timestamp.Value)) { continue }
+  $parsedTimestamp = [DateTimeOffset]::MinValue
+  Assert-Publication ([DateTimeOffset]::TryParse([string]$timestamp.Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind, [ref]$parsedTimestamp)) "$($timestamp.Name) is not a valid timestamp"
+  Assert-Publication ($parsedTimestamp.Offset -eq [TimeSpan]::Zero) "$($timestamp.Name) must be recorded in UTC"
+}
+$publicationStatus = [string](Get-JsonPropertyValue -InputObject $manifest -Name 'status')
+$pushPerformed = [bool](Get-JsonPropertyValue -InputObject $publication -Name 'pushPerformed')
+$publishedCommit = [string](Get-JsonPropertyValue -InputObject $publication -Name 'publishedCommit')
+if ($publicationStatus -ceq 'published') {
+  Assert-Publication ($pushPerformed -and $publishedCommit -match '^[0-9a-f]{40}$') 'published release must record pushPerformed and a full publishedCommit'
+  Assert-Publication (-not [string]::IsNullOrWhiteSpace([string]$publicationVerifierPassedAt) -and -not [string]::IsNullOrWhiteSpace([string]$freshCloneVerifiedAt)) 'published release must record both verification timestamps'
+} else {
+  Assert-Publication ($publicationStatus -ceq 'candidate') 'RELEASE-MANIFEST.json status must be candidate before all publication gates pass'
+}
 $packageName = [string]$packageManifest.name
 $packageVersion = [string]$packageManifest.version
 Assert-Publication ($packageName -ceq 'dsh-plugin-debug') 'package runtime ID is not dsh-plugin-debug'
@@ -161,6 +195,30 @@ foreach ($requiredFile in $requiredFunctionalFiles) {
     }
   }
   Assert-Publication $coveredByPackageFiles "package.json files does not include required functionality file: $requiredFile"
+}
+
+$metadataOnlyTraceFixtures = @(
+  'tools/fixtures/trace-recursion.json',
+  'tools/fixtures/trace-loop.json',
+  'tools/fixtures/tool-call-trace.json',
+  'tools/fixtures/tool-call-baseline.json',
+  'tools/fixtures/tool-call-incomplete-page.json'
+)
+$forbiddenTraceFixturePatterns = @(
+  '(?i)"sessionId"\s*:',
+  '(?i)"agentId"\s*:',
+  '(?i)"token"\s*:',
+  '(?i)"command"\s*:',
+  '(?i)"path"\s*:',
+  '(?i)"text"\s*:'
+)
+foreach ($relativeFixture in $metadataOnlyTraceFixtures) {
+  $fixturePath = Join-Path $packageRoot ($relativeFixture -replace '/', '\')
+  Assert-Publication (Test-Path -LiteralPath $fixturePath -PathType Leaf) "metadata-only Trace fixture is missing: $relativeFixture"
+  $fixtureText = Get-Content -LiteralPath $fixturePath -Raw -Encoding UTF8
+  foreach ($pattern in $forbiddenTraceFixturePatterns) {
+    Assert-Publication ($fixtureText -notmatch $pattern) "metadata-only Trace fixture contains a forbidden raw field ($pattern): $relativeFixture"
+  }
 }
 
 Assert-Publication ($null -ne (Get-Command node -ErrorAction SilentlyContinue)) 'node is required to parse package-lock.json'

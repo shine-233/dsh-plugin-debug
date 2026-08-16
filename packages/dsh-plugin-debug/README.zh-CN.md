@@ -14,7 +14,7 @@
 - 在 Web 页面提供鼠标来源检查器和诊断页，报告插件、Module、Slot、客户端错误、主机端（Host）插件清单、Tool Call 元数据和运行时线索。
 - 在客户端保留最多 80 条脱敏诊断 breadcrumb（面包屑事件），串起启动处置、鼠标来源变化、插件清单刷新、Slot/客户端错误；超出上限会记录丢弃计数，不保存 Tool 参数、正文、DOM 文本或凭据。
 - 比较两次脱敏诊断/事故报告的状态、计数和 Issue code；检测到消息、路径、命令或凭据字段时只返回 `MANUAL_REVIEW`。
-- 提供 Profile/Workspace 快照（snapshot）、known-good 恢复、事故采集（incident capture）、脱敏 trace/eval、资源压力和失败归档工具。
+- 提供 Profile/Workspace 快照（snapshot）、known-good 恢复、事故采集（incident capture）、脱敏 trace/eval、资源压力和失败归档工具；标记为敏感的条目和 `.env` 只记录排除原因，不复制内容，恢复时也不会覆盖它们。
 - 根据脱敏插件清单、失败证据和 Profile manifest 生成只读插件二分定位计划，给出安全第三方候选顺序；不会自动禁用插件、不会写 Profile、不会执行命令。
 - 离线静态预检 JS/MJS/CJS 的 `inject` 与 `ctx.*` 服务依赖；不执行插件代码，动态访问或超出扫描上限时只返回人工复核。
 - 根据 Profile/package 元数据（metadata）生成离线依赖图，报告缺失依赖、循环和未引用本地包；不运行 npm/pnpm、不安装依赖、不执行 package code。
@@ -123,7 +123,15 @@ Trace 递归分析用于发现 Agent 或 Workflow 在生命周期事件中嵌套
 Invoke-RestMethod http://127.0.0.1:3081/api/dsh-plugin-debug/guardian/status
 ```
 
-接口和 `$DSH_HOME/guardian/events.jsonl` 只包含有界计数、事件类别、深度和不可逆指纹，不返回原始 Session ID、Tool 参数、消息正文或凭据。内存中的最近事件窗口和单条事件元数据有界；事件文件当前按行追加、没有自动轮转，因此不保证整个文件大小有界。长期运行时请按自己的保留策略管理本地日志，不要把日志提交或上传。守护不会终止任务、杀进程、重启 Host、禁用插件或修改 Profile；`agents` 服务或这些事件在 Host 中缺失时，插件仍可启动并保持 `UNAVAILABLE`/空闲状态。
+接口和 `$DSH_HOME/guardian/events.jsonl` 只包含有界计数、事件类别、深度和不可逆指纹，不返回原始 Session ID、Tool 参数、消息正文或凭据。内存中的最近事件窗口、单条事件元数据和磁盘事件日志均有界：默认保留当前文件加两个轮转文件，每个文件最多 256 KiB；可在 Guardian 设置中用 `eventLogMaxBytes`（1 KiB–4 MiB）和 `eventLogMaxFiles`（2–10）调整。轮转只处理 Debug 自己的 `guardian/events.jsonl*` 文件，不读取或清理其他 DSH 数据。长期运行时仍不要把本地日志提交或上传。守护不会终止任务、杀进程、重启 Host、禁用插件或修改 Profile；`agents` 服务或这些事件在 Host 中缺失时，插件仍可启动并保持 `UNAVAILABLE`/空闲状态。
+
+这里的 observer-only 只描述 Guardian。整个包还包含有明确边界的 Crash Guard 和 Runtime Supervisor：它们在公开 Debug 启动器中可以停止已确认的 DSH 子进程、生成可逆 Guard patch，并最多重启一次；不能把这部分描述成无副作用观察。底层 `tools/Start-DSH.ps1` 直接调用时默认不启用 Crash Guard。
+
+Host API 的 `BaseUrl` 默认必须是 loopback（例如 `127.0.0.1`、`localhost` 或 `::1`）。访问受信任的远端 Host 前，必须显式设置 `DSH_DEBUG_API_ALLOWED_HOSTS`，否则 `session.history`、`pluginInventory/list` 等查询会在发出请求前失败：
+
+```powershell
+$env:DSH_DEBUG_API_ALLOWED_HOSTS = 'debug-host.example'
+```
 
 重启前可以通过统一入口读取守护状态。空闲时返回退出码 0 和 `SAFE_TO_RESTART`；存在活动 Session 或未完成操作时返回退出码 2 和 `BUSY_DO_NOT_RESTART`，脚本只给出建议，不会自行重启：
 
@@ -137,7 +145,8 @@ Invoke-RestMethod http://127.0.0.1:3081/api/dsh-plugin-debug/guardian/status
 测试源码和脱敏 fixture 会随 GitHub 源码一起发布，便于别人复现实现和检查发布边界：
 
 ```powershell
-Set-Location .
+# 以下命令从仓库根目录（包含 scripts/ 和 packages/ 的目录）开始
+Set-Location C:\path\to\dsh-open-source
 .\scripts\Verify-Publication.ps1
 
 Set-Location .\packages\dsh-plugin-debug
@@ -170,7 +179,7 @@ Pop-Location
 `tools/runtime/node_modules`。runtime 安装属于本地/CI 测试准备，不属于 GitHub
 源码或 npm 发布内容。
 
-`tools\\fixtures` 中的 JSON/HTML 是合成且脱敏的输入数据，会被 trace 和浏览器契约测试直接引用。Crash Guard、启动冲突和 runtime supervisor 的 fake DSH 会在测试运行时创建到临时目录，测试结束后清理；仓库中没有真实 Profile、日志、凭据或崩溃转储。
+`tools\\fixtures` 中的 JSON/HTML 是合成且脱敏的输入数据，会被 trace 和浏览器契约测试直接引用。Trace fixture 只保存事件类型、调用键名、权限枚举、错误代码和 pending/错误语义，不保存 raw arguments、Tool result 正文、Token 或危险命令。Recovery fixture 会证明 `.env` 只标记为存在但排除，快照和 restore 都不会接触其内容。Crash Guard、启动冲突和 runtime supervisor 的 fake DSH 会在测试运行时创建到临时目录，测试结束后清理；仓库中没有真实 Profile、日志、凭据或崩溃转储。
 
 `Test-DSHPointerBrowser.ps1` 需要 `python.exe`、`npx` 和可用的 Playwright 浏览器 daemon；缺少这些依赖时只报告 `UNAVAILABLE`，不会把静态 HTML 加载冒充成真实 DSH Web 验证。
 
@@ -199,11 +208,11 @@ Crash Guard 的测试还会检查启动处置回执：第一次启动失败、�
 ## 更新功能和发布新版本
 
 1. 在 `src` 或 `tools` 修改源码，同时新增或更新对应的 Node/PowerShell 回归测试。
-2. 运行 `npm run check`，它会重新构建 `lib`、更新 `bundle-manifest.json` 并运行 Node 测试。
-3. 运行 `Test-DSHStandalone.ps1`、启动冲突夹具和发布验证器。
-4. 检查 `npm pack --dry-run --json --ignore-scripts` 的文件数，并同步 `SOURCE-SNAPSHOT.md`、`RELEASE-MANIFEST.json` 和必要的文档。
-5. 修改 `package.json` 的 `version`，同步 `package-lock.json`，确认 CHANGELOG/README 描述与行为一致。
-6. 先在本地做一次可审阅的 commit，再配置明确的 GitHub remote；新仓库第一次发布前应从 fresh clone 重跑测试。
+2. 如果功能改变了公开行为，先按 SemVer 修改 `package.json` 的 `version` 并同步 `package-lock.json`；版本不要放到构建之后才改。
+3. 运行 `npm run check`，它会重新构建 `lib`、更新 `bundle-manifest.json` 并运行 Node 测试。
+4. 运行 `Test-DSHStandalone.ps1`、启动冲突夹具和发布验证器；会启动 fake/loopback 测试进程的命令不能当作纯静态检查。
+5. 检查 `npm pack --dry-run --json --ignore-scripts` 的文件数，并同步 `SOURCE-SNAPSHOT.md`、`RELEASE-MANIFEST.json` 和必要的文档。
+6. 先在本地做一次可审阅的 commit，再配置明确的 GitHub remote；新仓库第一次发布或后续版本发布前，都要从 fresh clone 重跑测试，并把两个 UTC 验证时间写入发布清单。
 
 发布前候选状态、GitHub remote、fresh clone 验证结果会记录在仓库根目录的
 `RELEASE-MANIFEST.json` 和 `SOURCE-SNAPSHOT.md`；本地测试通过不等于真实 DSH

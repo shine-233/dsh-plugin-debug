@@ -12,8 +12,11 @@ if (-not (Test-Path -LiteralPath $canonical -PathType Leaf)) {
   throw "Canonical integration test is missing: $canonical"
 }
 
-$arguments = @{}
+$arguments = @{ SkipCompatibility = $true }
 if ($KeepTemp) { $arguments.KeepTemp = $true }
+# Do not rely on environment inheritance across the staged Start-Process
+# boundary. The explicit switch makes the compatibility wrapper one-way even
+# when a published package is tested by another PowerShell process.
 $previousSkip = $env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION
 $env:DSH_DEBUG_SKIP_COMPAT_INTEGRATION = '1'
 & $canonical @arguments

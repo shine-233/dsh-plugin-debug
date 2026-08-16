@@ -48,11 +48,20 @@ function Read-FixtureText {
   param([Parameter(Mandatory = $true)][string]$Path)
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
   for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    $stream = $null
+    $reader = $null
     try {
-      return Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+      # The launcher appends while the supervisor polls.  Open a shared read
+      # stream so the fixture observes the log without racing the writer.
+      $stream = [IO.FileStream]::new($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+      $reader = [IO.StreamReader]::new($stream, [Text.UTF8Encoding]::new($false), $true)
+      return $reader.ReadToEnd()
     } catch {
       if ($attempt -eq 19) { return '' }
       Start-Sleep -Milliseconds 100
+    } finally {
+      if ($null -ne $reader) { $reader.Dispose() }
+      elseif ($null -ne $stream) { $stream.Dispose() }
     }
   }
   return ''

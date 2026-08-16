@@ -18,10 +18,8 @@
         "type": "tool/call",
         "data": {
           "name": "read_file",
-          "callId": "fixture-call-a-1",
           "arguments": {
-            "path": "/workspace/alpha.txt",
-            "mode": "metadata-only"
+            "sandbox_permissions": "workspace-read"
           }
         }
       }
@@ -38,8 +36,7 @@
             "content": [
               {
                 "type": "tool-result",
-                "isError": false,
-                "text": "fixture result is intentionally not analyzed"
+                "isError": false
               }
             ]
           }
@@ -52,10 +49,8 @@
         "type": "tool/call",
         "data": {
           "name": "read_file",
-          "callId": "fixture-call-b-1",
           "arguments": {
-            "path": "/workspace/beta.txt",
-            "mode": "metadata-only"
+            "sandbox_permissions": "workspace-read"
           }
         }
       }
@@ -72,8 +67,7 @@
             "content": [
               {
                 "type": "tool-result",
-                "isError": false,
-                "text": "fixture result is intentionally not analyzed"
+                "isError": false
               }
             ]
           }
@@ -86,10 +80,8 @@
         "type": "tool/call",
         "data": {
           "name": "read_file",
-          "callId": "fixture-call-a-2",
           "arguments": {
-            "path": "/workspace/alpha.txt",
-            "mode": "metadata-only"
+            "sandbox_permissions": "workspace-read"
           }
         }
       }
@@ -106,8 +98,7 @@
             "content": [
               {
                 "type": "tool-result",
-                "isError": false,
-                "text": "fixture result is intentionally not analyzed"
+                "isError": false
               }
             ]
           }
@@ -120,10 +111,8 @@
         "type": "tool/call",
         "data": {
           "name": "read_file",
-          "callId": "fixture-call-b-2",
           "arguments": {
-            "path": "/workspace/beta.txt",
-            "mode": "metadata-only"
+            "sandbox_permissions": "workspace-read"
           }
         }
       }
@@ -140,8 +129,7 @@
             "content": [
               {
                 "type": "tool-result",
-                "isError": false,
-                "text": "fixture result is intentionally not analyzed"
+                "isError": false
               }
             ]
           }

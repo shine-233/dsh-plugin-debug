@@ -19,6 +19,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$stateModulePath = Join-Path $root 'DSH-State.psm1'
+Import-Module $stateModulePath -Force
 $previousDshHome = $env:DSH_HOME
 
 function Get-IncidentProperty {
@@ -44,16 +46,12 @@ function Get-IncidentItems {
 
 function Resolve-IncidentHome {
   param([string]$Value)
-  if ([string]::IsNullOrWhiteSpace($Value)) {
-    $Value = if ([string]::IsNullOrWhiteSpace($env:DSH_HOME)) { Join-Path $env:USERPROFILE '.dsh' } else { $env:DSH_HOME }
-  }
-  return [IO.Path]::GetFullPath($Value)
+  return Resolve-DshDebugHome -DshHome $Value
 }
 
 function Resolve-IncidentStateRoot {
   param([string]$Value)
-  if ([string]::IsNullOrWhiteSpace($Value)) { $Value = Join-Path $root "state\$Profile-$Port" }
-  return [IO.Path]::GetFullPath($Value)
+  return Resolve-DshDebugStateRoot -StateRoot $Value -DshHome (Resolve-IncidentHome -Value $DshHome) -Profile $Profile -Port $Port
 }
 
 function Get-IncidentHash {

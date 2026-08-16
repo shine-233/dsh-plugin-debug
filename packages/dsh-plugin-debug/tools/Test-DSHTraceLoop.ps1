@@ -90,6 +90,9 @@ try {
 
   $fixturePath = Join-Path $toolRoot 'fixtures\trace-loop.json'
   $fixtureRawBefore = Get-Content -LiteralPath $fixturePath -Raw -Encoding UTF8
+  foreach ($forbiddenField in @('sessionId', 'agentId', 'token', 'command', 'path', 'text')) {
+    Assert-TraceLoopTest ($fixtureRawBefore -notmatch ('(?i)"' + [regex]::Escape($forbiddenField) + '"\s*:')) "published loop fixture contains forbidden field: $forbiddenField"
+  }
   $fixture = New-TraceLoopFixtureObject -Path $fixturePath
   $fixtureJsonBefore = $fixture | ConvertTo-Json -Depth 32
 

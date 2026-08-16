@@ -59,6 +59,12 @@ function Get-DshRecoveryHash {
   }
 }
 
+function Test-DshRecoverySensitivePath {
+  param([Parameter(Mandatory = $true)][string]$RelativePath)
+  $leaf = Split-Path -Leaf $RelativePath
+  return $leaf -match '^(?i:\.env(?:\..*)?)$'
+}
+
 function Write-DshRecoveryJson {
   param(
     [Parameter(Mandatory = $true)][string]$Path,
@@ -117,6 +123,9 @@ function Save-DshProfileSnapshot {
         relativePath = [string]$definition.relativePath
         sensitive = [bool]$definition.sensitive
         exists = $exists
+        captured = $false
+        excluded = $false
+        exclusionReason = $null
         length = $null
         sha256 = $null
       }
@@ -124,12 +133,18 @@ function Save-DshProfileSnapshot {
         if (-not (Test-DshPathWithin -BasePath $paths.dshHome -CandidatePath $source)) {
           throw "recovery source escaped DSH_HOME: $source"
         }
-        $parent = Split-Path -Parent $destination
-        New-Item -ItemType Directory -Path $parent -Force | Out-Null
-        Copy-Item -LiteralPath $source -Destination $destination -Force
-        $item = Get-Item -LiteralPath $source -Force
-        $record.length = [int64]$item.Length
-        $record.sha256 = Get-DshRecoveryHash -Path $source
+        if ([bool]$definition.sensitive -or (Test-DshRecoverySensitivePath -RelativePath $definition.relativePath)) {
+          $record.excluded = $true
+          $record.exclusionReason = 'sensitive-content-not-captured'
+        } else {
+          $parent = Split-Path -Parent $destination
+          New-Item -ItemType Directory -Path $parent -Force | Out-Null
+          Copy-Item -LiteralPath $source -Destination $destination -Force
+          $item = Get-Item -LiteralPath $source -Force
+          $record.captured = $true
+          $record.length = [int64]$item.Length
+          $record.sha256 = Get-DshRecoveryHash -Path $source
+        }
       }
       $records += [PSCustomObject]$record
     }
@@ -144,7 +159,9 @@ function Save-DshProfileSnapshot {
       safety = [ordered]@{
         restoreDeletesFiles = $false
         restoreCreatesRescuePoint = $true
-        sensitiveFilesIncluded = @($records | Where-Object { $_.sensitive -and $_.exists } | ForEach-Object { $_.relativePath })
+        sensitiveFilesIncluded = @()
+        sensitiveFilesExcluded = @($records | Where-Object { $_.sensitive -and $_.exists } | ForEach-Object { $_.relativePath })
+        sensitiveContentCaptured = $false
       }
     }
     Write-DshRecoveryJson -Path (Join-Path $snapshotPath 'manifest.json') -Value $manifest
@@ -152,7 +169,7 @@ function Save-DshProfileSnapshot {
       id = $snapshotId
       path = $snapshotPath
       profile = $Profile
-      files = @($records | Where-Object { $_.exists } | ForEach-Object { $_.relativePath })
+      files = @($records | Where-Object { $_.captured } | ForEach-Object { $_.relativePath })
       sensitiveFiles = @($records | Where-Object { $_.sensitive -and $_.exists } | ForEach-Object { $_.relativePath })
     }
   } catch {
@@ -183,7 +200,7 @@ function Get-DshProfileSnapshots {
         createdAt = [string]$manifest.createdAt
         label = [string]$manifest.label
         path = $directory.FullName
-        fileCount = @($manifest.files | Where-Object { $_.exists }).Count
+        fileCount = @($manifest.files | Where-Object { $_.exists -and (-not $_.sensitive) }).Count
         sensitiveFileCount = @($manifest.files | Where-Object { $_.sensitive -and $_.exists }).Count
       }
     } catch {
@@ -220,6 +237,10 @@ function Restore-DshProfileSnapshot {
     if (-not (Test-DshPathWithin -BasePath $paths.snapshotRoot -CandidatePath $source) -or
         -not (Test-DshPathWithin -BasePath $paths.dshHome -CandidatePath $target)) {
       throw "recovery path escaped its root: $relativePath"
+    }
+    if ([bool]$record.sensitive -or (Test-DshRecoverySensitivePath -RelativePath $relativePath)) {
+      $skipped += $relativePath
+      continue
     }
     if (-not [bool]$record.exists) {
       $skipped += $relativePath

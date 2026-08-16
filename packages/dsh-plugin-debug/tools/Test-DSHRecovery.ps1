@@ -35,12 +35,19 @@ try {
 
   $snapshot = Save-DshProfileSnapshot -Profile $profile -DshHome $dshHome -SnapshotRoot $snapshotRoot -Label 'before-plugin-change'
   Assert-Recovery (-not [string]::IsNullOrWhiteSpace($snapshot.id)) 'snapshot should have an id'
-  Assert-Recovery (@($snapshot.files).Count -eq 6) 'snapshot should capture six defined files'
+  Assert-Recovery (@($snapshot.files).Count -eq 5) 'snapshot should capture only non-sensitive defined files'
   Assert-Recovery (@($snapshot.sensitiveFiles) -contains '.env') 'snapshot should mark .env as sensitive'
+  Assert-Recovery (-not (Test-Path -LiteralPath (Join-Path $snapshot.path '.env') -PathType Leaf)) 'snapshot must never copy .env'
+  $snapshotManifest = Get-Content -LiteralPath (Join-Path $snapshot.path 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+  $envRecord = @($snapshotManifest.files | Where-Object { $_.relativePath -eq '.env' })[0]
+  Assert-Recovery ($envRecord.excluded -eq $true -and $envRecord.captured -eq $false) 'manifest must mark .env as excluded, not captured'
+  $snapshotText = (Get-ChildItem -LiteralPath $snapshot.path -File -Recurse | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 }) -join "`n"
+  Assert-Recovery ($snapshotText -notmatch 'DSH_FIXTURE_SECRET=do-not-print') 'snapshot must not contain sensitive .env content'
 
   Set-Content -LiteralPath (Join-Path $profileRoot 'package.json') -Value '{"broken":true}' -Encoding UTF8
   Set-Content -LiteralPath (Join-Path $profileRoot 'cordis.patch.yml') -Value '- id: broken' -Encoding UTF8
   Set-Content -LiteralPath (Join-Path $profileRoot 'new-file-created-after-snapshot.txt') -Value 'keep me' -Encoding UTF8
+  Set-Content -LiteralPath (Join-Path $dshHome '.env') -Value 'DSH_FIXTURE_SECRET=changed-after-snapshot' -Encoding UTF8
 
   $restored = Restore-DshProfileSnapshot -Profile $profile -DshHome $dshHome -SnapshotRoot $snapshotRoot -SnapshotId $snapshot.id
   $package = Get-Content -LiteralPath (Join-Path $profileRoot 'package.json') -Raw -Encoding UTF8
@@ -48,6 +55,8 @@ try {
   Assert-Recovery ($package -match 'dsh-plugin-fixture') 'package.json should be restored'
   Assert-Recovery ($patch.Trim() -eq '[]') 'cordis.patch.yml should be restored'
   Assert-Recovery (Test-Path -LiteralPath (Join-Path $profileRoot 'new-file-created-after-snapshot.txt') -PathType Leaf) 'new files must not be deleted'
+  $envAfterRestore = Get-Content -LiteralPath (Join-Path $dshHome '.env') -Raw -Encoding UTF8
+  Assert-Recovery ($envAfterRestore -match 'DSH_FIXTURE_SECRET=changed-after-snapshot') 'restore must not overwrite .env'
   Assert-Recovery (-not [string]::IsNullOrWhiteSpace([string]$restored.rescueSnapshot)) 'restore should create a rescue snapshot'
 
   $snapshots = @(Get-DshProfileSnapshots -Profile $profile -DshHome $dshHome -SnapshotRoot $snapshotRoot)
@@ -98,6 +107,8 @@ try {
     rescueSnapshot = $restored.rescueSnapshot
     listedSnapshots = $snapshots.Count
     extraFilePreserved = $true
+    envExcluded = $true
+    envPreserved = $true
     workspaceSnapshotId = $workspaceSnapshot.id
     workspaceRescueSnapshot = $workspaceRestored.rescueSnapshot
     workspaceListedSnapshots = $workspaceSnapshots.Count

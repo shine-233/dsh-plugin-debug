@@ -80,7 +80,7 @@ if ($Action -eq 'guardian-status') {
   $guardianArguments = @{}
   $guardianHost = if ($invokeArguments.ContainsKey('HostName')) { [string]$invokeArguments.HostName } else { '127.0.0.1' }
   $guardianPort = if ($invokeArguments.ContainsKey('Port')) { [int]$invokeArguments.Port } else { 3081 }
-  $guardianArguments.Url = "http://\${guardianHost}:$guardianPort/api/dsh-plugin-debug/guardian/status"
+  $guardianArguments.Url = "http://${guardianHost}:$guardianPort/api/dsh-plugin-debug/guardian/status"
   if ($invokeArguments.ContainsKey('InputPath')) {
     $guardianArguments.InputPath = [string]@($invokeArguments.InputPath)[0]
   }

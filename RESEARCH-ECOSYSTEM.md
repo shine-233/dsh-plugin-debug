@@ -60,7 +60,7 @@ foreach ($repo in $repos) { gh api "repos/$repo" }
 - one-click launcher、Supervisor、Crash Guard、启动冲突隔离和 Workbench；
 - `plugin-bisect-plan`：根据脱敏 inventory、失败证据和 Profile manifest 生成 `safe`、`protected`、`ambiguous` 候选及人工复核顺序；
 - 启动后页面通知，以及只在 Host 明确声明 `no-tools` planner 时创建隔离诊断会话。
-- observer-only `dsh-guardian`：运行时循环/递归/中断检测、一次性引导、脱敏事件上报和只读 `safeToRestart` 状态；它不终止任务、不杀进程、不重启 Host、不禁用插件。
+- observer-only `dsh-guardian`：运行时循环/递归/中断检测、一次性引导、脱敏事件上报、只读 `safeToRestart` 状态和有界事件日志轮转；它不终止任务、不杀进程、不重启 Host、不禁用插件。
 
 ## 明确不引入的边界
 
@@ -81,6 +81,26 @@ Session。无法明确归因、缺少 evidence、目标是核心包或 receipt �
    并把结果写入 JSON，而不是把“静态通过”说成生产运行通过。
 4. 只有用户明确开启、并且存在脱敏 schema 和本地留存策略时，才考虑外部
    OpenTelemetry 导出；默认保持关闭。
+
+## 2026-08-16 在线复核与本轮吸收
+
+本轮又用 GitHub 公共 REST API 读取了仓库元数据和公开 README，没有使用令牌，
+也没有上传本机文件。API 返回的项目描述、默认分支和许可证线索用于确认研究
+对象仍然存在；许可证字段不是法律意见，仍不能替代逐仓库阅读 LICENSE。
+
+| 公开项目/文档 | 本次直接看到的信号 | 本项目的具体决定 |
+| --- | --- | --- |
+| [akira399/dsh-guardian](https://github.com/akira399/dsh-guardian) | README 明确记录滑动窗口循环、Agent/Workflow 递归、中断和 `safeToRestart`；GitHub API 返回 MIT | 已独立实现这些 observer-only 观察边界；本轮继续吸收它暴露出的“长期事件文件必须有界”问题，新增 `eventLogMaxBytes`/`eventLogMaxFiles` 轮转和旧归档清理；不复制源码或实际重启脚本 |
+| [zoahdev/dsh-plugin-doctor](https://github.com/zoahdev/dsh-plugin-doctor) | README 说明 manifest/patch/entry、pack/install/config、fresh-profile、BOM、大文件和入口检查，并提供 JSON CI 输出；API 返回 MIT | 当前单包已有离线 repository check、plugin preflight、dependency graph、fake offline install、publication verifier 和 standalone 测试；不把 DSH 官方尚未提供的 `dsh plugin check` 入口冒充成已存在 |
+| [jorinyang/dsh-doctor](https://github.com/jorinyang/dsh-doctor) | README 将诊断、分级修复、LIFO undo 和运行时服务分开，并保留 Web 不可用时的 CLI 方向；API 返回 MIT | 保留只读 doctor、receipt、known-good 和显式恢复边界；恢复快照现在明确排除 `.env`/敏感内容，回滚不会覆盖它们 |
+| [PangYiMing/dsh-bisect-debug](https://github.com/PangYiMing/dsh-bisect-debug) | README 提供代码、边界和 Git commit 三种二分，并要求干净工作树、退出码和显式 reset | 已吸收为只读 `plugin-bisect-plan`；不自动切换工作树、reset、删除文件或执行用户命令 |
+| [Areium/dsh-fail-logger](https://github.com/Areium/dsh-fail-logger) | README 说明只记录 `isError=true` 的 Tool failure，做去重、计数、确定性排序、TTL 清理和脱敏；API 返回 MIT | 吸收“失败证据应可控留存”的设计形状，但不把原始失败正文写入 skill；Guardian 事件只保存指纹/类别，并以有界文件轮转替代无限追加 |
+| [VS Code Extension Bisect](https://code.visualstudio.com/docs/editor/extension-marketplace) | 官方文档把 Extension Bisect 定义为通过启停扩展缩小问题范围 | DSH 的 `plugin-bisect-plan` 保留同样的缩小搜索空间思路，但使用安全候选、保护核心包和人工步骤；不在用户工作树上自动做破坏性切换 |
+
+本轮没有把“看过这些项目”写成“已经完成生产兼容”。真正新增到代码的是 Guardian
+事件日志的有界轮转/过期归档清理，以及恢复快照的敏感文件排除；两者都配有回归
+断言。网络导出、常驻 watcher、自动 Git bisect、durable rewind 和模型自行执行
+修复仍保持明确的未吸收状态。
 
 ## 许可证和归属
 

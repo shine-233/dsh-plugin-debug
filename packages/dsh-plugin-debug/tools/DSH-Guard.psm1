@@ -367,7 +367,40 @@ function Get-DshDisconnectedPluginInventory {
         fiberPhase = 'failed'
         enabled = $true
       }
-    })
+  })
+}
+
+function Resolve-DshGuardApiUri {
+  param(
+    [Parameter(Mandatory = $true)][string]$BaseUrl,
+    [Parameter(Mandatory = $true)][string]$Method
+  )
+  $baseUri = $null
+  if (-not [Uri]::TryCreate($BaseUrl, [UriKind]::Absolute, [ref]$baseUri)) {
+    throw 'DSH API BaseUrl must be an absolute HTTP(S) URL'
+  }
+  if ($baseUri.Scheme -notin @('http', 'https')) {
+    throw 'DSH API BaseUrl must use http or https'
+  }
+  if (-not [string]::IsNullOrWhiteSpace($baseUri.UserInfo)) {
+    throw 'DSH API BaseUrl must not contain userinfo or embedded credentials'
+  }
+  if (-not [string]::IsNullOrWhiteSpace($baseUri.Query) -or -not [string]::IsNullOrWhiteSpace($baseUri.Fragment)) {
+    throw 'DSH API BaseUrl must not contain a query or fragment'
+  }
+  if ($Method -notmatch '^[A-Za-z][A-Za-z0-9._/-]{0,100}$' -or $Method.Contains('..') -or $Method.StartsWith('/') -or $Method.EndsWith('/')) {
+    throw "invalid DSH API method: $Method"
+  }
+
+  $allowedHosts = @()
+  if (-not [string]::IsNullOrWhiteSpace($env:DSH_DEBUG_API_ALLOWED_HOSTS)) {
+    $allowedHosts = @($env:DSH_DEBUG_API_ALLOWED_HOSTS -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
+  }
+  $host = $baseUri.DnsSafeHost.ToLowerInvariant()
+  if (-not $baseUri.IsLoopback -and $allowedHosts -notcontains $host) {
+    throw "DSH API BaseUrl host '$host' is not loopback; set DSH_DEBUG_API_ALLOWED_HOSTS explicitly to allow a trusted host"
+  }
+  return [Uri]::new("$($BaseUrl.TrimEnd('/'))/api/$Method")
 }
 
 function Invoke-DshGuardApi {
@@ -377,13 +410,13 @@ function Invoke-DshGuardApi {
     [hashtable]$Arguments = @{},
     [int]$TimeoutSec = 5
   )
+  $uri = Resolve-DshGuardApiUri -BaseUrl $BaseUrl -Method $Method
   $body = [ordered]@{
     type = 'client-request'
     rpcId = "dsh-guard-$([guid]::NewGuid().ToString('N'))"
     method = $Method
     payload = @{ args = $Arguments }
   } | ConvertTo-Json -Depth 12 -Compress
-  $uri = "$($BaseUrl.TrimEnd('/'))/api/$Method"
   $response = Invoke-RestMethod -UseBasicParsing -Uri $uri -Method Post -ContentType 'application/json' -Body $body -TimeoutSec $TimeoutSec
   if ($null -eq $response.result) { throw "DSH API response has no result: $Method" }
   if ($response.result.ok -ne $true) {

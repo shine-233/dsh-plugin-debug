@@ -56,8 +56,13 @@ jobs:
           }
           if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
       - name: Run standalone combined debug suite
+        id: standalone
         shell: powershell
-        run: .\packages\dsh-plugin-debug\Test-DSHStandalone.ps1
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'dsh-standalone.log'
+          & .\packages\dsh-plugin-debug\Test-DSHStandalone.ps1 2>&1 | Tee-Object -FilePath $log
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) { exit $exitCode }
       - name: Run resource-pressure regression
         shell: powershell
         run: .\packages\dsh-plugin-debug\tools\Test-DSHResourcePressure.ps1
@@ -89,3 +94,60 @@ jobs:
           .\packages\dsh-plugin-debug\tools\Test-DSHPluginHealth.ps1
           .\packages\dsh-plugin-debug\tools\Test-DSHPluginState.ps1
           .\packages\dsh-plugin-debug\tools\Test-DSHRecovery.ps1
+      - name: Collect Windows debug-suite diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          $artifactRoot = Join-Path $env:RUNNER_TEMP 'dsh-debug-suite-artifacts'
+          New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+          $summary = [ordered]@{
+            schemaVersion = 1
+            repository = $env:GITHUB_REPOSITORY
+            sha = $env:GITHUB_SHA
+            runId = $env:GITHUB_RUN_ID
+            job = $env:GITHUB_JOB
+            os = [System.Environment]::OSVersion.VersionString
+            powershell = $PSVersionTable.PSVersion.ToString()
+            node = (& node --version 2>$null | Out-String).Trim()
+            standaloneLog = (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'dsh-standalone.log') -PathType Leaf)
+          }
+          $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $artifactRoot 'summary.json') -Encoding UTF8
+          $tempDirs = @(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'dsh-provenance-standalone-*' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 20 Name,LastWriteTime)
+          $tempDirs | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $artifactRoot 'standalone-temp-directories.json') -Encoding UTF8
+          $standaloneLog = Join-Path $env:RUNNER_TEMP 'dsh-standalone.log'
+          if (Test-Path -LiteralPath $standaloneLog -PathType Leaf) {
+            Copy-Item -LiteralPath $standaloneLog -Destination (Join-Path $artifactRoot 'dsh-standalone.log') -Force
+          }
+      - name: Upload Windows debug-suite diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-debug-suite-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/dsh-debug-suite-artifacts
+          if-no-files-found: warn
+
+  fresh-clone:
+    name: Fresh clone publication gate
+    needs:
+      - node-tests
+      - windows-debug-suite
+    if: ${{ needs.node-tests.result == 'success' && needs.windows-debug-suite.result == 'success' }}
+    runs-on: windows-latest
+    steps:
+      - name: Clone the exact GitHub commit into a new directory
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: fresh-clone
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run fresh-clone package checks
+        shell: pwsh
+        working-directory: fresh-clone
+        run: |
+          npm run check --prefix packages/dsh-plugin-debug
+          ./scripts/Verify-Publication.ps1

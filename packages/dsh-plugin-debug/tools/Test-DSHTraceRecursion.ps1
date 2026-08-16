@@ -26,6 +26,10 @@ function New-TraceRecursionInput {
 try {
   if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { throw 'trace recursion script is missing' }
   if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw 'trace recursion fixture is missing' }
+  $fixtureRaw = Get-Content -LiteralPath $fixturePath -Raw -Encoding UTF8
+  foreach ($forbiddenField in @('sessionId', 'agentId', 'token', 'command', 'path', 'text')) {
+    Assert-TraceRecursion ($fixtureRaw -notmatch ('(?i)"' + [regex]::Escape($forbiddenField) + '"\s*:')) "published recursion fixture contains forbidden field: $forbiddenField"
+  }
   . $scriptPath
 
   $safe = New-TraceRecursionInput -Events @(
@@ -113,7 +117,7 @@ try {
   $cliExit = $LASTEXITCODE
   $cliReport = $cliText | ConvertFrom-Json
   Assert-TraceRecursion ($cliExit -eq 0 -and $cliReport.result -eq 'RECURSION_DETECTED') 'CLI fixture did not report recursion'
-  Assert-TraceRecursion ($cliText -notmatch 'fixture-agent-secret|fixture-session-secret|fixture-message-secret') 'CLI fixture leaked raw payload data'
+  Assert-TraceRecursion ($cliText -notmatch 'fixture-agent-secret|fixture-session-secret|fixture-message-secret|fixture-token-secret') 'CLI fixture leaked raw payload data'
 } catch {
   [void]$failures.Add("unhandled: $($_.Exception.Message)")
 }

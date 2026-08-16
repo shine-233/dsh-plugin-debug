@@ -1,6 +1,5 @@
 {
   "source": "fixture",
-  "sessionId": "fixture-session",
   "hasMore": false,
   "events": [
     {
@@ -22,11 +21,11 @@
           "step": 1,
           "name": "bash",
           "callId": "fixture-call-1",
-          "arguments": {
-            "command": "Write secret-token to a fixture file",
-            "sandbox_permissions": "danger-full-access",
-            "token": "secret-value"
-          }
+          "argumentKeysObserved": [
+            "command",
+            "sandbox_permissions"
+          ],
+          "sandboxPermissionObserved": "danger-full-access"
         }
       }
     },
@@ -37,22 +36,10 @@
         "data": {
           "turn": 1,
           "step": 1,
-          "message": {
-            "source": {
-              "callId": "fixture-call-1"
-            },
-            "content": [
-              {
-                "type": "tool-result",
-                "isError": true,
-                "text": "secret command output must not be exported"
-              }
-            ]
-          },
-          "error": {
-            "code": "PERMISSION_DENIED",
-            "message": "token=secret-value"
-          }
+          "callId": "fixture-call-1",
+          "isErrorObserved": true,
+          "errorObjectObserved": true,
+          "errorCodeObserved": "PERMISSION_DENIED"
         }
       }
     },

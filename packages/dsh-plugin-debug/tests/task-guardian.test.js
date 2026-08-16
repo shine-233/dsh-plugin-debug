@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -102,6 +102,115 @@ test('guardian configuration is bounded and enabled by default', () => {
   assert.equal(bounded.loopWindowSize, 20)
   assert.equal(bounded.maxSubagentDepth, 1)
   assert.equal(bounded.policy, 'report')
+  assert.equal(bounded.eventLogMaxBytes, 262144)
+  assert.equal(bounded.eventLogMaxFiles, 3)
+})
+
+test('guardian event log rotates into a bounded set of redacted files', () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-debug-guardian-'))
+  try {
+    const harness = makeHarness()
+    const subject = makeAgent('rotation-session')
+    subject.agent.status = 'running'
+    harness.agents.set(subject.agent.id, subject.agent)
+    const controller = registerTaskGuardian(harness.ctx, {
+      policy: 'report',
+      maxLoopRepeats: 2,
+      loopWindowSize: 2,
+      eventLogMaxBytes: 1024,
+      eventLogMaxFiles: 3,
+    }, { home })
+
+    harness.dispatch('agent/created', { agent: subject.agent })
+    for (let index = 0; index < 30; index += 1) {
+      const event = {
+        type: 'tool/call',
+        data: { name: 'read', arguments: { path: `fixture-${index}`, token: 'secret-value' } },
+      }
+      harness.dispatch('session/event', subject.session, event)
+      harness.dispatch('session/event', subject.session, event)
+    }
+
+    const guardianRoot = join(home, 'guardian')
+    const files = readdirSync(guardianRoot).filter(name => name === 'events.jsonl' || /^events\.jsonl\.\d+$/u.test(name))
+    assert.ok(files.includes('events.jsonl.1'))
+    assert.ok(files.length <= 3)
+    assert.equal(files.includes('events.jsonl.3'), false)
+    for (const file of files) {
+      const path = join(guardianRoot, file)
+      assert.ok(statSync(path).size <= 1024)
+      for (const line of readFileSync(path, 'utf8').trim().split(/\r?\n/u).filter(Boolean)) {
+        const event = JSON.parse(line)
+        assert.doesNotMatch(JSON.stringify(event), /secret-value|fixture-\d+/u)
+      }
+    }
+    const snapshot = controller.snapshot()
+    assert.deepEqual(snapshot.privacy.eventLogRetention, { maxBytes: 1024, maxFiles: 3 })
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('guardian event log prunes stale archives and keeps oversized input out of reports', () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-debug-guardian-'))
+  try {
+    const guardianRoot = join(home, 'guardian')
+    const eventFile = join(guardianRoot, 'events.jsonl')
+    const staleArchive = join(guardianRoot, 'events.jsonl.3')
+    const oversizedArchive = join(guardianRoot, 'events.jsonl.4')
+    const subject = makeAgent('retention-session')
+    subject.agent.status = 'running'
+    const harness = makeHarness()
+    harness.agents.set(subject.agent.id, subject.agent)
+    const controller = registerTaskGuardian(harness.ctx, {
+      policy: 'report',
+      maxLoopRepeats: 2,
+      loopWindowSize: 2,
+      eventLogMaxBytes: 1024,
+      eventLogMaxFiles: 3,
+    }, { home })
+
+    writeFileSync(eventFile, `${'x'.repeat(1010)}\n`, 'utf8')
+    writeFileSync(staleArchive, 'stale\n', 'utf8')
+    writeFileSync(oversizedArchive, 'stale\n', 'utf8')
+    harness.dispatch('agent/created', { agent: subject.agent })
+    const repeatedEvent = {
+      type: 'tool/call',
+      data: { name: 'read', arguments: { path: 'fixture', token: 'secret-value' } },
+    }
+    harness.dispatch('session/event', subject.session, repeatedEvent)
+    harness.dispatch('session/event', subject.session, repeatedEvent)
+
+    assert.equal(readdirSync(guardianRoot).includes('events.jsonl.3'), false)
+    assert.equal(readdirSync(guardianRoot).includes('events.jsonl.4'), false)
+    assert.ok(controller.snapshot().privacy.eventLogRetention.maxFiles === 3)
+
+    const largeHome = mkdtempSync(join(tmpdir(), 'dsh-debug-guardian-large-'))
+    try {
+      const largeHarness = makeHarness()
+      const largeSubject = makeAgent('oversized-session')
+      largeSubject.agent.status = 'running'
+      largeHarness.agents.set(largeSubject.agent.id, largeSubject.agent)
+      registerTaskGuardian(largeHarness.ctx, {
+        policy: 'report',
+        eventLogMaxBytes: 1024,
+        eventLogMaxFiles: 3,
+      }, { home: largeHome })
+      largeHarness.dispatch('agent/created', { agent: largeSubject.agent })
+      const oversizedArguments = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [`field-${index}`, 'x'.repeat(200)]))
+      largeHarness.dispatch('session/event', largeSubject.session, {
+        type: 'tool/call',
+        data: { name: 'read', arguments: oversizedArguments },
+      })
+      const largeEventFile = join(largeHome, 'guardian', 'events.jsonl')
+      assert.ok(statSync(largeEventFile).size <= 1024)
+      assert.doesNotMatch(readFileSync(largeEventFile, 'utf8'), /field-\d+|x{50}/u)
+    } finally {
+      rmSync(largeHome, { recursive: true, force: true })
+    }
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test('tool fingerprints are stable without returning raw arguments', () => {

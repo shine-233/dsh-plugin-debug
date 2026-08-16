@@ -79,6 +79,12 @@ const bundleManifest = {
       liveLoopGuidance: true,
       liveRecursionGuidance: true,
       interruptionAwareness: true,
+      boundedEventLog: {
+        defaultMaxBytes: 262144,
+        defaultMaxFiles: 3,
+        configurableMaxBytes: [1024, 4194304],
+        configurableMaxFiles: [2, 10],
+      },
       taskTermination: false,
       processTermination: false,
       profileMutation: false,
