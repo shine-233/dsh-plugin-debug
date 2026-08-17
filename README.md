@@ -4,7 +4,7 @@
 
 GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-plugin-debug)。包内的 [`README.zh-CN.md`](packages/dsh-plugin-debug/README.zh-CN.md) 是更完整的中文操作手册；包内默认显示的 [`README.md`](packages/dsh-plugin-debug/README.md) 同样是中文，不要求读者先看英文文档。
 
-当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。公开证据记录中的 `v0.8.3` source commit 是 `591ca0da959465a1207030cd7eb91372d8e90b2a`，该提交的精确远端 fresh clone 通过了发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke；当前工作树是基于它的 `0.8.4` 候选，新增的 Agent 报告、hotswap 预检和门禁修复尚未进入远端发布证据。当前仍没有发布到 npm registry，也不应仅凭文案把 source commit 说成正式 tag/release。
+当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。`0.8.4` 的 source commit 是 `7fce25118098cbceb7f3f24fa391d75324318b11`，已经推送到 GitHub；从该远端提交创建的精确 fresh clone 已通过 95/95 Node 测试、canonical integration、61 文件 standalone、108 文件 pack、SBOM/锁定依赖与发布验证器。它是 GitHub source release，不发布到 npm registry。真实有数据 Session、模型请求、第三方插件安装或跨平台兼容仍需另行验证，不能从离线 fixture 或工具注册证据推导出来。
 
 功能变化、维护路线和门禁记录见 [`CHANGELOG.md`](CHANGELOG.md)、[`ROADMAP.md`](ROADMAP.md) 与 [`CONTRIBUTING.md`](CONTRIBUTING.md)。不要把 GitHub source release 当成 npm 安装包，也不要把离线 fixture/注册分发证据扩大成真实有数据 Session、模型请求、第三方插件安装或跨平台兼容证明。
 

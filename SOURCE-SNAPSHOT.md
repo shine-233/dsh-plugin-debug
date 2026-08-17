@@ -1,12 +1,12 @@
 # Source snapshot status
 
-This is the current single-package publication candidate source tree. The public remote is
+This is the current single-package published source snapshot. The public remote is
 `https://github.com/shine-233/dsh-plugin-debug.git`, default branch `main`.
-The candidate version is `0.8.4`; `v0.8.3` is the previous published baseline.
+The released version is `0.8.4`; `v0.8.3` is the previous published baseline.
 
 | Component | Files | Notes |
 | --- | ---: | --- |
-| packages/dsh-plugin-debug | 108 files in the current candidate pack result | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, startup incident receipts, read-only plugin bisect planning, diagnostics-report diffing, static plugin preflight, offline plugin repository health checks, read-only hotswap capability probing, bounded hotswap candidate-source preflight, deterministic metadata-only agent/session reports, explicit offline redacted-document report generation, dependency graph inspection, offline trace-loop and bounded trace-recursion analysis, observer-only task guardian and its status checker, bounded client breadcrumbs, Workbench and one-click launcher; the small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer/bisect/dependency/trace-loop/recursion tests, while fake runtimes and temporary Profiles are generated at test time |
+| packages/dsh-plugin-debug | 108 files in the published pack result | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, startup incident receipts, read-only plugin bisect planning, diagnostics-report diffing, static plugin preflight, offline plugin repository health checks, read-only hotswap capability probing, bounded hotswap candidate-source preflight, deterministic metadata-only agent/session reports, explicit offline redacted-document report generation, dependency graph inspection, offline trace-loop and bounded trace-recursion analysis, observer-only task guardian and its status checker, bounded client breadcrumbs, Workbench and one-click launcher; the small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer/bisect/dependency/trace-loop/recursion tests, while fake runtimes and temporary Profiles are generated at test time |
 
 The original provenance, debug-suite and one-click inputs were removed from the
 projects tree after migration review and are not package dependencies. The
@@ -20,14 +20,11 @@ the exported entry points, the migration manifest and the regression suites; it
 does not claim that a deleted source directory can be re-diffed in place.
 
 Publication evidence for the previous baseline is recorded separately in
-`RELEASE-MANIFEST.json`; this working tree is a new candidate and has not been
-committed, pushed, tagged or published. The previous `0.8.3` source evidence
-used commit `591ca0da959465a1207030cd7eb91372d8e90b2a` and a 102-file pack.
-The current Agent report enhancement and its reproducible fixture/CLI entries
-are included in the current candidate pack, which contains 108 files. The
-manifest therefore remains `candidate` with null publication timestamps and no
-published commit until a fresh commit, clone, pack and verifier run are
-completed. The npm registry is intentionally not used.
+`RELEASE-MANIFEST.json`. The v0.8.4 source commit is
+`7fce25118098cbceb7f3f24fa391d75324318b11`; it was pushed to `main`, cloned
+again from the public remote, and passed the fresh-clone Node, integration,
+standalone, pack and publication-verifier gates. The published pack contains
+108 files. The npm registry is intentionally not used.
 
 The historical `v0.8.2` release was not a clean evidence baseline: at that
 time, the `main` evidence record named source commit
@@ -40,7 +37,7 @@ publication baseline was `0.8.1` at
 create a new candidate source commit and repeat the same fresh-clone and
 publication gates.
 
-## Previous 0.8.3 evidence layers and current candidate boundary
+## v0.8.4 evidence layers and remaining boundary
 
 - Source and offline fixture checks cover implementation contracts and privacy
   boundaries. Fake/loopback supervisor checks cover bounded launch, attributed
@@ -57,14 +54,16 @@ publication gates.
   `agent-preset-invalid` / duplicate `deployment:persona` condition for
   `standard` and `minimal`. Real business Session history and model requests
   remain unverified; do not attribute that runtime limitation to this plugin.
-- The current dirty working tree also passed the bounded real compatibility lane
+- The 0.8.4 source commit also passed the bounded real compatibility lane
   with a temporary shipped `web` Profile: Web HTTP 200, `host.describe`, and
   `pluginInventory/list` succeeded; 134 inventory entries were observed and
-  `dsh-plugin-debug` was active. This is fresh working-tree evidence, not a
-  published-commit or data-bearing Session proof.
+  `dsh-plugin-debug` was active. This is working-tree compatibility evidence,
+  not data-bearing Session proof; the exact fresh-clone source evidence is
+  recorded above.
 
 The previous exact source commit produced 102 npm pack entries in both the
 dry-run publication check and the real prepack/pack extraction smoke. The
-current candidate has re-run local Node, PowerShell, standalone and offline
-integration checks, and the current dry-run contains 108 entries; any future fresh-clone evidence
-must be recorded only after the candidate is committed and published.
+0.8.4 source commit produced 108 entries; the exact fresh clone repeated the
+95-test check, canonical offline integration, 61-file standalone suite and
+publication verifier successfully. Future functional changes must create a new
+candidate source commit and repeat the same fresh-clone and publication gates.

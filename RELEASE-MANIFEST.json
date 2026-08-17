@@ -1,28 +1,28 @@
 {
   "schemaVersion": 1,
   "repositoryRole": "dsh-publication-release",
-  "status": "candidate",
+  "status": "published",
   "publication": {
     "githubOwner": "shine-233",
     "repositoryName": "dsh-plugin-debug",
     "visibility": "public",
     "copyrightHolder": "shine-233",
     "remoteConfigured": true,
-    "pushPerformed": false,
+    "pushPerformed": true,
     "remoteUrl": "https://github.com/shine-233/dsh-plugin-debug.git",
     "defaultBranch": "main",
-    "publishedCommit": null
+    "publishedCommit": "7fce25118098cbceb7f3f24fa391d75324318b11"
   },
   "verification": {
     "sourceSnapshotComparedAt": "2026-08-17",
-    "sourceSnapshotScope": "local 0.8.4 candidate working tree with Agent report and hotswap-preflight enhancements",
-    "sourceCommit": null,
-    "workingTreeState": "dirty",
+    "sourceSnapshotScope": "remote 0.8.4 source commit verified from exact fresh clone",
+    "sourceCommit": "7fce25118098cbceb7f3f24fa391d75324318b11",
+    "workingTreeState": "clean",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
     "packageFileCount": 108,
     "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts",
-    "publicationVerifierPassedAt": null,
-    "freshCloneVerifiedAt": null,
+    "publicationVerifierPassedAt": "2026-08-17T09:37:18Z",
+    "freshCloneVerifiedAt": "2026-08-17T09:37:18Z",
     "sbom": {
       "spdxVersion": "2.3",
       "spdxPath": "packages/dsh-plugin-debug/sbom/dsh-plugin-debug.spdx.json",

@@ -4,8 +4,8 @@
 
 本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
-公开证据记录中的 `v0.8.3` source commit 是
-`591ca0da959465a1207030cd7eb91372d8e90b2a`；该提交的精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前工作树是基于它的 `0.8.4` 候选，新增的 Agent 报告、hotswap 预检和门禁修复在重新提交、重新跑门禁前，不属于这份已记录的发布证据；当前没有发布到 npm registry；远端是否存在正式 tag/release 不能只靠这段文案推断，应以 GitHub 远端 ref 和 `RELEASE-MANIFEST.json` 为准。真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。
+公开证据记录中的 `0.8.4` source commit 是
+`7fce25118098cbceb7f3f24fa391d75324318b11`；该提交已经推送到 GitHub，精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、离线 integration、SBOM 和 108 文件 pack 检查。本包是 GitHub source release，不发布到 npm registry；真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行。
 
 ## 小白快速开始
 
