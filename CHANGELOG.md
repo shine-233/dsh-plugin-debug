@@ -10,6 +10,7 @@
 - 增加离线 `plugin_hotswap_preflight` 源码预检：限制文件/字节预算，识别 shell 执行、私有生命周期、缓存清理、无鉴权控制面、非原子 patch、缺少回滚/队列/核心保护/测试/CI 等静态线索；不 import、不安装、不运行候选，也不把静态结果当成漏洞利用证明。
 - CI 的 GitHub Actions 改为完整 40 位 commit SHA，并增加 `check:workflow-pins` 回归；包根目录的开发依赖与 pinned runtime 分开做官方 npm advisory 高危审计，避免只审计生产依赖而漏掉构建工具。
 - 上游 `dsh-whale-report` 已在 2026-08-17 重新核对到 `main` 提交 `b3de4a7d8851f63757078427ecfda52bc908961f`、版本 `0.4.0`；本包只吸收本地确定性报告引擎，不吸收其凭据/余额/网络探针或 `rm -rf lib` 构建步骤。
+- 真实隔离 Host 现在已经验证有数据的 `SessionQuery` 失败报告：1 个 Session、15 条事件、1 个失败回合、0 Tool Call、0 Token、`¥0.0000`；`session.create(minimal)` 在当前隔离 Profile 通过，但无 provider 凭据的模型请求仍返回 `MISSING_CREDENTIAL`。这不等于成功模型、真实账单或生产 Profile 兼容证明。
 - Windows standalone 的 Known-good / Live API 测试夹具改用仅监听 loopback 的原始 TCP HTTP 实现，不再依赖 `HttpListener` 的机器级 URL ACL；这是测试基础设施修复，不会扩大插件的网络或命令执行能力。
 - 修复 GitHub CI 的 tarball exact-lib 白名单和 npm pack notice 解析，并在精确远端提交 `687dbaba3897a50ff2c797049ad9755eb76576d5` 上重新通过 GitHub CI、CodeQL、fresh clone、95/95 Node 测试、集成测试、61 文件 standalone 和 108 文件发布边界验证；本版本作为 GitHub source release 发布，不发布到 npm registry。
 

@@ -1,9 +1,37 @@
 # Public release checklist
 
 This checklist is the gate for the single combined DSH Debug Plugin. Repeat it
-for every version. The v0.8.3 entries below are evidence from source commit
-`591ca0da959465a1207030cd7eb91372d8e90b2a`, its exact remote fresh clone and
-the separate evidence commit that carries the published manifest.
+for every version. The current v0.8.4 closeout is recorded first; the v0.8.3
+section below is retained as historical evidence from source commit
+`591ca0da959465a1207030cd7eb91372d8e90b2a`.
+
+## v0.8.4 current publication — source and boundary
+
+The v0.8.4 source implementation commit is
+`687dbaba3897a50ff2c797049ad9755eb76576d5`; the evidence commit on
+`origin/main` and the `v0.8.4` tag is
+`41bb77a6f8cd872d98a39be14d99b2f338c890f5`. The GitHub Release is public,
+non-draft and non-prerelease. This is a GitHub source release; the package is
+not published to npm.
+
+- [x] `packages/dsh-plugin-debug` is the only public package and is version `0.8.4`; `dsh-plugin-store` is absent and removed from the capability surface.
+- [x] The local worktree and `origin/main` are clean and point to the published evidence commit; the annotated `v0.8.4` tag resolves to that commit.
+- [x] The exact remote fresh clone of `origin/main` passed `Verify-Publication.ps1`: 108 package files, no forbidden directories, no sensitive artifacts and parseable JSON.
+- [x] The exact fresh clone passed 95/95 Node tests, build/generated-artifact/syntax/workflow-pin checks, lint, format, honest typecheck (`SKIPPED` because the package has no TypeScript sources), runtime-lock checks, SBOM checks and both high-severity npm audits.
+- [x] The exact fresh clone passed the 61-file/59-PowerShell-file/51-fixture Standalone suite and the canonical integration suite; the latter passed offline installation, client bridge, legacy alias, combined launcher, Agent overlay and Host incident correlation.
+- [x] The package tarball was built through the real `prepack` lifecycle with 108 entries. Node-safe exports loaded from the tarball and the browser client registered through a minimal `window.__ModuleLoader__` contract; browser E2E remains `UNAVAILABLE` when no browser runtime is installed.
+- [x] CI run `32025200100` and CodeQL run `32025200153` succeeded for the evidence commit. Main branch protection requires the Node, Windows, fresh-clone and CodeQL checks; Dependabot security updates and secret push protection are enabled.
+- [x] A real isolated rc.6 Host produced a data-bearing `SessionQuery` report: 1 session listed/read, 15 events used, 1 failed turn, 0 tool calls, 0 tokens and `¥0.0000`. The request failed closed with `MISSING_CREDENTIAL`; this proves the report's real failure/data path, not a successful model or billing path.
+- [x] In the current isolated Profile, `session.create` with the minimal preset passed. An older external instance showed `agent-preset-invalid`/duplicate `deployment:persona`; that limitation was not universal in the current isolated run and must not be stated as an unconditional Debug failure.
+- [x] Real Host hotswap capability inspection failed closed to `MANUAL_REVIEW`/`NOT_ATTEMPTED` because the inventory was truncated and no authoritative lifecycle contract was exposed; no production hotswap was executed.
+- [x] `dsh-plugin-check` was tested in isolation and is not installed or merged: it conflicts with Debug's same-named `plugin_check` when co-installed, and its `git`/`gh` behavior does not meet Debug's offline-only contract.
+
+The following remain intentionally unproven and are not silently promoted to
+release claims: a successful provider/model response with real credentials,
+real token/cost accounting, a model-generated Tool Call, production-Profile
+third-party installation, production hotswap, and cross-platform runtime
+compatibility. These require explicit runtime authority and/or user-supplied
+provider credentials.
 
 ## v0.8.3 publication — source and boundary
 

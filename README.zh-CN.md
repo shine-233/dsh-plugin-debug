@@ -5,7 +5,8 @@
 完整的中文操作手册在 [packages/dsh-plugin-debug/README.zh-CN.md](packages/dsh-plugin-debug/README.zh-CN.md)，维护顺序见 [ROADMAP.md](ROADMAP.md)，GitHub 首页简要说明在 [README.md](README.md)。
 
 `0.8.4` 已完成 GitHub source release 的源码、CI、CodeQL 和 fresh-clone 证据闭环：精确源码提交为
-`687dbaba3897a50ff2c797049ad9755eb76576d5`，发布包检查结果为 108 个文件。这个仓库不发布到 npm registry；离线 fixture、Host 注册和工具分发证据也不等于真实有数据 Session、模型请求、第三方安装或跨平台兼容证明。正式状态仍以 GitHub 远端 ref 和 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准。
+`687dbaba3897a50ff2c797049ad9755eb76576d5`，evidence commit 为
+`41bb77a6f8cd872d98a39be14d99b2f338c890f5`，发布包检查结果为 108 个文件。这个仓库不发布到 npm registry；真实有数据但失败的 SessionQuery 报告路径已验证（1 个 Session、15 条事件），但成功模型、真实 Token/费用、模型 Tool Call、生产第三方安装和跨平台兼容仍未证明。正式状态仍以 GitHub 远端 ref 和 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准。
 
 如果你要找的是“系统学习 DSH”的仓库，请看公开的 [`shine-233/deepseek-harness-study`](https://github.com/shine-233/deepseek-harness-study)：它有 `START-HERE.md`、中文 README、00–27 分层学习入口、15 分钟任务单和固定版本索引。本仓库是可运行的调试插件和研究记录，不是教程；有数据 Session、模型请求、完整 Web/CLI E2E 和跨平台运行仍需另行验证。
 
@@ -54,9 +55,9 @@ Guardian 本身是 observer-only：它观察 Tool Call、Agent/Workflow 递归�
 
 ## 当前真实验证的边界
 
-截至 2026-08-17，使用隔离临时根目录、`@deepseek-ai/dsh@0.1.0-rc.6` 和 Node 24.15.0 做过真实 Host/Web 验证：页面 readiness 为 200，Host 被识别为 DSH，inventory 正常，并且此前的隔离探针已证明上述三个工具完成真实 ToolRuntime 注册和 dispatch。本轮工作树又用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：HTTP 200、`host.describe`、`pluginInventory/list` 成功，134 条 inventory 中确认 `dsh-plugin-debug` active。这个验证没有访问真实用户 Profile 或凭据。
+截至 2026-08-17，使用隔离临时根目录、`@deepseek-ai/dsh@0.1.0-rc.6` 和 Node 24.15.0 做过真实 Host/Web 验证：页面 readiness 为 200，Host 被识别为 DSH，inventory 正常，并且此前的隔离探针已证明上述三个工具完成真实 ToolRuntime 注册和 dispatch。本轮工作树又用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：HTTP 200、`host.describe`、`pluginInventory/list` 成功，134 条 inventory 中确认 `dsh-plugin-debug` active。随后真实 `SessionQuery` 读取 1 个 Session、15 条事件并生成了失败报告；`session.create(minimal)` 在当前隔离 Profile 通过。这个验证没有访问真实用户 Profile 或凭据。
 
-但隔离 Profile 没有历史 Session，所以 `dsh_agent_report` 返回的是合法的空报告（0 个 Session、0 个事件），不能据此声称 Token、费用和风险已经在真实业务数据上验证。直接调用 `session.create` 还被 rc.6 的外部 `agent-preset-invalid` 阻塞，`standard` 和 `minimal` 都遇到 `deployment:persona` 重复注册；这是 DSH 运行时限制，不是 Debug 插件主动执行了错误操作。真实有数据 Session、模型请求、完整报告体验、第三方安装和跨平台兼容仍待验证。
+报告识别出 1 个失败回合、0 Tool Call、0 Token、`¥0.0000`，失败原因是 `MISSING_CREDENTIAL`；这证明了真实有数据的失败报告路径，不证明成功模型、真实账单或模型 Tool Call。此前另一个外部实例曾出现 `agent-preset-invalid`/`deployment:persona` 重复注册，但当前隔离 Profile 没有复现，因此不能把它写成所有 Profile 必然失败。真实生产第三方安装、生产 hotswap 和跨平台兼容仍待验证。
 
 Host API 默认只允许 loopback 地址。若确实需要访问受信任的远端 Host，必须显式设置 `DSH_DEBUG_API_ALLOWED_HOSTS`，例如：
 

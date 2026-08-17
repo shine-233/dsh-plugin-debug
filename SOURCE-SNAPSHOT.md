@@ -21,13 +21,16 @@ does not claim that a deleted source directory can be re-diffed in place.
 
 Publication evidence for this release is recorded in `RELEASE-MANIFEST.json`.
 The exact 0.8.4 source commit is
-`687dbaba3897a50ff2c797049ad9755eb76576d5`. GitHub CI run `32023249802`
+`687dbaba3897a50ff2c797049ad9755eb76576d5`; the evidence commit on
+`origin/main` and the `v0.8.4` tag is
+`41bb77a6f8cd872d98a39be14d99b2f338c890f5`. GitHub CI run `32025200100`
 passed the Node 22/24, Windows, dependency, standalone, integration, package
-boundary and fresh-clone gates; CodeQL run `32023249790` passed JavaScript/
-TypeScript and Actions analysis. A new local fresh clone of that exact remote
-commit also passed the 95-test check, canonical offline integration, 61-file
-standalone suite and `Verify-Publication.ps1` with 108 package files. The npm
-registry is intentionally not used.
+boundary and fresh-clone gates; CodeQL run `32025200153` passed JavaScript/
+TypeScript and Actions analysis. A new local fresh clone of `origin/main`
+passed the 95-test check, canonical offline integration, 61-file standalone
+suite, package/tarball export smoke and `Verify-Publication.ps1` with 108
+package files. The npm registry is intentionally not used as a publication
+channel.
 
 The historical `v0.8.2` release was not a clean evidence baseline: at that
 time, the `main` evidence record named source commit
@@ -50,19 +53,26 @@ publication gates.
   `dsh-plugin-debug` enabled/active, and successfully dispatched
   `plugin_check`, `plugin_hotswap_check` and `dsh_agent_report` through the
   real ToolRuntime. No real user Profile or credentials were accessed.
-- The report tool saw an empty `SessionQuery` (0 Sessions/0 events), so this is
-  registration and dispatch evidence, not data-bearing report proof.
+- A later real isolated run injected the actual `SessionQuery` into the report
+  tool and used 1 listed/read Session, 15 events and 1 failed turn. The report
+  correctly showed 0 Tool Calls, 0 Tokens and `¥0.0000`; the model request
+  failed with `MISSING_CREDENTIAL`. This is data-bearing failure/report-path
+  evidence, not successful model, billing or Tool Call proof.
   `plugin_hotswap_check` returned `UNAVAILABLE` and did not attempt a switch.
-- In the same rc.6 environment, `session.create` failed with the external
-  `agent-preset-invalid` / duplicate `deployment:persona` condition for
-  `standard` and `minimal`. Real business Session history and model requests
-  remain unverified; do not attribute that runtime limitation to this plugin.
+- In the current isolated Profile, `session.create` with `minimal` passed. An
+  earlier external instance showed the `agent-preset-invalid` / duplicate
+  `deployment:persona` condition; because the current isolated run did not
+  reproduce it, document it as an external-instance observation rather than
+  an unconditional plugin failure. Real successful model responses and
+  provider billing remain unverified.
 - The 0.8.4 working tree also passed the bounded real compatibility lane
   with a temporary shipped `web` Profile: Web HTTP 200, `host.describe`, and
   `pluginInventory/list` succeeded; 134 inventory entries were observed and
   `dsh-plugin-debug` was active. This is working-tree compatibility evidence,
-  not data-bearing Session proof; the exact fresh-clone source evidence is
-  recorded above.
+  not successful model proof; the exact fresh-clone source evidence is recorded
+  above. The same Host's hotswap inspection returned `MANUAL_REVIEW` without
+  attempting a switch because inventory and lifecycle-contract safeguards were
+  insufficient.
 
 The previous exact source commit produced 102 npm pack entries in both the
 dry-run publication check and the real prepack/pack extraction smoke. The

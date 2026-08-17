@@ -5,7 +5,8 @@
 本手册说明当前源码能做什么、明确不会做什么，以及如何测试、更新和发布。版本是否已经推送，以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准；本地测试通过不等于生产 DSH 已验证。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
 公开证据记录中的 `0.8.4` 已完成 GitHub source release 的源码、CI、CodeQL 和 fresh-clone 证据闭环：source commit
-`687dbaba3897a50ff2c797049ad9755eb76576d5` 的精确 fresh clone 通过 95/95 Node 测试、集成测试、61 文件 standalone 和发布边界验证，发布包为 108 个文件。本包不发布到 npm registry；真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行；正式状态以 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。
+`687dbaba3897a50ff2c797049ad9755eb76576d5` 的实现由 evidence commit
+`41bb77a6f8cd872d98a39be14d99b2f338c890f5` 发布；远端 fresh clone 通过 95/95 Node 测试、集成测试、61 文件 standalone、tarball 导出检查和发布边界验证，发布包为 108 个文件。本包不发布到 npm registry。现在已经验证过真实有数据但失败的 SessionQuery 报告路径（1 个 Session、15 条事件、1 个失败回合），但真实成功模型、真实 Token/费用、模型 Tool Call、生产第三方安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行；正式状态以 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。
 
 ## 先看结论（普通用户版）
 
@@ -63,13 +64,13 @@
 
 ### 真实 DSH rc.6 验证到哪里
 
-截至 `2026-08-17`，在隔离的临时 Profile 中用 pinned `@deepseek-ai/dsh@0.1.0-rc.6` 验证到的范围包括：Web 返回 `HTTP 200`；`host.describe`、`session.list` 和 `pluginInventory/list` 可以调用；Host inventory 观察到 `dsh-plugin-debug` 为 active。本轮还用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：134 条 inventory 中确认 Debug 插件为 active；这只是当前 dirty 工作树的启动/注册证据，不是发布 commit 或有数据 Session 证据。
+截至 `2026-08-17`，在隔离的临时 Profile 中用 pinned `@deepseek-ai/dsh@0.1.0-rc.6` 验证到的范围包括：Web 返回 `HTTP 200`；`host.describe`、`session.list` 和 `pluginInventory/list` 可以调用；Host inventory 观察到 `dsh-plugin-debug` 为 active。本轮还用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：134 条 inventory 中确认 Debug 插件为 active；这只是临时 Profile 的启动/注册证据，不是生产 Profile 或成功模型证据。
 
 还验证了三个工具都能通过真实 ToolRuntime 注册和调用：`plugin_check`、`plugin_hotswap_check`、`dsh_agent_report` 的 schema 均已注册，dispatch 均返回 `isError=false`。其中热切换检查仍给出 `UNAVAILABLE`，执行标记为 `NOT_ATTEMPTED`；这符合安全设计。
 
-该隔离 Profile 没有真实历史 Session，因此 `dsh_agent_report` 只证明了“能调用并返回合法的空报告”：状态为 `PASS`、Session 数为 `0`。尚未证明有业务数据时的完整 Token、费用、风险和 Tool Call 统计，也不能写成“已经读取真实业务历史”。
+随后通过真实 Host 注入的 `SessionQuery` 读取到 1 个 Session、15 条事件，报告识别出 1 个失败回合、0 次 Tool Call、0 Token、`¥0.0000`；失败原因是 provider 没有凭据（`MISSING_CREDENTIAL`）。这证明了有数据的真实失败报告路径和脱敏统计，不证明成功模型、真实账单或模型生成 Tool Call。
 
-同一 rc.6 验证中，直接调用 `session.create` 被外部运行时的 `agent-preset-invalid` 阻塞，原因是 `deployment:persona` 重复注册。这个错误不是 Debug 插件产生的；在修复官方 Host 合同前，不应通过修改真实 Profile 或凭据来绕过它。
+当前隔离 Profile 中 `session.create(agentPreset=minimal)` 已通过；此前另一个外部实例曾出现 `agent-preset-invalid`/`deployment:persona` 重复注册，因此该错误应记录为外部实例观察，不应写成当前所有 Profile 必然失败。即使创建成功，当前模型请求仍会因没有 provider 凭据而失败；不要为了绕过它修改真实 Profile 或读取凭据。
 
 建议环境：PowerShell 7（命令名 `pwsh`）、Node.js 22 或更高版本；CI 当前覆盖 Node 22/24 和 PowerShell 7 主流程。离线核心测试不需要真实 DSH；页面、浏览器和 Host API 测试需要额外的本机运行环境。PowerShell 5.1 只作为兼容性检查宿主；如果本机两者都装有，优先使用 `pwsh`。
 

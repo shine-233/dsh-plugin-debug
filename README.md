@@ -63,7 +63,7 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 | 隔离的真实 `@deepseek-ai/dsh@0.1.0-rc.6` | 真实 Web/Host 能启动，inventory 能看到 `dsh-plugin-debug` active，`plugin_check`、`plugin_hotswap_check`、`dsh_agent_report` 能通过 ToolRuntime 注册和 dispatch。 |
 | 尚未证明 | rc.6 有数据的历史 Session、真实模型请求、完整报告体验、第三方安装和跨平台兼容。 |
 
-这次真实隔离验证中，`dsh_agent_report` 只读到 0 个 Session/事件，因此是“调用链通过”，不是“真实业务数据报告已通过”。`session.create` 被 rc.6 的外部 `agent-preset-invalid` 阻塞：`standard`/`minimal` 都遇到重复注册 `deployment:persona`。这是运行时限制，不是 Debug 插件执行了错误操作；在上游/运行时修复前，文档和 issue 都应保持这个边界。
+这次真实隔离验证已经通过了有数据但失败的报告路径：`SessionQuery` 读取 1 个 Session、15 条事件，报告识别 1 个失败回合、0 Tool Call、0 Token、`¥0.0000`，模型请求以 `MISSING_CREDENTIAL` 失败。当前隔离 Profile 的 `session.create(minimal)` 已通过；此前另一个外部实例曾出现 `agent-preset-invalid`/重复注册 `deployment:persona`，所以应记录为外部实例观察，而不是所有 Profile 的必然失败。成功模型、真实账单、生产第三方安装、生产 hotswap 和跨平台兼容仍未证明。
 
 - 想先启动：看下面的“安装与启动”。
 - 想按傻瓜式步骤安装、启动、导出诊断和更新：阅读 [`packages/dsh-plugin-debug/DEBUG-QUICKSTART.md`](packages/dsh-plugin-debug/DEBUG-QUICKSTART.md)。

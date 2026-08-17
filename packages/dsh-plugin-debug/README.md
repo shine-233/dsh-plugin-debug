@@ -5,7 +5,8 @@
 本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
 公开证据记录中的 `0.8.4` 已完成 GitHub source release 的源码、CI、CodeQL 和 fresh-clone 证据闭环：source commit
-`687dbaba3897a50ff2c797049ad9755eb76576d5` 的精确 fresh clone 通过 95/95 Node 测试、集成测试、61 文件 standalone 和发布边界验证，发布包为 108 个文件。本包不发布到 npm registry；真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行。
+`687dbaba3897a50ff2c797049ad9755eb76576d5` 的实现由 evidence commit
+`41bb77a6f8cd872d98a39be14d99b2f338c890f5` 发布；远端 fresh clone 通过 95/95 Node 测试、集成测试、61 文件 standalone、tarball 导出检查和发布边界验证，发布包为 108 个文件。本包不发布到 npm registry。真实有数据但失败的 SessionQuery 报告路径已经验证（1 个 Session、15 条事件、1 个失败回合），但真实成功模型、真实 Token/费用、模型 Tool Call、生产第三方安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行。
 
 ## 小白快速开始
 
@@ -248,11 +249,11 @@ ToolRuntime 对外返回的是一个字符串（`output.schema.type=string`）�
 | --- | --- | --- |
 | fake/fixture/loopback | 合成 Session、Node 测试、PowerShell fixture 和 fake/loopback runtime 回归了报告聚合、边界、脱敏、Crash Guard 与 supervisor 分支 | 没有证明真实 DSH Web、真实 Host inventory 或真实业务历史存在 |
 | 真实 Host 注册与 ToolRuntime | 在临时隔离目录用 pinned `@deepseek-ai/dsh@0.1.0-rc.6` 启动真实 Web：`http://127.0.0.1:31989/` 和 `http://127.0.0.1:31990/` 返回 HTTP 200，`webIsDsh=true`；真实 API `host.describe`、`session.list`、`pluginInventory/list` 可调用。`pluginInventory/list` 观察到 `entryCount=134`、`failedCount=0`，其中 `dsh-plugin-debug` 为 `enabled=true`、`fiberPhase=active`。临时 ToolRuntime 探针还确认 `plugin_check`、`plugin_hotswap_check`、`dsh_agent_report` 都已注册并可执行，三者均 `isError=false` | 只证明真实 Host 能加载、注册并 dispatch 工具；探针包只存在于隔离 Profile，未进入仓库或发行包，也不等于已经读到真实业务 Session |
-| 真实业务 Session 历史 | 当前没有通过这一层：隔离 Profile 的 `session.list` 返回空列表，所以 `dsh_agent_report` 的真实 dispatch 结果是 `PASS`、0 个 Session、0 条事件、0 Token、`¥0.0000`，并确认没有执行命令或修改数据 | 没有验证有数据 Session 的真实 Token、费用、Tool Call、风险或异常统计；不能把空历史的 PASS 当成业务历史证明 |
+| 真实业务 Session 历史 | 已通过真实 `SessionQuery` 的有数据失败路径：1 个 Session、15 条事件、1 个失败回合；报告为 0 Tool Call、0 Token、`¥0.0000`，并确认没有执行命令或修改数据 | 没有验证成功模型响应、真实 Token/费用、模型 Tool Call；provider 缺少凭据时会返回 `MISSING_CREDENTIAL`，不能把失败报告当成账单 |
 
-上述真实 Host 检查使用的是临时隔离 Profile，不访问真实用户 Profile 或凭据。另一个独立的外部限制是：在同一个 pinned rc.6 隔离环境中直接调用 `session.create` 会失败，错误为 `agent-preset-invalid`，核心原因是 `preset "standard" failed to mount: prompt section "deployment:persona" is already registered`；使用 `minimal` preset 也出现同类重复注册错误。这是 rc.6 的 agent-preset/deployment:persona 装载问题，不是 `dsh_agent_report` 造成的。因而当前只能声称真实 Web、inventory、工具注册和空历史 dispatch 已验证，不能声称已经创建并读取真实业务 Session。
+上述真实 Host 检查使用的是临时隔离 Profile，不访问真实用户 Profile 或凭据。随后一次真实 `SessionQuery` 报告已读取 1 个 Session、15 条事件并渲染出失败回合、0 Tool Call、0 Token、`¥0.0000`；模型请求因 `MISSING_CREDENTIAL` 失败，因此仍不能声称成功模型或真实账单已经验证。当前隔离 Profile 的 `session.create(minimal)` 已通过；此前另一个外部实例曾出现 `agent-preset-invalid`/`deployment:persona` 重复注册，这应记录为外部实例观察，而不是当前所有 Profile 的必然失败。真实生产第三方安装和 hotswap 仍未执行，因为候选插件注册冲突/Host 缺少权威生命周期合同，继续执行会越过安全边界。
 
-真实 ToolRuntime 的三项结果还应按各自语义阅读：`plugin_check(action="schema")` 成功返回检查 schema；`plugin_hotswap_check` 成功返回 `verdict=UNAVAILABLE`、`execution=NOT_ATTEMPTED`、`actualHotSwap=false`，说明安全门禁没有执行热切换；`dsh_agent_report` 成功返回合法空报告，说明注册和调用链可用，但不增加业务历史数据。
+真实 ToolRuntime 的三项结果还应按各自语义阅读：`plugin_check(action="schema")` 成功返回检查 schema；`plugin_hotswap_check` 成功返回 `verdict=UNAVAILABLE`、`execution=NOT_ATTEMPTED`、`actualHotSwap=false`，说明安全门禁没有执行热切换；`dsh_agent_report` 成功返回了真实失败 Session 的脱敏报告，说明注册、调用链和有数据失败路径可用，但不等于成功模型或账单证明。
 
 ## 插件二分定位、报告对比和静态预检
 
