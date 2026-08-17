@@ -2,10 +2,10 @@
 
 这是单包 `dsh-plugin-debug` 的完整中文手册。它把 DSH 检测、调试、来源追踪、日志取证、恢复、崩溃防护（Crash Guard）、插件预检、追踪（Trace）分析、任务守护和一键启动能力合并到一起；不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。包内默认的 [`README.md`](README.md) 也是中文简版，GitHub 首页不会要求读者先阅读英文文档。
 
-本手册说明当前源码能做什么、明确不会做什么，以及如何测试、更新和发布。候选版本是否已经推送，以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准；本地测试通过不等于生产 DSH 已验证。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
+本手册说明当前源码能做什么、明确不会做什么，以及如何测试、更新和发布。版本是否已经推送，以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准；本地测试通过不等于生产 DSH 已验证。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
-公开证据记录中的 `0.8.4` 仍是候选版本：source commit
-`7fce25118098cbceb7f3f24fa391d75324318b11` 的本地 fresh clone 功能检查通过，但 GitHub CI 的 tarball exact-lib smoke 发现白名单漏了新增的 `lib/hotswap-preflight.js`，所以尚未创建 tag 或 GitHub Release；修复后必须重新跑 CI、fresh clone 和发布门禁。这个版本最终作为 GitHub source release 发布，不发布到 npm registry；真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行；正式状态以 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。
+公开证据记录中的 `0.8.4` 已完成 GitHub source release 的源码、CI、CodeQL 和 fresh-clone 证据闭环：source commit
+`687dbaba3897a50ff2c797049ad9755eb76576d5` 的精确 fresh clone 通过 95/95 Node 测试、集成测试、61 文件 standalone 和发布边界验证，发布包为 108 个文件。本包不发布到 npm registry；真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行；正式状态以 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。
 
 ## 先看结论（普通用户版）
 

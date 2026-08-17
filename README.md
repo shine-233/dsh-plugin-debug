@@ -4,7 +4,7 @@
 
 GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-plugin-debug)。包内的 [`README.zh-CN.md`](packages/dsh-plugin-debug/README.zh-CN.md) 是更完整的中文操作手册；包内默认显示的 [`README.md`](packages/dsh-plugin-debug/README.md) 同样是中文，不要求读者先看英文文档。
 
-当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。`0.8.4` 仍是候选版本：源提交 `7fce25118098cbceb7f3f24fa391d75324318b11` 的本地 fresh clone 功能检查通过，但 GitHub CI 发现 tarball exact-lib 白名单漏了新增的 `lib/hotswap-preflight.js`，因此还没有创建 tag 或 GitHub Release；修复后必须重新跑 CI 和 fresh clone。最终版本仍是 GitHub source release，不发布到 npm registry。真实有数据 Session、模型请求、第三方插件安装或跨平台兼容仍需另行验证，不能从离线 fixture 或工具注册证据推导出来。
+当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。`0.8.4` 已完成 GitHub source release 的源码、CI、CodeQL 和 fresh-clone 证据闭环，精确源码提交为 `687dbaba3897a50ff2c797049ad9755eb76576d5`，发布包检查结果为 108 个文件。这个仓库不发布到 npm registry。真实有数据 Session、模型请求、第三方插件安装或跨平台兼容仍需另行验证，不能从离线 fixture 或工具注册证据推导出来。
 
 功能变化、维护路线和门禁记录见 [`CHANGELOG.md`](CHANGELOG.md)、[`ROADMAP.md`](ROADMAP.md) 与 [`CONTRIBUTING.md`](CONTRIBUTING.md)。不要把 GitHub source release 当成 npm 安装包，也不要把离线 fixture/注册分发证据扩大成真实有数据 Session、模型请求、第三方插件安装或跨平台兼容证明。
 
