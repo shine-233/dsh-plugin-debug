@@ -8,14 +8,14 @@ section below is retained as historical evidence from source commit
 ## v0.8.4 current publication — source and boundary
 
 The v0.8.4 source implementation commit is
-`687dbaba3897a50ff2c797049ad9755eb76576d5`; the evidence commit on
-`origin/main` and the `v0.8.4` tag is
+`687dbaba3897a50ff2c797049ad9755eb76576d5`; the evidence commit resolved by
+the immutable `v0.8.4` tag is
 `41bb77a6f8cd872d98a39be14d99b2f338c890f5`. The GitHub Release is public,
 non-draft and non-prerelease. This is a GitHub source release; the package is
 not published to npm.
 
 - [x] `packages/dsh-plugin-debug` is the only public package and is version `0.8.4`; `dsh-plugin-store` is absent and removed from the capability surface.
-- [x] The local worktree and `origin/main` are clean and point to the published evidence commit; the annotated `v0.8.4` tag resolves to that commit.
+- [x] The annotated `v0.8.4` tag resolves to the published evidence commit. `origin/main` may contain later documentation-only reconciliation commits; the current delta from the tag is documentation-only and contains no source, generated `lib`, tests, CI, scripts or package-manifest changes.
 - [x] The exact remote fresh clone of `origin/main` passed `Verify-Publication.ps1`: 108 package files, no forbidden directories, no sensitive artifacts and parseable JSON.
 - [x] The exact fresh clone passed 95/95 Node tests, build/generated-artifact/syntax/workflow-pin checks, lint, format, honest typecheck (`SKIPPED` because the package has no TypeScript sources), runtime-lock checks, SBOM checks and both high-severity npm audits.
 - [x] The exact fresh clone passed the 61-file/59-PowerShell-file/51-fixture Standalone suite and the canonical integration suite; the latter passed offline installation, client bridge, legacy alias, combined launcher, Agent overlay and Host incident correlation.

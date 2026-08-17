@@ -282,7 +282,7 @@ post-image 验证。即使这些门禁通过，也要把“切换请求已接受
 | 真实 Web 启动 | `PASS` | `http://127.0.0.1:31989/` 和 `http://127.0.0.1:31990/` 返回 HTTP 200，`webIsDsh=true`，supervisor 为 `healthy` | 不能推出真实业务 Session 已创建或历史已读取 |
 | 真实 Host/API/inventory | `PASS` | `host.describe`、`session.list`、`pluginInventory/list` 成功；inventory 共观察到 134 个条目、`failedCount=0`；其中 `dsh-plugin-debug` 为 `enabled=true`、`fiberPhase=active` | 不能推出每个插件功能都已在真实业务数据上验证 |
 | 三个 Debug 工具注册与 dispatch | `PASS` | 三个 schema 都报告 `registered=true`，并经真实 `ToolRuntime.execute` 调用，均 `isError=false` | 不能把工具 schema/dispatch 通过写成完整业务回归通过 |
-| 有数据 Session 的报告 | `UNVERIFIED` | 隔离 Profile 没有历史 Session；`session.list` 为空 | 不能声称已经验证真实历史中的 token、cost、风险或异常聚合 |
+| 有数据 Session 的报告 | `PASS`（失败路径） | 真实隔离 Profile 读取 1 个 Session、15 条事件，报告识别 1 个失败回合、0 Tool Call、0 Token、`¥0.0000`；请求以 `MISSING_CREDENTIAL` 失败闭合 | 不能声称已经验证成功模型、真实 Token/费用账单、模型 Tool Call 或生产 Profile |
 
 真实 dispatch 的逐项结果如下：
 
@@ -290,9 +290,10 @@ post-image 验证。即使这些门禁通过，也要把“切换请求已接受
 - `plugin_hotswap_check`：dispatch 成功，但按安全设计返回
   `verdict=UNAVAILABLE`、`execution=NOT_ATTEMPTED`、`actualHotSwap=false`。当前没有权威、稳定、
   带版本的 Host 生命周期合同，因此不能把“能观察到 HMR”写成“可以热切换”；
-- `dsh_agent_report`：dispatch 成功，返回 `status=PASS`、`source=SessionQuery`，读取 0 个
-  Session、使用 0 条事件、0 token、费用 `¥0.0000`，并明确没有执行命令、没有修改数据。
-  这是空历史隔离 Profile 的合法空报告，不是有数据 Session 的统计证明。
+- `dsh_agent_report`：dispatch 成功，返回 `status=PASS`、`source=SessionQuery`，读取 1 个
+  Session、使用 15 条事件，识别 1 个失败回合、0 Tool Call、0 Token、费用 `¥0.0000`，
+  并明确没有执行命令、没有修改数据。报告中的失败来自 `MISSING_CREDENTIAL`，这是有数据
+  的真实失败路径证明，不是成功模型或真实账单证明。
 
 ### `dsh-whale-report` 0.4.0 的确定性 Agent 报告吸收结果
 
@@ -332,20 +333,23 @@ Guard 状态、隔离插件或执行重启逻辑。模块不可用时会返回�
 `guardStateCreated=false`。这证明默认路径的模块导入回归已闭合；它仍然是本地受控 runtime
 fixture 证据，不等同于真实业务 Session 或真实历史报告证据。
 
-### `session.create` 的 rc.6 外部阻塞
+### `session.create` 的当前隔离复核与历史外部观察
 
-在同一个全新隔离 rc.6 Profile 中直接调用 `session.create`，即使不经过 UI，也返回
-`agent-preset-invalid`。`standard` 和 `minimal` preset 都出现同类挂载失败，核心错误为：
-`prompt section "deployment:persona" is already registered`。因此当前可以确认 Web、inventory
-和三个 Debug 工具的注册/dispatch，但不能继续伪造一个“有数据 Session”来证明报告统计。
-这是锁定 rc.6 的 agent-preset/deployment:persona 重复注册问题，不是 `dsh_agent_report` 产生的
-错误；临时尝试的 overlay 没有进入仓库，也不应被当作生产修复。
+在当前全新的隔离 rc.6 Profile 中直接调用 `session.create(agentPreset=minimal)` 已通过，
+创建后再次调用 `session.list` 能看到 1 个 Session。这个预检没有调用 `session.prompt`、
+没有读取凭据、没有产生模型请求或费用；因此它证明了当前隔离运行时可以创建最小 Session，
+但不证明成功模型、真实账单或模型 Tool Call。
+
+此前另一个外部 DSH 实例曾返回 `agent-preset-invalid`，核心错误是
+`prompt section "deployment:persona" is already registered`。该现象应作为外部实例的历史
+运行观察保留，不能写成所有 Profile 必然失败，也不是 `dsh_agent_report` 产生的错误；临时
+overlay 没有进入仓库，也不应被当作生产修复。
 
 ## 未宣称完成的部分
 
 - DSH 原生 durable rewind 事件在当前实际 rc.6 上没有被验证，因此本项目不能声称可以无损删除或重写对话历史。
 - 旧记录中关于真实端口 `3081` 的 Tool Call 表述不再作为当前证据：本轮没有在缺少明确 Session ID 时读取该端口上的业务 Tool Call，也没有把旧端口/旧上下文与 2026-08-17 的 rc.6 复核混用。Host 配置里的 `danger-full-access` 不是 Tool 成功证据；当前能确认的只是上文列出的三个 Debug 工具经真实 `ToolRuntime.execute` dispatch 成功。
-- `session.create` 仍被 rc.6 的 `deployment:persona` 重复注册阻塞，所以真实有数据 Session、历史 token/cost、真实风险与异常聚合仍未验证。
+- 成功 provider/model 响应、真实 Token/费用账单、模型生成 Tool Call、生产第三方安装、生产 hotswap 和跨平台运行仍未验证；当前已经验证的是有数据但失败的 `SessionQuery` 报告路径。真实模型验证必须使用临时隔离 Profile，并取得明确的 provider、model、费用上限和网络/Session 授权。
 - 当前真实实例的运行时模型证据是 `deepseek-official/deepseek-v4-flash`；`gpt-5.6-sol` 只有在 Session history/request context 观察到时才会被报告为运行中。
 - zstd Session 文件会被识别并标记为 `not-decoded`，不会假装已解码；后续可以在检测到本机可用解码器时增加显式 opt-in 读取。
 

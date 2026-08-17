@@ -17,14 +17,16 @@ script and contains no remote URL.
 CI/fresh-clone 结果只能留在对应的历史证据段落，不能复制到当前 candidate 的
 `publishedCommit` 或验证时间戳。
 
-本地 0.8.3 的真实运行证据也要分层记录。2026-08-17 在隔离临时根目录中用
+v0.8.4 的真实运行证据也要分层记录。2026-08-17 在隔离临时根目录中用
 `@deepseek-ai/dsh@0.1.0-rc.6` 和 Node 24.15.0 验证了真实 Web/Host 启动、插件
 inventory，以及 `plugin_check`、`plugin_hotswap_check`、`dsh_agent_report` 的
-ToolRuntime 注册和 dispatch；这没有访问真实用户 Profile 或凭据。该次报告读取到
-的是空的 SessionQuery，因此只能证明工具合同和调用链，不证明有数据的历史报告。
-同一 rc.6 环境的 `session.create` 因外部 `agent-preset-invalid`（重复注册
-`deployment:persona`）失败；在该运行时限制解决前，不得把它写成 Debug 插件故障，
-也不得声称已完成真实业务 Session 或模型请求验证。
+ToolRuntime 注册和 dispatch；这没有访问真实用户 Profile 或凭据。随后取得了一条
+有数据但失败的 `SessionQuery` 报告：1 个 Session、15 条事件、1 个失败回合、0 个
+Tool Call、0 Token、`¥0.0000`，失败原因为 `MISSING_CREDENTIAL`。这证明了真实数据的
+失败报告路径和脱敏边界，不证明成功模型、真实计费、模型生成 Tool Call 或生产 Profile
+兼容性。当前隔离 Profile 的 `session.create(minimal)` 也已通过；此前另一个外部实例
+观察到的 `agent-preset-invalid`/重复注册 `deployment:persona` 不能再写成所有 Profile
+必然失败，也不能归咎于 Debug 插件。
 
 `dsh_agent_report` 借鉴 `dsh-whale-report` 的确定性 Agent 报告形状，但候选只保留
 有界、脱敏、离线可审计的报告引擎；不复制余额探针、在线价格抓取、凭据读取、完整
