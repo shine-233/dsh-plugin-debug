@@ -116,6 +116,18 @@ foreach ($timestamp in @(
     [PSCustomObject]@{ Name = 'verification.freshCloneVerifiedAt'; Value = $freshCloneVerifiedAt }
   )) {
   if ($null -eq $timestamp.Value -or [string]::IsNullOrWhiteSpace([string]$timestamp.Value)) { continue }
+  # Windows PowerShell 5.1's ConvertFrom-Json materializes an ISO-8601 value
+  # ending in `Z` as a DateTime(Kind=Utc).  Preserve that explicit kind instead
+  # of converting it to a local-time string and accidentally rejecting a valid
+  # UTC publication record.
+  if ($timestamp.Value -is [DateTime]) {
+    Assert-Publication (([DateTime]$timestamp.Value).Kind -eq [DateTimeKind]::Utc) "$($timestamp.Name) must be recorded in UTC"
+    continue
+  }
+  if ($timestamp.Value -is [DateTimeOffset]) {
+    Assert-Publication (([DateTimeOffset]$timestamp.Value).Offset -eq [TimeSpan]::Zero) "$($timestamp.Name) must be recorded in UTC"
+    continue
+  }
   $parsedTimestamp = [DateTimeOffset]::MinValue
   Assert-Publication ([DateTimeOffset]::TryParse([string]$timestamp.Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind, [ref]$parsedTimestamp)) "$($timestamp.Name) is not a valid timestamp"
   Assert-Publication ($parsedTimestamp.Offset -eq [TimeSpan]::Zero) "$($timestamp.Name) must be recorded in UTC"
