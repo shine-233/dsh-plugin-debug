@@ -2,22 +2,22 @@
 
 这是维护顺序，不是对真实 DSH 兼容性的承诺。每一项只有在对应的证据门禁通过后，才会从“计划”移动到“已完成”。
 
-## 当前候选（0.8.3）
+## 已发布（0.8.3）
 
 - 单包 `dsh-plugin-debug`，默认离线、metadata-only、fail-closed。
 - `plugin_check`：离线仓库形态检查、技能目录识别、路径围栏和构建陷阱提示。
 - `plugin_hotswap_check`：只读观察 Host 生命周期合同；不执行热切换。
 - `dsh_agent_report`：只读生成有界 Session/Token/工具/风险报告；没有 Session 服务时明确返回 `UNAVAILABLE`。
 - 真实 rc.6 隔离证据：Web/Host 启动、inventory 和三个工具的 ToolRuntime dispatch 已验证；空 SessionQuery 和外部 `session.create` 限制仍把真实业务报告留在未完成状态。
-- `.github/workflows/ci.yml`、`.github/workflows/codeql.yml` 和 `.github/dependabot.yml` 已在源代码中配置；远端设置未随本地 candidate 证明。
+- `.github/workflows/ci.yml`、`.github/workflows/codeql.yml` 和 `.github/dependabot.yml` 已随 v0.8.3 source commit 发布；远端设置仍以 GitHub 设置页/API 为准。
 - Node 22/24、PowerShell 7 主流程、5.1 兼容解析、runtime 官方 advisory audit、fresh clone 和真实 tarball→解包→package-only Standalone 门禁。
 
 ## 下一优先级
 
-1. 发布一个与 source commit、manifest、README 和 release notes 完全一致的修订版 GitHub source release；修复旧 `v0.8.2` 的候选证据和损坏换行，不移动旧 tag，除非维护者明确批准。
+1. 修复旧 `v0.8.2` release notes 的历史说明和 Markdown 换行；保持旧 tag 不动，并让读者明确它不是当前 v0.8.3 证据基线。
 2. 继续 opt-in compatibility lane：在 DSH 修复 `session.create` 的 `deployment:persona` 重复注册或提供新的 pinned runtime 后，验证有数据 Session、模型请求和完整 Agent 报告；在此之前只保留已取得的 Web/Host/inventory/ToolRuntime 分层证据。
-3. 把依赖许可汇总改成可机器验证的 SPDX/CycloneDX SBOM，并在 CI 检查 runtime lockfile 漂移。
-4. 为 `deepseek-harness-study` 增加一个最小示例插件工作台和“构建→注册→卸载”实验；学习仓库仍保持文档 fork 的边界，不强行声称是官方运行镜像。
+3. 维护已发布的 SPDX/CycloneDX SBOM、runtime lockfile 漂移检查和 Node/PowerShell 质量门禁，依赖更新时重新生成并复验。
+4. 继续维护 `deepseek-harness-study` 的最小示例插件工作台和“构建→注册→卸载”实验；学习仓库仍保持文档 fork 的边界，不强行声称是官方运行镜像。
 
 ## 暂不承诺
 

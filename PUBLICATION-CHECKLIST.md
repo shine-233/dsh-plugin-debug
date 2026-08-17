@@ -1,18 +1,17 @@
 # Public release checklist
 
 This checklist is the gate for the single combined DSH Debug Plugin. Repeat it
-for every version. The entries labelled **current candidate** are local
-working-tree evidence only; they must not be changed to published evidence
-until a source commit has been pushed, verified from an exact fresh clone, and
-followed by a separate evidence commit.
+for every version. The v0.8.3 entries below are evidence from source commit
+`591ca0da959465a1207030cd7eb91372d8e90b2a`, its exact remote fresh clone and
+the separate evidence commit that carries the published manifest.
 
-## Current 0.8.3 candidate — source and boundary (local only)
+## v0.8.3 publication — source and boundary
 
-The checked items below describe the uncommitted local candidate only. They are
-not evidence for the historical 0.8.2 release or for a GitHub publication.
+The checked items below describe the published v0.8.3 source snapshot. They are
+not evidence for the historical 0.8.2 tag.
 
 - [x] `packages/dsh-plugin-debug` is the only public package and contains the runtime plus Host-side debug/launcher tools.
-- [x] The package retains runtime ID `dsh-plugin-debug` and the current candidate version is `0.8.3`.
+- [x] The package retains runtime ID `dsh-plugin-debug` and the published version is `0.8.3`.
 - [x] Crash Guard's fake runtime is generated only in a bounded temporary test directory; no independent fixture package is present.
 - [x] Startup incident receipts and the read-only plugin bisect plan are covered by candidate regression tests and contain no raw payloads or automatic Profile mutation.
 - [x] Startup health fail-closes unresolved or unavailable plugin failures: safe third-party mappings may be quarantined once, while core/unknown/ambiguous failures produce a `degraded` receipt without arbitrary disable or a second restart.
@@ -43,7 +42,7 @@ not evidence for the historical 0.8.2 release or for a GitHub publication.
 
 - [x] Root and package MIT copyright holder is recorded as `shine-233`.
 - [x] The public package manifest has a real `repository`, `bugs` and `homepage` field.
-- [ ] `RELEASE-MANIFEST.json` records evidence-backed `publicationVerifierPassedAt`/`freshCloneVerifiedAt` timestamps for the current candidate. (They remain `null` until the exact remote fresh-clone gate passes.)
+- [x] `RELEASE-MANIFEST.json` records evidence-backed UTC `publicationVerifierPassedAt`/`freshCloneVerifiedAt` timestamps for source commit `591ca0da959465a1207030cd7eb91372d8e90b2a`.
 - [x] Dependency license fields were inventoried against the exact pinned runtime lockfile; this is not legal advice.
 
 ## Repository automation (configured in the source tree)
@@ -105,25 +104,24 @@ proof of a real production DSH or successful GitHub publication.
 ## GitHub gate
 
 - [x] Target GitHub owner, repository name and visibility are recorded (`shine-233/dsh-plugin-debug`, public).
-- [ ] A reviewed local source commit for the `0.8.3` candidate has been created.
+- [x] A reviewed source commit for the `0.8.3` candidate was created: `591ca0da959465a1207030cd7eb91372d8e90b2a`.
 - [x] Remote URL is explicitly recorded before any push.
-- [ ] Push is performed only after staged contents are approved.
-- [ ] An exact-remote fresh clone passes the single-package tests and publication checks for `0.8.3`.
+- [x] Push was performed only after the staged contents were approved; the source commit is present on `origin/main`.
+- [x] An exact-remote fresh clone passed the single-package tests, publication checks, audit, SBOM, runtime lock, PowerShell and tarball smoke gates for `0.8.3`.
 
-## Current 0.8.3 candidate evidence (local only)
+## Published 0.8.3 evidence
 
-- Candidate version: `0.8.3`.
-- Candidate status: `RELEASE-MANIFEST.json` has `status: candidate`,
-  `pushPerformed: false`, `publishedCommit: null`, and null publication/fresh
-  clone timestamps.
-- No numeric `packageFileCount` is asserted for the current candidate in this
-  document. Re-run `npm pack --dry-run --json --ignore-scripts` after the final
-  source change and update the manifest only from that real output; a candidate
-  field is not publication evidence.
-- Earlier local package, Standalone, publication-boundary and advisory results
-  are not re-certified by this documentation-only pass because the latest
-  supervisor/default-launcher changes still require the final local gate to be
-  rerun. Do not copy those earlier numbers into the current candidate record.
+- Published version: `0.8.3`.
+- Published status: `RELEASE-MANIFEST.json` has `status: published`,
+  `pushPerformed: true`, `publishedCommit` and `verification.sourceCommit`
+  set to `591ca0da959465a1207030cd7eb91372d8e90b2a`, with both UTC timestamps.
+- The publication verifier and both dry-run and real prepack `npm pack` reports
+  contain 102 files. The exact extracted tarball passed package-only Standalone,
+  offline consumer installation and all declared export imports.
+- The exact fresh clone passed plugin/runtime `npm audit` with 0 vulnerabilities,
+  Node 22/24 tests, 91.48% line coverage, lint, format, honest typecheck,
+  runtime lock metadata/installed-tree checks, 584-component SPDX/CycloneDX
+  SBOM checks, PowerShell parsing, Recovery, Known-good and integration.
 - On 2026-08-17, an isolated temporary profile with pinned
   `@deepseek-ai/dsh@0.1.0-rc.6` and Node 24.15.0 started the real DSH Web/Host
   successfully: HTTP readiness was 200, the host was identified as DSH, the
@@ -150,7 +148,7 @@ flows; the isolated pinned rc.6 run proves real Web/Host loading and tool
 dispatch; only a successful data-bearing Session and model request would prove
 the end-to-end report experience.
 
-## Historical 0.8.2 CI evidence (not current candidate evidence)
+## Historical 0.8.2 CI evidence (not current v0.8.3 evidence)
 
 - The historical source commit was `b234e79dfe7b349568f7f3e3c63504979f0e74e0`.
 - GitHub Actions run `31936340306`: `node-tests`, `windows-debug-suite` and

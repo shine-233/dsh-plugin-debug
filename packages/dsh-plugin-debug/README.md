@@ -2,9 +2,10 @@
 
 这是 npm 和 GitHub 默认显示的中文说明。它把 DSH 检测、调试、恢复、插件健康检查、崩溃隔离、事故取证、Trace 分析、任务守护和一键启动能力合并到一起，运行时只有一个包：`dsh-plugin-debug`。更长的逐项中文手册见 [`README.zh-CN.md`](README.zh-CN.md)；两份文档都以当前源码和测试为准，不把英文术语当成额外组件。Windows 上推荐使用 PowerShell 7（`pwsh`）；PowerShell 5.1 只用于兼容性检查。
 
-本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。候选发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
+本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
-当前工作树候选版本为 `0.8.3`。它仍是 candidate：尚未发布到 npm，也不能把本地测试结果当成 GitHub release、正式发布或完整的真实 DSH 兼容性证明。
+`v0.8.3` 已作为 GitHub source release 发布，source commit 为
+`591ca0da959465a1207030cd7eb91372d8e90b2a`；精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前没有发布到 npm registry。真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。
 
 ## 小白快速开始
 

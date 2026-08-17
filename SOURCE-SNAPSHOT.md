@@ -5,7 +5,7 @@ This is the current single-package publication release source tree. The public r
 
 | Component | Files | Notes |
 | --- | ---: | --- |
-| packages/dsh-plugin-debug | package file count pending final `npm pack` check (candidate) | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, startup incident receipts, read-only plugin bisect planning, diagnostics-report diffing, static plugin preflight, offline plugin repository health checks, read-only hotswap capability probing, deterministic metadata-only agent/session reports, dependency graph inspection, offline trace-loop and bounded trace-recursion analysis, observer-only task guardian and its status checker, bounded client breadcrumbs, Workbench and one-click launcher; the small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer/bisect/dependency/trace-loop/recursion tests, while fake runtimes and temporary Profiles are generated at test time |
+| packages/dsh-plugin-debug | 102 files in the `v0.8.3` pack result | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, startup incident receipts, read-only plugin bisect planning, diagnostics-report diffing, static plugin preflight, offline plugin repository health checks, read-only hotswap capability probing, deterministic metadata-only agent/session reports, dependency graph inspection, offline trace-loop and bounded trace-recursion analysis, observer-only task guardian and its status checker, bounded client breadcrumbs, Workbench and one-click launcher; the small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer/bisect/dependency/trace-loop/recursion tests, while fake runtimes and temporary Profiles are generated at test time |
 
 The original provenance, debug-suite and one-click inputs were removed from the
 projects tree after migration review and are not package dependencies. The
@@ -19,25 +19,26 @@ the exported entry points, the migration manifest and the regression suites; it
 does not claim that a deleted source directory can be re-diffed in place.
 
 Publication evidence is recorded separately in `RELEASE-MANIFEST.json`.
-The current working tree is a new candidate after the `0.8.2` baseline. It
-has not been pushed or verified from an exact remote source commit, so its
-publication fields remain `candidate`/`null`. Recompute the package count,
-push a candidate source commit, re-read that remote SHA, and only then write
-the evidence commit after a fresh-clone gate passes. Do not reuse the old
-`0.8.2` timestamps or source hash for this candidate.
+Version `0.8.3` uses source commit
+`591ca0da959465a1207030cd7eb91372d8e90b2a`; that exact remote commit passed the
+fresh-clone publication gate before the evidence commit was written. The
+manifest records `published`, `pushPerformed=true`, the source commit, both UTC
+verification timestamps, the 102-file pack result and the deterministic 584
+component SPDX/CycloneDX SBOMs. The evidence commit and the `v0.8.3` tag carry
+this publication record; the npm registry is intentionally not used.
 
-The remote currently advertises `v0.8.2`, but that historical release is not a
-clean evidence baseline: `main` records published source commit
+The historical `v0.8.2` release was not a clean evidence baseline: at that
+time, the `main` evidence record named source commit
 `b234e79dfe7b349568f7f3e3c63504979f0e74e0` while the `v0.8.2` tag/source
-archive still contains candidate/null publication fields and its release body
-has malformed literal newlines/control characters. Treat `0.8.2` as an
-inconsistent historical snapshot, not as proof for this candidate. The older
-local publication baseline was `0.8.1` at
+archive still contained candidate/null publication fields and its release body
+had malformed literal newlines/control characters. Treat `0.8.2` as an
+inconsistent historical snapshot, not as proof for v0.8.3. The older local
+publication baseline was `0.8.1` at
 `f74e06d8ce82d5c9d7b091e9ab000248e166f368`; future functional changes must
 create a new candidate source commit and repeat the same fresh-clone and
 publication gates.
 
-## Current local evidence layers (0.8.3 candidate)
+## Published 0.8.3 evidence layers
 
 - Source and offline fixture checks cover implementation contracts and privacy
   boundaries. Fake/loopback supervisor checks cover bounded launch, attributed
@@ -55,6 +56,8 @@ publication gates.
   `standard` and `minimal`. Real business Session history and model requests
   remain unverified; do not attribute that runtime limitation to this plugin.
 
-No current numeric `packageFileCount` is asserted here. The count must be
-regenerated from the final candidate with the real pack command before any
-publication evidence is written.
+The exact source commit produced 102 npm pack entries in both the dry-run
+publication check and the real prepack/pack extraction smoke. The unpacked
+tarball contained the seven expected `lib/` modules, both SBOM files and no
+forbidden directories; package-only Standalone and an offline consumer import
+also passed.

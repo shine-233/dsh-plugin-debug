@@ -1,6 +1,6 @@
 # 更新记录
 
-## 0.8.3（candidate，尚未发布）
+## 0.8.3（2026-08-17，GitHub source release）
 
 - 增加离线 `plugin_check` 仓库健康检查，支持 bundle、tool-bundle、registry、skill 和 collection 形态，并限制文件/字节预算。
 - 增加只读 `plugin_hotswap_check` capability probe：分层报告 Host 合同和插件风险，但不调用 `_dispose`、`refresh`、`update` 或任何缓存清理。
@@ -21,4 +21,5 @@
 - 上一个 GitHub source release 的历史基线；`main`、tag/source archive 和 release
   body 的证据需要彼此复核，不能把它当成当前候选的发布证明。
 - 其历史发布记录以 `RELEASE-MANIFEST.json` / `SOURCE-SNAPSHOT.md` 的历史段落为准。
-- 当前 0.8.3 candidate 不复用 0.8.2 的 source SHA、时间戳或文件数。
+- source commit 为 `591ca0da959465a1207030cd7eb91372d8e90b2a`；精确远端 fresh clone、102 文件 pack/extract smoke、SPDX 2.3/CycloneDX 1.5 SBOM（584 components）和 runtime lock 漂移检查均已通过。
+- 当前发布路线仍是 GitHub source release，没有发布到 npm registry；provenance、签名、npm 安装和版本兼容门禁留待未来另行设计。

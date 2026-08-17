@@ -1,28 +1,36 @@
 {
   "schemaVersion": 1,
   "repositoryRole": "dsh-publication-release",
-  "status": "candidate",
+  "status": "published",
   "publication": {
     "githubOwner": "shine-233",
     "repositoryName": "dsh-plugin-debug",
     "visibility": "public",
     "copyrightHolder": "shine-233",
     "remoteConfigured": true,
-    "pushPerformed": false,
+    "pushPerformed": true,
     "remoteUrl": "https://github.com/shine-233/dsh-plugin-debug.git",
     "defaultBranch": "main",
-    "publishedCommit": null
+    "publishedCommit": "591ca0da959465a1207030cd7eb91372d8e90b2a"
   },
   "verification": {
     "sourceSnapshotComparedAt": "2026-08-17",
-    "sourceSnapshotScope": "local 0.8.3 candidate working tree",
-    "sourceCommit": null,
-    "workingTreeState": "dirty",
+    "sourceSnapshotScope": "remote 0.8.3 source commit verified from an exact fresh clone",
+    "sourceCommit": "591ca0da959465a1207030cd7eb91372d8e90b2a",
+    "workingTreeState": "clean",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
     "packageFileCount": 102,
-    "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts",
-    "publicationVerifierPassedAt": null,
-    "freshCloneVerifiedAt": null
+    "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts and npm pack --json with prepack lifecycle",
+    "publicationVerifierPassedAt": "2026-08-17T05:12:28Z",
+    "freshCloneVerifiedAt": "2026-08-17T05:12:38Z",
+    "sbom": {
+      "spdxVersion": "2.3",
+      "spdxPath": "packages/dsh-plugin-debug/sbom/dsh-plugin-debug.spdx.json",
+      "cycloneDxVersion": "1.5",
+      "cycloneDxPath": "packages/dsh-plugin-debug/sbom/dsh-plugin-debug.cdx.json",
+      "componentCount": 584,
+      "deterministic": true
+    }
   },
   "layout": {
     "packageRoot": "packages/dsh-plugin-debug",
@@ -43,7 +51,7 @@
   "removedComponents": [
     {
       "id": "dsh-plugin-store",
-      "reason": "User requested the plugin-store be disabled for this release; its source and capability are not part of this candidate."
+      "reason": "User requested the plugin-store be disabled for this release; its source and capability are not part of v0.8.3."
     }
   ],
   "excludedFromPublication": [

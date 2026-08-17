@@ -4,9 +4,9 @@
 
 GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-plugin-debug)。包内的 [`README.zh-CN.md`](packages/dsh-plugin-debug/README.zh-CN.md) 是更完整的中文操作手册；包内默认显示的 [`README.md`](packages/dsh-plugin-debug/README.md) 同样是中文，不要求读者先看英文文档。
 
-当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准：候选版本必须经过本地测试、发布边界检查和 fresh clone（全新克隆）复验后才能称为正式发布。仓库页面显示的提交或 npm 包版本不能替代这些门禁。
+当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准。`v0.8.3` 已作为 GitHub source release 发布：source commit 是 `591ca0da959465a1207030cd7eb91372d8e90b2a`，精确远端 fresh clone 通过了发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke；证据记录在随后的 evidence commit 中。当前仍没有发布到 npm registry。
 
-当前工作树候选版本是 `0.8.3`，尚未推送；功能变化、维护路线和门禁记录见 [`CHANGELOG.md`](CHANGELOG.md)、[`ROADMAP.md`](ROADMAP.md) 与 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+功能变化、维护路线和门禁记录见 [`CHANGELOG.md`](CHANGELOG.md)、[`ROADMAP.md`](ROADMAP.md) 与 [`CONTRIBUTING.md`](CONTRIBUTING.md)。不要把 GitHub source release 当成 npm 安装包，也不要把离线 fixture/注册分发证据扩大成真实有数据 Session、模型请求、第三方插件安装或跨平台兼容证明。
 
 插件 lockfile 当前使用国内镜像、固定 runtime lockfile 使用官方 npm registry；CI 的高危审计显式访问官方 advisory API。更换安装源必须重新生成 lockfile 并重跑发布门禁。
 
@@ -253,7 +253,7 @@ npm run check:integration
 - `.github/workflows/codeql.yml`：已配置 JavaScript/TypeScript 和 GitHub Actions workflow 扫描；它只报告安全问题，不改变插件运行时。
 - `.github/dependabot.yml`：已配置插件依赖、固定 runtime 依赖和 Actions 版本的定期更新建议。
 - `.github/ISSUE_TEMPLATE`、`pull_request_template.md`：已配置诊断报告、功能建议和隐私/测试检查入口。
-- GitHub 依赖漏洞告警、自动安全修复、分支保护和“合并后删除分支”属于远端仓库设置；当前 0.8.3 仍是未推送的 dirty candidate，本地文件不能证明这些设置已经在远端生效，发布后必须从 GitHub 设置页/API 复核。
+- GitHub 依赖漏洞告警、自动安全修复、分支保护和“合并后删除分支”属于远端仓库设置；v0.8.3 的公开源代码已推送，但这些开关仍应以 GitHub 设置页/API 的当前状态为准，不能只从 workflow 文件推断。
 
 这些自动化也不能替代本地测试、真实 DSH/浏览器验证或人工审阅；看到 CI 变绿时，仍要看它覆盖的是哪一层。
 

@@ -4,7 +4,8 @@
 
 本手册说明当前源码能做什么、明确不会做什么，以及如何测试、更新和发布。候选版本是否已经推送，以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准；本地测试通过不等于生产 DSH 已验证。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
-当前工作树候选版本为 `0.8.3`。它仍是本地候选版，尚未发布到 npm，也不能把本地测试结果写成“GitHub 已发布”或真实 DSH 兼容性证明。当前发布清单仍是 `status=candidate`、`pushPerformed=false`、`publishedCommit=null`，工作树也是 dirty；在提交、推送、fresh clone 验证和发布清单更新完成前，只能称为“本地 candidate”。
+`v0.8.3` 已作为 GitHub source release 发布，source commit 为
+`591ca0da959465a1207030cd7eb91372d8e90b2a`；精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前没有发布到 npm registry。真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。
 
 ## 先看结论（普通用户版）
 

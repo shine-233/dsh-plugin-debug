@@ -4,6 +4,9 @@
 
 完整的中文操作手册在 [packages/dsh-plugin-debug/README.zh-CN.md](packages/dsh-plugin-debug/README.zh-CN.md)，维护顺序见 [ROADMAP.md](ROADMAP.md)，GitHub 首页简要说明在 [README.md](README.md)。
 
+`v0.8.3` 已作为 GitHub source release 发布，source commit 为
+`591ca0da959465a1207030cd7eb91372d8e90b2a`；精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前没有发布到 npm registry；离线 fixture、Host 注册和工具分发证据也不等于真实有数据 Session、模型请求、第三方安装或跨平台兼容证明。
+
 如果你要找的是“系统学习 DSH”的仓库，请看公开的 [`shine-233/deepseek-harness-study`](https://github.com/shine-233/deepseek-harness-study)：它有 `START-HERE.md`、中文 README、00–27 分层学习入口、15 分钟任务单和固定版本索引。本仓库是可运行的调试插件和研究记录，不是教程；有数据 Session、模型请求、完整 Web/CLI E2E 和跨平台运行仍需另行验证。
 
 ## 快速开始
@@ -81,7 +84,7 @@ Pop-Location
 
 `Verify-Publication.ps1` 会实际调用 `npm pack --dry-run`，因此只有取得真实 `result=PASS` 后才能更新发布清单。`npm run check` 还会验证 `src`/`lib` 生成物和 bundle manifest 的逐项 SHA-256；CI 会拒绝构建后仍有 dirty generated files 的提交。静态目录检查、Node 测试通过或本地 commit 都不等于 GitHub 已发布；fresh clone 和远端提交哈希必须单独记录。
 
-根目录已经配置 `.github/workflows/ci.yml`、`.github/workflows/codeql.yml` 和 `.github/dependabot.yml`：分别负责 CI/发布门禁、JavaScript/TypeScript 与 Actions 扫描、以及插件/runtime/Actions 的依赖更新建议。远端分支保护、Dependabot 安全告警和自动修复属于 GitHub 设置，当前 0.8.3 尚未推送，不能从本地文件宣称这些远端开关已生效。
+根目录已经配置 `.github/workflows/ci.yml`、`.github/workflows/codeql.yml` 和 `.github/dependabot.yml`：分别负责 CI/发布门禁、JavaScript/TypeScript 与 Actions 扫描、以及插件/runtime/Actions 的依赖更新建议。远端分支保护、Dependabot 安全告警和自动修复属于 GitHub 设置，仍应以 GitHub 设置页/API 的当前状态为准，不能只从 workflow 文件推断。
 
 ## 如何更新功能
 
