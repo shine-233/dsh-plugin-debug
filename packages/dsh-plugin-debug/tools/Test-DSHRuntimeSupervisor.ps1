@@ -2,12 +2,14 @@
 param(
   [int]$TimeoutSec = 30,
   [int]$Port = 0,
-  [switch]$UnresolvedPluginFailure
+  [switch]$UnresolvedPluginFailure,
+  [switch]$NoCrashGuard
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $packageRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $packageRoot 'DSH-PowerShell.ps1')
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-provenance-runtime-supervisor-' + [Guid]::NewGuid().ToString('N'))
 $fixtureTools = Join-Path $tempRoot 'tools'
 $fixtureRuntime = Join-Path $fixtureTools 'runtime'
@@ -128,6 +130,7 @@ const bootFile = process.env.DSH_RUNTIME_SUPERVISOR_BOOT_FILE;
 const priorBoots = fs.existsSync(bootFile) ? Number(fs.readFileSync(bootFile, 'utf8')) || 0 : 0;
 fs.writeFileSync(bootFile, String(priorBoots + 1), 'utf8');
 const unresolvedPlugin = process.env.DSH_RUNTIME_SUPERVISOR_UNRESOLVED === '1';
+const noFailure = process.env.DSH_RUNTIME_SUPERVISOR_NO_FAILURE === '1';
 const failingModule = unresolvedPlugin ? 'unmapped-plugin' : 'test-dsh-plugin';
 const patchPath = argument('--patch');
 const patch = patchPath && fs.existsSync(patchPath) ? fs.readFileSync(patchPath, 'utf8') : '';
@@ -148,7 +151,7 @@ const server = http.createServer((request, response) => {
     // after that response so the test deterministically exercises the
     // keep-alive supervisor's runtime restart path instead of sometimes
     // racing startup Crash Guard on a busy Windows runner.
-    if (priorBoots === 0 && inventoryRequests === 1) {
+    if (!noFailure && priorBoots === 0 && inventoryRequests === 1) {
       failed = true;
       process.stderr.write('Error: test-dsh-plugin runtime failed after Web ready\n');
     }
@@ -166,19 +169,21 @@ process.on('SIGINT', close);
   $env:DSH_HOME = $fixtureDshHome
   $env:DSH_RUNTIME_SUPERVISOR_BOOT_FILE = $bootFile
   $env:DSH_RUNTIME_SUPERVISOR_UNRESOLVED = if ($UnresolvedPluginFailure) { '1' } else { '0' }
-  $powerShellCommand = Get-Command powershell.exe -ErrorAction SilentlyContinue
-  if ($null -eq $powerShellCommand) { throw 'Windows PowerShell executable is required for the runtime supervisor fixture' }
+  $env:DSH_RUNTIME_SUPERVISOR_NO_FAILURE = if ($NoCrashGuard) { '1' } else { '0' }
+  $powerShellPath = Get-DshPowerShellPath
   $argumentList = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $launcher,
     '-Port', [string]$fixturePort, '-HostName', '127.0.0.1', '-Profile', 'fixture',
     '-Workspace', $fixtureWorkspace, '-StateRoot', $fixtureState,
-    '-EnableCrashGuard', '-GuardThreshold', '1', '-NoBrowser', '-NoErrorDialog', '-NoInstall',
+    '-NoBrowser', '-NoErrorDialog', '-NoInstall',
     '-NoPluginInstall', '-KeepAlive', '-SupervisorIntervalSec', '1', '-StartupTimeoutSec', '10'
   )
-  $launcherProcess = Start-Process -FilePath $powerShellCommand.Source -ArgumentList $argumentList -WorkingDirectory $fixtureWorkspace -WindowStyle Hidden -PassThru
+  if (-not $NoCrashGuard) { $argumentList += @('-EnableCrashGuard', '-GuardThreshold', '1') }
+  $launcherProcess = Start-Process -FilePath $powerShellPath -ArgumentList $argumentList -WorkingDirectory $fixtureWorkspace -WindowStyle Hidden -PassThru
   $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
   $recovered = $false
   $blockedAsDegraded = $false
+  $defaultHealthy = $false
   while ([DateTime]::UtcNow -lt $deadline) {
     if (Test-Path -LiteralPath $pidRecordPath -PathType Leaf) {
       try { $record = Get-Content -LiteralPath $pidRecordPath -Raw -Encoding UTF8 | ConvertFrom-Json; $fixtureProcess = Get-Process -Id ([int]$record.pid) -ErrorAction SilentlyContinue } catch { }
@@ -194,6 +199,13 @@ process.on('SIGINT', close);
       else { @($guardState.quarantined | Where-Object { [string]$_.moduleName -eq 'test-dsh-plugin' }) }
     )
     $log = Read-FixtureText -Path $launcherLogPath
+    if ($NoCrashGuard -and
+        (Read-BootCount) -eq 1 -and
+        @($log -split "`r?`n" | Where-Object { $_ -match 'DSH Web ready' }).Count -ge 1 -and
+        $null -ne $supervisorState -and [string]$supervisorState.status -eq 'healthy') {
+      $defaultHealthy = $true
+      break
+    }
     if ($UnresolvedPluginFailure -and
         $null -ne $supervisorState -and [string]$supervisorState.status -eq 'degraded' -and
         (Read-BootCount) -eq 1) {
@@ -254,6 +266,25 @@ process.on('SIGINT', close);
     } | ConvertTo-Json -Depth 12
     exit 0
   }
+  if ($NoCrashGuard) {
+    if (-not $defaultHealthy) {
+      throw "default launcher did not remain healthy without Crash Guard within ${TimeoutSec}s; boots=$(Read-BootCount); log=$log"
+    }
+    $finalSupervisorState = $null
+    if (Test-Path -LiteralPath (Join-Path $fixtureState 'supervisor-state.json') -PathType Leaf) {
+      try { $finalSupervisorState = Get-Content -LiteralPath (Join-Path $fixtureState 'supervisor-state.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+    }
+    [ordered]@{
+      result = 'PASS'
+      scenario = 'default-launcher-inventory-without-crash-guard'
+      bootCount = Read-BootCount
+      webReady = $true
+      supervisorStatus = if ($null -eq $finalSupervisorState) { $null } else { [string]$finalSupervisorState.status }
+      supervisorReason = if ($null -eq $finalSupervisorState) { $null } else { [string]$finalSupervisorState.reason }
+      guardStateCreated = Test-Path -LiteralPath $guardStatePath -PathType Leaf
+    } | ConvertTo-Json -Depth 12
+    exit 0
+  }
   if (-not $recovered) {
     $log = Read-FixtureText -Path $launcherLogPath
     $supervisorStateText = if (Test-Path -LiteralPath (Join-Path $fixtureState 'supervisor-state.json') -PathType Leaf) {
@@ -301,6 +332,7 @@ process.on('SIGINT', close);
   if ($null -eq $previousDshHome) { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue } else { $env:DSH_HOME = $previousDshHome }
   Remove-Item Env:DSH_RUNTIME_SUPERVISOR_BOOT_FILE -ErrorAction SilentlyContinue
   Remove-Item Env:DSH_RUNTIME_SUPERVISOR_UNRESOLVED -ErrorAction SilentlyContinue
+  Remove-Item Env:DSH_RUNTIME_SUPERVISOR_NO_FAILURE -ErrorAction SilentlyContinue
   if (Test-Path -LiteralPath $tempRoot) {
     $cleanupDeadline = [DateTime]::UtcNow.AddSeconds(5)
     do {

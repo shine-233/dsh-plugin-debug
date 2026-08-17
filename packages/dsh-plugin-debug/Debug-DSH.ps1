@@ -9,6 +9,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'tools\DSH-PowerShell.ps1')
 $entry = Join-Path $PSScriptRoot 'DSH-Provenance.ps1'
 if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) {
   throw "Debug entrypoint is missing: $entry"
@@ -93,9 +94,7 @@ if ($Action -eq 'guardian-status') {
   exit $guardianExit
 }
 
-$hostCommand = Get-Command powershell.exe -ErrorAction SilentlyContinue
-if ($null -eq $hostCommand) { $hostCommand = Get-Command pwsh -ErrorAction SilentlyContinue }
-if ($null -eq $hostCommand) { throw 'PowerShell host is required for the Debug dispatcher' }
+$hostPath = Get-DshPowerShellPath
 # Native PowerShell process argument marshalling cannot reliably preserve a
 # repeated string[] parameter (for example two -InputPath values). Serialize
 # the already-parsed named arguments through an environment variable instead,
@@ -109,7 +108,7 @@ $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($c
 try {
   $env:DSH_DEBUG_CHILD_SCRIPT = [IO.Path]::GetFullPath($entry)
   $env:DSH_DEBUG_CHILD_ARGS = ConvertTo-Json -InputObject $childInvocation -Compress -Depth 20
-  & $hostCommand.Source -NoLogo -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand
+  & $hostPath -NoLogo -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand
   $childExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
 } finally {
   if ($null -eq $previousChildScript) { Remove-Item Env:DSH_DEBUG_CHILD_SCRIPT -ErrorAction SilentlyContinue } else { $env:DSH_DEBUG_CHILD_SCRIPT = $previousChildScript }

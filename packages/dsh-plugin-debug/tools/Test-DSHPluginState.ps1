@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $root 'DSH-PowerShell.ps1')
 $scriptPath = Join-Path $root 'Set-DSHPluginState.ps1'
 $modulePath = Join-Path $root 'DSH-Guard.psm1'
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-plugin-state-' + [guid]::NewGuid().ToString('N'))
@@ -19,7 +20,7 @@ function Assert-PluginState {
 
 function Invoke-PluginStateChild {
   param([string[]]$Arguments)
-  $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
+  $powershell = Get-DshPowerShellPath
   $output = & $powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath @Arguments
   return [PSCustomObject]@{ exitCode = $LASTEXITCODE; value = (($output -join "`n") | ConvertFrom-Json) }
 }

@@ -153,6 +153,10 @@ Assert-Publication ($null -ne $packageLockRoot -and [string]$packageLockRootName
 Assert-Publication ($null -ne $packageLockRoot -and [string]$packageLockRootVersion -ceq $packageVersion) 'package-lock.json root package version does not match package.json'
 Assert-Publication ([string]$bundleManifest.package -ceq $packageName) 'bundle-manifest.json package does not match package.json'
 Assert-Publication ([string]$bundleManifest.version -ceq $packageVersion) 'bundle-manifest.json version does not match package.json'
+$hotswapExport = Get-JsonPropertyValue -InputObject (Get-JsonPropertyValue -InputObject $packageManifest -Name 'exports') -Name './hotswap-check'
+Assert-Publication ($null -ne $hotswapExport -and [string](Get-JsonPropertyValue -InputObject $hotswapExport -Name 'default') -ceq './lib/hotswap-check.js') 'package.json exports does not expose ./hotswap-check through lib/hotswap-check.js'
+$hotswapFeature = Get-JsonPropertyValue -InputObject (Get-JsonPropertyValue -InputObject $bundleManifest -Name 'features') -Name 'pluginHotswapCapabilityCheck'
+Assert-Publication ($null -ne $hotswapFeature -and [bool](Get-JsonPropertyValue -InputObject $hotswapFeature -Name 'readOnly') -and -not [bool](Get-JsonPropertyValue -InputObject $hotswapFeature -Name 'actualHotSwap')) 'bundle-manifest.json does not keep plugin_hotswap_check report-only'
 $manifestComponents = @($manifest.components)
 Assert-Publication ($manifestComponents.Count -gt 0) 'release manifest has no components'
 $primaryComponent = $manifestComponents[0]
@@ -170,6 +174,14 @@ Assert-Publication (-not (@($manifest.components | ForEach-Object { $_.id }) -co
 Assert-Publication ($null -ne $manifest.removedComponents -and (@($manifest.removedComponents | ForEach-Object { $_.id }) -contains 'dsh-plugin-store')) 'release manifest lacks the recorded plugin-store removal'
 
 $requiredFunctionalFiles = @(
+  'lib/index.js',
+  'lib/client.js',
+  'lib/hotswap-check.js',
+  'lib/agent-report.js',
+  'lib/repository-check.js',
+  'lib/tool-adapter.js',
+  'lib/task-guardian.js',
+  'tools/DSH-PowerShell.ps1',
   'tools/DSH-Preflight.ps1',
   'tools/Test-DSHPreflight.ps1',
   'tools/DSH-DependencyGraph.ps1',
@@ -181,8 +193,17 @@ $requiredFunctionalFiles = @(
   'tools/DSH-TraceRecursion.ps1',
   'tools/Test-DSHTraceRecursion.ps1',
   'tools/Get-DSHGuardianStatus.ps1',
-  'tools/Test-DSHGuardianStatus.ps1'
+  'tools/Test-DSHGuardianStatus.ps1',
+  'tools/runtime/package-lock.json'
 )
+$hotswapSourcePath = Join-Path $packageRoot 'src\hotswap-check.js'
+$hotswapGeneratedPath = Join-Path $packageRoot 'lib\hotswap-check.js'
+Assert-Publication (Test-Path -LiteralPath $hotswapSourcePath -PathType Leaf) 'hotswap source module is missing'
+Assert-Publication ((Get-FileHash -LiteralPath $hotswapSourcePath -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $hotswapGeneratedPath -Algorithm SHA256).Hash) 'generated hotswap module differs from its source module'
+$agentReportSourcePath = Join-Path $packageRoot 'src\agent-report.js'
+$agentReportGeneratedPath = Join-Path $packageRoot 'lib\agent-report.js'
+Assert-Publication (Test-Path -LiteralPath $agentReportSourcePath -PathType Leaf) 'agent report source module is missing'
+Assert-Publication ((Get-FileHash -LiteralPath $agentReportSourcePath -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $agentReportGeneratedPath -Algorithm SHA256).Hash) 'generated agent report module differs from its source module'
 $packageFileSpecs = @($packageManifest.files | ForEach-Object { ([string]$_).Replace('\', '/').TrimEnd('/') })
 foreach ($requiredFile in $requiredFunctionalFiles) {
   $requiredDiskPath = Join-Path $packageRoot ($requiredFile -replace '/', '\')
@@ -245,6 +266,47 @@ Assert-Publication ([int]$manifest.verification.packageFileCount -eq $packFileCo
 $packedPaths = @($packReport.files | ForEach-Object { ([string]$_.path).Replace('\', '/') })
 foreach ($requiredFile in $requiredFunctionalFiles) {
   Assert-Publication ($packedPaths -contains $requiredFile) "npm pack does not include required functionality file: $requiredFile"
+}
+$forbiddenPackedPatterns = @(
+  '(?i)(^|/)node_modules(/|$)',
+  '(?i)(^|/)(state|logs|coverage)(/|$)',
+  '(?i)(^|/)\.env(?:$|\.)',
+  '(?i)\.(key|pem|pfx|p12|jks|keystore|sqlite|sqlite3|db)$'
+)
+foreach ($packedPath in $packedPaths) {
+  foreach ($pattern in $forbiddenPackedPatterns) {
+    Assert-Publication ($packedPath -notmatch $pattern) "npm pack includes a forbidden path ($pattern): $packedPath"
+  }
+}
+$expectedPackedLibFiles = @(
+  'lib/agent-report.js',
+  'lib/client.js',
+  'lib/hotswap-check.js',
+  'lib/index.js',
+  'lib/repository-check.js',
+  'lib/task-guardian.js',
+  'lib/tool-adapter.js'
+)
+$packedLibFiles = @($packedPaths | Where-Object { $_ -like 'lib/*' })
+$missingPackedLibFiles = @($expectedPackedLibFiles | Where-Object { $packedLibFiles -notcontains $_ })
+$unexpectedPackedLibFiles = @($packedLibFiles | Where-Object { $expectedPackedLibFiles -notcontains $_ })
+Assert-Publication ($missingPackedLibFiles.Count -eq 0) "npm pack omits expected lib artifacts: $($missingPackedLibFiles -join ', ')"
+Assert-Publication ($unexpectedPackedLibFiles.Count -eq 0) "npm pack includes unexpected lib artifacts: $($unexpectedPackedLibFiles -join ', ')"
+$exports = Get-JsonPropertyValue -InputObject $packageManifest -Name 'exports'
+foreach ($exportProperty in $exports.PSObject.Properties) {
+  $exportValue = $exportProperty.Value
+  $exportTarget = if ($exportValue -is [string]) {
+    [string]$exportValue
+  } else {
+    [string](Get-JsonPropertyValue -InputObject $exportValue -Name 'default')
+  }
+  if ([string]::IsNullOrWhiteSpace($exportTarget) -or -not $exportTarget.StartsWith('./', [StringComparison]::Ordinal)) { continue }
+  $exportPath = $exportTarget.Substring(2).Replace('\', '/')
+  Assert-Publication ($packedPaths -contains $exportPath) "npm pack does not include export target: $($exportProperty.Name) -> $exportTarget"
+}
+$bundleFileProperties = (Get-JsonPropertyValue -InputObject $bundleManifest -Name 'files').PSObject.Properties
+foreach ($bundleFileProperty in $bundleFileProperties) {
+  Assert-Publication ($packedPaths -contains ([string]$bundleFileProperty.Name).Replace('\', '/')) "npm pack does not include bundle manifest file: $($bundleFileProperty.Name)"
 }
 
 $slash = [char]92

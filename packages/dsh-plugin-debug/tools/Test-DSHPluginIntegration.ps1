@@ -8,6 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $packageRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $toolRoot = Join-Path $packageRoot 'tools'
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-plugin-debug-integration-' + [Guid]::NewGuid().ToString('N'))
 $previousDshHome = $env:DSH_HOME
 
@@ -37,7 +38,7 @@ function Invoke-JsonChild {
   $stderrPath = [IO.Path]::GetTempFileName()
   $process = $null
   try {
-    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList (@('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath) + $cli) -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden -PassThru
+    $process = Start-Process -FilePath (Get-DshPowerShellPath) -ArgumentList (@('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath) + $cli) -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden -PassThru
     if (-not $process.WaitForExit($TimeoutSec * 1000)) {
       try { $process.Kill() } catch { }
       return [PSCustomObject]@{ exitCode = 124; text = 'child PowerShell timed out'; value = $null }
@@ -63,7 +64,8 @@ try {
     'DSH-Provenance.ps1', 'Start-DSH-Combined.ps1', 'tools\Start-DSH.ps1',
     'tools\Install-DSH-Agents.ps1', 'tools\combined-agents.patch.yml',
     'tools\DSH-IncidentCorrelation.psm1', 'tools\Test-DSHIncidentCorrelation.ps1',
-    'tools\Test-DSHProvenanceIntegration.ps1'
+    'tools\Test-DSHProvenanceIntegration.ps1', 'tools\Test-DSHCompatibility.ps1',
+    'sbom\dsh-plugin-debug.spdx.json', 'sbom\dsh-plugin-debug.cdx.json'
   )
   foreach ($relative in $required) {
     Assert-PluginIntegration (Test-Path -LiteralPath (Join-Path $packageRoot $relative) -PathType Leaf) "combined package is missing $relative"
@@ -86,6 +88,10 @@ try {
   $launcherText = Get-Content -LiteralPath (Join-Path $toolRoot 'Start-DSH.ps1') -Raw -Encoding UTF8
   Assert-PluginIntegration ($launcherText -notmatch '(?i)plugin.?store' -and $launcherText -notmatch '(?i)dsh-one-click') 'combined launcher still contains removed store or old one-click coupling'
   Assert-PluginIntegration ($launcherText -match '\[switch\]\$EnableAgents' -and $launcherText -match '\$AgentsPatch') 'combined launcher does not expose the Agent overlay boundary'
+  Assert-PluginIntegration ($launcherText -match '\[System\.Net\.HttpWebRequest\]::Create\(\$Url\)' -and $launcherText -match '\$request\.Proxy = \$null') 'local DSH Web probe does not bypass the machine HTTP proxy'
+  $stopLauncherText = Get-Content -LiteralPath (Join-Path $toolRoot 'Stop-DSH.ps1') -Raw -Encoding UTF8
+  Assert-PluginIntegration ($stopLauncherText -match '\$rawPidRecord\s*=\s*Get-Content' -and $stopLauncherText -match '\[DateTimeOffset\]::Parse' -and $stopLauncherText -match 'RoundtripKind' -and $stopLauncherText -match 'Get-RawPidRecordTimestamp') 'stop launcher does not preserve UTC PID identity timestamps'
+  Assert-PluginIntegration ($launcherText -match "Add-Member -NotePropertyName '__rawJson'" -and $launcherText -match '\[DateTimeOffset\]::Parse' -and $launcherText -match 'Get-RawPidRecordTimestamp') 'combined launcher does not preserve UTC PID identity timestamps when reusing a child'
   $debugLauncherText = Get-Content -LiteralPath (Join-Path $packageRoot 'Start-DSH-Debug.ps1') -Raw -Encoding UTF8
   $combinedLauncherText = Get-Content -LiteralPath (Join-Path $packageRoot 'Start-DSH-Combined.ps1') -Raw -Encoding UTF8
   Assert-PluginIntegration ($debugLauncherText -match "'-Port', '3081'" -and $combinedLauncherText -match "'-Port', '3081'") 'debug launchers do not keep the documented default diagnostics port'
@@ -94,7 +100,7 @@ try {
   # proves the package installs as itself without a registry or real Profile.
   $stagedRoot = Join-Path $tempRoot 'package'
   New-Item -ItemType Directory -Path $stagedRoot -Force | Out-Null
-  foreach ($relative in @('package.json', 'bundle-manifest.json', 'cordis.patch.yml', 'lib', 'tools', 'DSH-Provenance.ps1', 'Start-DSH-Debug.ps1', 'Start-DSH-Combined.ps1')) {
+  foreach ($relative in @('package.json', 'bundle-manifest.json', 'cordis.patch.yml', 'lib', 'sbom', 'tools', 'DSH-Provenance.ps1', 'Start-DSH-Debug.ps1', 'Start-DSH-Combined.ps1')) {
     Copy-Item -LiteralPath (Join-Path $packageRoot $relative) -Destination (Join-Path $stagedRoot $relative) -Recurse -Force
   }
   $stagedRuntimeModules = Join-Path $stagedRoot 'tools\runtime\node_modules'

@@ -6,22 +6,35 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 
 当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准：候选版本必须经过本地测试、发布边界检查和 fresh clone（全新克隆）复验后才能称为正式发布。仓库页面显示的提交或 npm 包版本不能替代这些门禁。
 
+当前工作树候选版本是 `0.8.3`，尚未推送；功能变化、维护路线和门禁记录见 [`CHANGELOG.md`](CHANGELOG.md)、[`ROADMAP.md`](ROADMAP.md) 与 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+
+插件 lockfile 当前使用国内镜像、固定 runtime lockfile 使用官方 npm registry；CI 的高危审计显式访问官方 advisory API。更换安装源必须重新生成 lockfile 并重跑发布门禁。
+
 插件商店 `dsh-plugin-store` 没有进入这个包，也不再是运行时依赖。旧的 provenance、debug-suite 和 one-click 源码已经完成迁移并从项目目录移除；当前公开源代码的唯一事实来源是这个单包。具体名称和迁移记录见 [`MIGRATION-MANIFEST.md`](MIGRATION-MANIFEST.md)，同类项目比较和拒绝吸收的能力见 [`RESEARCH-ECOSYSTEM.md`](RESEARCH-ECOSYSTEM.md)。
+
+如果你要找的是“系统学习 DSH”的仓库，请看公开的 [`shine-233/deepseek-harness-study`](https://github.com/shine-233/deepseek-harness-study)：它有 `START-HERE.md`、中文 README、00–27 分层学习入口、15 分钟任务单和固定版本索引。本仓库是可运行的调试插件和研究记录，不是教程；有数据 Session、模型请求、完整 Web/CLI E2E 和跨平台运行仍需另行验证。
 
 ## 先看这里：安装前提和文档入口
 
-本项目面向 Windows PowerShell，建议使用 Node.js 22 或更高版本。它可以在没有真实 DSH 服务的情况下运行离线测试；启动真实 Web 页面、浏览器契约测试或 Host API 测试时，仍然需要相应的本机 DSH、Python、npx 或 Playwright 环境。
+本项目面向 Windows，建议使用 PowerShell 7（命令名 `pwsh`）和 Node.js 22 或更高版本；PowerShell 5.1 只作为兼容性检查宿主，CI 的主流程使用 PowerShell 7。它可以在没有真实 DSH 服务的情况下运行离线测试；启动真实 Web 页面、浏览器契约测试或 Host API 测试时，仍然需要相应的本机 DSH、Python、npx 或 Playwright 环境。
+
+源码质量和供应链门禁包括 `npm run lint`、`npm run format:check`、`npm run typecheck`（当前纯 JavaScript/PowerShell 项目会诚实报告 `SKIPPED`）、`npm run coverage`、`npm run check:runtime-lock` 和 `npm run sbom:check`。确定性 SPDX/CycloneDX 清单位于 [`packages/dsh-plugin-debug/sbom/`](packages/dsh-plugin-debug/sbom/)。安装 pinned runtime 后可再运行 `npm run check:runtime-lock:installed --prefix .\packages\dsh-plugin-debug`，核对完整已安装树。
+
+真实 DSH Host/Web 只在明确手动确认时检查：先启动真实 DSH，再从包目录执行 `pwsh -File .\tools\Test-DSHCompatibility.ps1 -ConfirmRealDsh -BaseUrl http://127.0.0.1:3080`。没有确认、服务不可用、Host API 不可读或插件未出现在真实 inventory 中都不能记为 `PASS`；该脚本不使用 fake fixture、不调用模型，也不启动或停止已有实例。GitHub 手动入口见 [real compatibility workflow](.github/workflows/compatibility.yml)。
+
+也可以在先安装 `tools/runtime` pinned 依赖后传 `-StartPinnedRuntime -RuntimeRoot .\tools\runtime`，让它在临时 `DSH_HOME`、Profile 和端口中启动真实 runtime；脚本结束时只清理自己启动的进程和临时目录。默认 workflow 不自动启动。
 
 ## 不懂代码也能启动：只做这三步
 
 1. 安装 Node.js 22 或更高版本，然后在 PowerShell 进入仓库根目录。
-2. 复制下面三行命令；第一次会安装测试依赖，启动时只安装本地 Debug 包：
+2. 复制下面两行命令；想保证启动过程不自动联网，请使用 `-NoInstall`，并提前准备好 DSH runtime：
 
    ```powershell
    Set-Location .\packages\dsh-plugin-debug
-   npm ci --ignore-scripts
-   .\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -NoBrowser
+   .\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -NoInstall -NoBrowser
    ```
+
+   如果本机没有 runtime，这条命令会直接提示缺少环境，不会偷偷下载。只有明确同意联网时，才在包目录单独执行 `npm ci --prefix .\tools\runtime --omit=dev --ignore-scripts --no-audit --no-fund`。
 
 3. 看到 JSON 或窗口后，再打开 `http://127.0.0.1:3081`。如果你只是想检查文件，不想启动 DSH，运行：
 
@@ -34,12 +47,26 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 
 ```powershell
 .\tools\Stop-DSH.ps1 -Profile debug -Port 3081
-.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -ForcePluginInstall -NoBrowser
+.\Start-DSH-Debug.ps1 -Profile debug -Port 3081 -ForcePluginInstall -NoInstall -NoBrowser
 ```
 
 看到 `PASS` 表示这项检查通过；`UNAVAILABLE` 表示本机没有对应的 DSH/浏览器/Host 服务；`PARTIAL` 或 `WARN` 表示只有部分证据；`FAIL` 才表示检查本身失败。任何一个报告生成成功，都不等于真实生产 DSH 已经恢复。
 
+## 当前证据到底证明了什么
+
+截至 2026-08-17，证据分成四层，不能把它们合并成一个“全部可用”的结论：
+
+| 证据层 | 当前结论 |
+| --- | --- |
+| 源码、Node/PowerShell 回归和脱敏 fixture | 证明单包实现、边界和失败即停止契约；不是生产 DSH 证明。 |
+| fake/loopback 监督器与启动回归 | 证明默认启动、可归因故障隔离和不可归因故障 fail-closed 的本地流程。 |
+| 隔离的真实 `@deepseek-ai/dsh@0.1.0-rc.6` | 真实 Web/Host 能启动，inventory 能看到 `dsh-plugin-debug` active，`plugin_check`、`plugin_hotswap_check`、`dsh_agent_report` 能通过 ToolRuntime 注册和 dispatch。 |
+| 尚未证明 | rc.6 有数据的历史 Session、真实模型请求、完整报告体验、第三方安装和跨平台兼容。 |
+
+这次真实隔离验证中，`dsh_agent_report` 只读到 0 个 Session/事件，因此是“调用链通过”，不是“真实业务数据报告已通过”。`session.create` 被 rc.6 的外部 `agent-preset-invalid` 阻塞：`standard`/`minimal` 都遇到重复注册 `deployment:persona`。这是运行时限制，不是 Debug 插件执行了错误操作；在上游/运行时修复前，文档和 issue 都应保持这个边界。
+
 - 想先启动：看下面的“安装与启动”。
+- 想按傻瓜式步骤安装、启动、导出诊断和更新：阅读 [`packages/dsh-plugin-debug/DEBUG-QUICKSTART.md`](packages/dsh-plugin-debug/DEBUG-QUICKSTART.md)。
 - 想逐项了解动作、输入和安全边界：阅读 [`packages/dsh-plugin-debug/README.zh-CN.md`](packages/dsh-plugin-debug/README.zh-CN.md)。
 - 想确认源码是否可公开：运行 [`scripts/Verify-Publication.ps1`](scripts/Verify-Publication.ps1)，再看 [`PUBLICATION-CHECKLIST.md`](PUBLICATION-CHECKLIST.md)。
 - 想增加功能或发版：按“如何更新功能”执行；不要直接编辑构建产物，也不要把测试运行时目录上传。
@@ -59,6 +86,9 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 | 插件二分定位 | 只读生成安全第三方候选顺序和人工复核步骤 | `tools/DSH-Bisect.ps1`、`-Action plugin-bisect-plan` |
 | 诊断报告对比 | 比较两次脱敏事故/诊断报告的状态、计数和 Issue code；敏感字段自动转人工复核 | `tools/DSH-DiagnosticsDiff.ps1`、`-Action diagnostics-diff` |
 | 插件静态预检 | 离线扫描静态 `inject` 和 `ctx.*` 服务依赖，不执行插件代码 | `tools/DSH-Preflight.ps1`、`-Action plugin-preflight` |
+| 插件仓库健康检查 | 离线检查清单协议、patch 形态、构建陷阱和 hub 收录线索；限制文件/字节预算，不安装或执行候选 | `plugin_check`、`lib/repository-check.js` |
+| 插件热切换能力探测 | 只读检查 Host 生命周期合同、inventory、核心保护和动态表达式风险；不执行切换 | `plugin_hotswap_check`、`lib/hotswap-check.js` |
+| Agent/Session 报告 | 借鉴 `dsh-whale-report` 的确定性报告形状，从 Host 可提供的持久化或当前内存会话生成 Token、工具调用、失败、风险和内置估算费用的脱敏报告 | `dsh_agent_report`、`lib/agent-report.js`；费用是内置估算而非账单，不调用模型、不执行命令、不读取凭据、不写回 Session |
 | 依赖图检查 | 离线读取 Profile/package metadata，识别缺失依赖、循环和未引用本地包 | `tools/DSH-DependencyGraph.ps1`、`-Action plugin-dependency-graph` |
 | Trace 循环分析 | 在有限窗口内识别重复工具调用/事件指纹，输出脱敏的事后复核线索 | `tools/DSH-TraceLoop.ps1`、`-Action trace-loop` |
 | Trace 递归分析 | 按有限生命周期深度识别 Agent/Workflow 嵌套过深、未闭合和错配事件 | `tools/DSH-TraceRecursion.ps1`、`-Action trace-recursion` |
@@ -67,14 +97,14 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 
 ## 安装与启动
 
-在 Windows PowerShell 中从包目录运行：
+在 PowerShell 7（`pwsh`）中从包目录运行；PowerShell 5.1 仅用于兼容性检查：
 
 ```powershell
 Set-Location .\packages\dsh-plugin-debug
-.\Start-DSH-Debug.ps1 -NoBrowser
+.\Start-DSH-Debug.ps1 -NoInstall -NoBrowser
 ```
 
-默认使用 `debug` Profile 和 `127.0.0.1:3081`。启动器只安装本地 Debug bundle，不搜索、安装或调用插件商店。也可以使用 DSH CLI 离线安装：
+默认使用 `debug` Profile 和 `127.0.0.1:3081`。`-NoInstall` 要求本机已经有 DSH runtime；缺少 runtime 时会直接提示，不会偷偷下载。省略它时，启动器可能按固定 lockfile 通过 npm 准备 runtime。启动器只安装本地 Debug bundle，不搜索、安装或调用插件商店。也可以使用 DSH CLI 离线安装：
 
 ```powershell
 dsh plugin --profile debug add . --offline
@@ -133,11 +163,14 @@ Invoke-RestMethod http://127.0.0.1:3081/api/dsh-plugin-debug/guardian/status
 
 ## 安全边界
 
-- 默认离线；不上传日志，不连接 Langfuse/OpenTelemetry，也不创建插件市场（marketplace）。
+- 诊断、插件静态检查和本地 Debug bundle 安装默认不访问插件商店、不上传日志，也不连接 Langfuse/OpenTelemetry；如果启动器发现本机没有 DSH runtime 且未传 `-NoInstall`，会按固定 lockfile 执行一次 `npm ci`，因此要求绝对不联网时必须使用 `-NoInstall`。
 - 默认只收集元数据（metadata-only）；不保存 Tool 参数、Tool 结果正文、会话正文、Cookie、Authorization、API key、`.env` 内容或完整工作目录。
 - Guardian 本身是 observer-only，但整个包不是无副作用工具：Crash Guard/Runtime Supervisor 可能停止已确认的 DSH 子进程、写入可逆 Guard state/patch，并最多执行一次受控重启；底层 `Start-DSH.ps1` 默认关闭该处置能力，公开 Debug 启动器才会显式开启。
 - Host API 默认只接受 loopback；远端 Host 必须通过 `DSH_DEBUG_API_ALLOWED_HOSTS` 明确列入主机白名单，禁止把不可信 `BaseUrl` 直接用于 session/history 查询。
 - Recovery 对敏感文件只记录“存在但排除”，不会复制或恢复 `.env` 内容；公开 trace fixture 只保留调用键名、权限枚举、错误代码和事件顺序等元数据。
+- `plugin_hotswap_check` 只有能力探测：缺少权威、稳定、带版本的生命周期合同就返回 `UNAVAILABLE`，绝不调用 `_dispose`、`refresh`、`update` 或缓存清理。
+- `dsh_agent_report` 读取 Session 时受有界数量/事件上限约束；它只输出脱敏汇总和风险类型，不输出原始命令、Tool 错误正文、密钥或完整 Session ID。报告中的费用是本地内置估算，不是服务商账单。
+- 风险识别只会把 Session 里已有的命令文本（包括 `rm -rf` 这类线索）分类为风险，不会把它交给 shell 执行；上游报告项目的构建清理命令也没有被吸收到本候选。
 - 受限修复（Repair）只允许经过允许列表（allowlist）的本地 Guard 状态；递归危险字段、核心包、Profile/workspace 路径和未观察候选都会被拒绝。
 - 回滚前校验修改前哈希（pre-image hash），回滚时校验修改后哈希（post-image hash）；用户改过文件就返回 `ROLLBACK_CONFLICT`，不覆盖改动。
 - `UNAVAILABLE`（不可用）、`PARTIAL`（部分结果）、`WARN`（警告）和 `FAIL`（失败）都是有意保留的证据状态；生成报告不等于 DSH 已恢复，发现失败插件也不等于已经证明因果。
@@ -209,20 +242,18 @@ npm run check:integration
 3. 如果功能改变了公开行为，先按语义化版本（SemVer）修改 `package.json`，同步 `package-lock.json`；不要在构建完成后才改版本。
 4. 运行 `npm test`、`npm run check`、`npm run check:standalone`、`npm run check:integration`，再运行相关 PowerShell 测试和根目录 `scripts/Verify-Publication.ps1`。
 5. 运行 `npm pack --dry-run --json --ignore-scripts`，把实际文件数同步到 `RELEASE-MANIFEST.json` 和 `SOURCE-SNAPSHOT.md`。
-6. 先检查 `git diff --check`、敏感文件和待提交文件；完成一次本地可审阅提交后，从 fresh clone（全新克隆）重跑测试，最后才 push 到 `main`。
-7. 发布后再读取远端提交哈希，并把 `RELEASE-MANIFEST.json` 的发布字段和 `SOURCE-SNAPSHOT.md` 更新为事实；不能用旧提交哈希冒充新版本。
+6. 先检查 `git diff --check`、敏感文件和待提交文件；提交 candidate source commit 后先推送到目标 remote，回读远端 `sourceCommit`，再从这个精确 SHA 创建 fresh clone 重跑测试。
+7. 只有 fresh clone 和发布验证都通过后，才用单独的 evidence commit 更新 `RELEASE-MANIFEST.json` 与 `SOURCE-SNAPSHOT.md` 的发布字段，然后再推送 evidence commit；不能用本地未推送提交或旧提交哈希冒充新版本。
 
 不要把 `node_modules`、`.dsh`、`.codex`、Profile state、logs、coverage、credentials、临时 fake runtime 或测试输出提交进仓库。功能继续扩展时，必须保持单包边界、默认离线、仅元数据和失败即停止（fail-closed）的安全契约。
 
-## GitHub 自动维护现在已经打开什么
+## GitHub 自动维护已经配置什么
 
-- `DSH Debug Plugin CI`：提交、Pull Request、手动触发和每周定时运行；包含 Node、Windows PowerShell、发布边界和 fresh clone 门禁。
-- `CodeQL`：扫描 JavaScript/TypeScript 和 GitHub Actions workflow；它只报告安全问题，不会改变插件运行时。
-- `Dependabot`：每月检查插件依赖、固定 runtime 依赖和 Actions 版本，生成可审阅的更新 PR。
-- GitHub 依赖漏洞告警和自动安全修复：已在仓库设置中打开。
-- `main` 分支保护：普通 PR 必须通过 Node、Windows 调试套件、fresh-clone 发布门禁和两项 CodeQL 检查；单人维护的管理员紧急直推仍保留。
-- 合并 PR 后自动删除临时分支，避免 Dependabot 和功能分支长期堆积。
-- Issue/PR 模板：诊断报告、功能建议和隐私/测试检查都放在仓库根目录的 `.github/` 下，GitHub 页面会真正读取这些文件。
+- `.github/workflows/ci.yml`：已配置提交、Pull Request、手动触发和每周定时运行；包含 Node 22/24、PowerShell 7 主流程（另有 5.1 发布脚本兼容检查）、发布边界、pinned runtime audit、fresh clone、实际 prepack/tarball 和 consumer exports 门禁。
+- `.github/workflows/codeql.yml`：已配置 JavaScript/TypeScript 和 GitHub Actions workflow 扫描；它只报告安全问题，不改变插件运行时。
+- `.github/dependabot.yml`：已配置插件依赖、固定 runtime 依赖和 Actions 版本的定期更新建议。
+- `.github/ISSUE_TEMPLATE`、`pull_request_template.md`：已配置诊断报告、功能建议和隐私/测试检查入口。
+- GitHub 依赖漏洞告警、自动安全修复、分支保护和“合并后删除分支”属于远端仓库设置；当前 0.8.3 仍是未推送的 dirty candidate，本地文件不能证明这些设置已经在远端生效，发布后必须从 GitHub 设置页/API 复核。
 
 这些自动化也不能替代本地测试、真实 DSH/浏览器验证或人工审阅；看到 CI 变绿时，仍要看它覆盖的是哪一层。
 

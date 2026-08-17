@@ -22,6 +22,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $root 'DSH-PowerShell.ps1')
 Import-Module (Join-Path $root 'DSH-Repair.psm1') -Force
 Import-Module (Join-Path $root 'DSH-State.psm1') -Force
 
@@ -46,7 +47,7 @@ function Invoke-ChildJsonScript {
     [Parameter(Mandatory = $true)][string]$ScriptPath,
     [Parameter(Mandatory = $true)][hashtable]$Arguments
   )
-  $output = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1
+  $output = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1
   $exitCode = $LASTEXITCODE
   $text = ($output | Out-String).Trim()
   if ($exitCode -ne 0) { throw "diagnostics command failed (exit $exitCode): $text" }
@@ -112,7 +113,7 @@ function Invoke-RepairRestart {
   $previousDshHome = $env:DSH_HOME
   try {
     $env:DSH_HOME = $ResolvedDshHome
-    $output = & powershell.exe @arguments 2>&1
+    $output = & (Get-DshPowerShellPath) @arguments 2>&1
     $exitCode = $LASTEXITCODE
   } finally {
     if ($null -eq $previousDshHome) { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue } else { $env:DSH_HOME = $previousDshHome }

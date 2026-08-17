@@ -8,6 +8,8 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const POINTER_OBSERVATION_SCHEMA_VERSION = 2
 mkdirSync(resolve(root, 'lib'), { recursive: true })
 cpSync(resolve(root, 'src', 'index.js'), resolve(root, 'lib', 'index.js'))
+  cpSync(resolve(root, 'src', 'hotswap-check.js'), resolve(root, 'lib', 'hotswap-check.js'))
+  cpSync(resolve(root, 'src', 'agent-report.js'), resolve(root, 'lib', 'agent-report.js'))
 cpSync(resolve(root, 'src', 'repository-check.js'), resolve(root, 'lib', 'repository-check.js'))
 cpSync(resolve(root, 'src', 'tool-adapter.js'), resolve(root, 'lib', 'tool-adapter.js'))
 cpSync(resolve(root, 'src', 'task-guardian.js'), resolve(root, 'lib', 'task-guardian.js'))
@@ -17,6 +19,10 @@ const bundleFiles = [
   'package.json',
   'cordis.patch.yml',
   'lib/index.js',
+  'lib/hotswap-check.js',
+  'lib/agent-report.js',
+  'lib/repository-check.js',
+  'lib/tool-adapter.js',
   'lib/task-guardian.js',
   'lib/client.js',
 ]
@@ -55,6 +61,51 @@ const bundleManifest = {
       standaloneTool: true,
       metadataOnly: true,
       dynamicAccessManualReview: true,
+    },
+    pluginRepositoryHealthCheck: {
+      embedded: true,
+      tool: 'plugin_check',
+      actions: ['check', 'scan', 'schema'],
+      reportSchemaVersion: 2,
+      repositoryForms: ['registry', 'skill', 'collection', 'bundle', 'tool-bundle'],
+      offlineOnly: true,
+      executesPluginCode: false,
+      manualInstallOnlyWarning: true,
+      missingPrepackWarning: true,
+      scannedSourceExtensions: ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.tsx'],
+    },
+    pluginHotswapCapabilityCheck: {
+      embedded: true,
+      tool: 'plugin_hotswap_check',
+      reportSchemaVersion: 1,
+      readOnly: true,
+      actualHotSwap: false,
+      requiresAuthoritativeLifecycleContract: true,
+      protectsCoreAndDynamicEntries: true,
+      observesOfficialHmrWithoutInvokingIt: true,
+      invokesInternalDisposeOrRefresh: false,
+      rewritesProfile: false,
+      installsDependencies: false,
+    },
+    deterministicAgentReport: {
+      embedded: true,
+      tool: 'dsh_agent_report',
+      reportSchemaVersion: 1,
+      readOnly: true,
+      localDeterministicGeneration: true,
+      generationTokens: 0,
+      credentialReads: false,
+      networkPricingFetch: false,
+      rawCommandsInReport: false,
+      rawSecretValuesInReport: false,
+      dangerousTextDetectionOnly: true,
+      executionEvidence: false,
+      rawToolErrorsInReport: false,
+      persistedHistoryWhenSessionQueryAvailable: true,
+      liveSessionFallback: true,
+      boundedSessions: 500,
+      boundedEvents: 1000000,
+      costIsEstimate: true,
     },
     readOnlyPluginDependencyGraph: {
       standaloneTool: true,

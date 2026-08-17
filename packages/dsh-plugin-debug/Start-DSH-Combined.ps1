@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param()
 
+. (Join-Path $PSScriptRoot 'tools\DSH-PowerShell.ps1')
+
 # Single-package entry point for the optional Kimi/Codex overlay. The overlay
 # is loaded by the same combined debug launcher; it is an optional provider
 # overlay, not another runtime plugin.
@@ -63,5 +65,5 @@ if ($enableAgents) {
 } elseif (-not $explicitAgents -and -not $explicitAgentsPatch) {
   Write-Warning "未检测到 Profile '$profile' 的 Kimi/Codex Agent Provider；本次只启动 dsh-plugin-debug 核心。需要 Agent 时先运行 tools\\Install-DSH-Agents.ps1，或显式传 -EnableAgents。"
 }
-& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $target @defaults @forwarded
+& (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $target @defaults @forwarded
 exit $LASTEXITCODE

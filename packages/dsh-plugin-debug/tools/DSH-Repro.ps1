@@ -80,7 +80,13 @@ function Convert-ReproScalar {
       $Value -is [double] -or $Value -is [single]) {
     return $Value
   }
-  $text = ([string]$Value).Trim()
+  $text = if ($Value -is [DateTimeOffset]) {
+    $Value.ToUniversalTime().ToString('o')
+  } elseif ($Value -is [DateTime]) {
+    ([DateTimeOffset]$Value.ToUniversalTime()).ToString('o')
+  } else {
+    ([string]$Value).Trim()
+  }
   if (-not (Test-ReproSafeIdentifier -Value $text)) { return $null }
   if ($Key -match '(?i)^result$' -and $text.ToUpperInvariant() -notin @('PASS','PARTIAL','FAIL','WARN','COMPLETE','UNAVAILABLE','INCONCLUSIVE','NOT_REQUESTED')) { return $null }
   if ($Key -match '(?i)^(sandbox|approval|permission)$' -and $text.ToLowerInvariant() -notin @('danger-full-access','workspace-write','read-only','readonly','ask','allow','deny','manual','none','unknown','not-observed','required')) { return $null }
@@ -242,8 +248,13 @@ try {
   }
 
   $sourceKinds = @($sources | ForEach-Object { [string]$_.sourceKind } | Sort-Object -Unique)
-  $generatedAt = Get-ReproGeneratedAt -Values @($values)
-  $sourceIncidentId = Get-ReproSourceIncidentId -Values @($values)
+  # Generic List instances are not guaranteed to enumerate when passed as a
+  # single PowerShell argument. Materialize the same ordered value array for
+  # both derived fields so an input that already contains generatedAt/id does
+  # not fall through to a fresh clock value on every export.
+  $valueArray = $values.ToArray()
+  $generatedAt = Get-ReproGeneratedAt -Values $valueArray
+  $sourceIncidentId = Get-ReproSourceIncidentId -Values $valueArray
   if (-not (Test-Path -LiteralPath $resolvedOutput)) { [IO.Directory]::CreateDirectory($resolvedOutput) | Out-Null }
   foreach ($name in @('repro.json','manifest.json','README.txt')) {
     $artifactPath = Join-Path $resolvedOutput $name

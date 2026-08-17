@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { registerPluginCheckTool } from '../src/tool-adapter.js'
+import { registerAgentReportTool, registerPluginCheckTool, registerPluginHotswapCheckTool } from '../src/tool-adapter.js'
 
 test('registerPluginCheckTool registers one plugin_check definition through ctx.tools', () => {
   const registrations = []
@@ -46,4 +46,40 @@ test('plugin_check executes the selected read-only checker action', async () => 
     options: { strict: true },
   })
   assert.deepEqual(JSON.parse(await registrations[0].execute({ action: 'schema' })), [{ code: 'fixture' }])
+})
+
+test('registerPluginHotswapCheckTool exposes a report-only target selector', async () => {
+  const registrations = []
+  const ctx = { tools: { register(definition) { registrations.push(definition); return () => {} } } }
+  const defineTool = options => options
+  const probeCalls = []
+
+  registerPluginHotswapCheckTool(ctx, {
+    defineTool,
+    probe: async input => {
+      probeCalls.push(input)
+      return { verdict: 'UNAVAILABLE', execution: 'NOT_ATTEMPTED', targetMutated: false }
+    },
+  })
+
+  assert.equal(registrations.length, 1)
+  assert.equal(registrations[0].name, 'plugin_hotswap_check')
+  assert.equal(registrations[0].parameters.pluginId.type, 'string')
+  const value = JSON.parse(await registrations[0].execute({ pluginId: 'dsh-example' }))
+  assert.equal(value.execution, 'NOT_ATTEMPTED')
+  assert.deepEqual(probeCalls, [{ pluginId: 'dsh-example' }])
+  assert.equal(registrations[0].parameters.action, undefined)
+})
+
+test('dsh_agent_report renders a deterministic report from the currently available source', async () => {
+  const registrations = []
+  const ctx = { tools: { register(definition) { registrations.push(definition); return () => {} } } }
+  registerAgentReportTool(ctx, {
+    defineTool: options => options,
+    getSource: () => ({ kind: 'live-sessions' }),
+    generate: async input => ({ report: `status=${input.source.kind}; preset=${input.preset}` }),
+  })
+  assert.equal(registrations.length, 1)
+  assert.equal(registrations[0].name, 'dsh_agent_report')
+  assert.deepEqual(await registrations[0].execute({ preset: '24h' }), 'status=live-sessions; preset=24h')
 })

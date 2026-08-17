@@ -216,11 +216,34 @@ function Read-DshPidRecord {
     if ([string]::IsNullOrWhiteSpace($raw)) { return $null }
     $record = $raw | ConvertFrom-Json -ErrorAction Stop
     if ($null -eq $record.pid) { throw 'PID 记录缺少 pid' }
+    $record | Add-Member -NotePropertyName '__rawJson' -NotePropertyValue $raw -Force
     return $record
   } catch {
     Write-LauncherLog "无法读取启动器 PID 记录，按未记录进程处理：$PidFile；$($_.Exception.Message)"
     return $null
   }
+}
+
+function Get-RawPidRecordTimestamp {
+  param(
+    [Parameter(Mandatory = $true)][string]$RawJson
+  )
+
+  # Windows PowerShell eagerly converts ISO JSON values to DateTime. Read the
+  # two identity fields from the original text so their UTC offset is retained.
+  foreach ($propertyName in @('processStartTimeUtc', 'startedAt')) {
+    $pattern = '"' + [Regex]::Escape($propertyName) + '"\s*:\s*"(?<timestamp>[^"\\]*(?:\\.[^"\\]*)*)"'
+    $match = [Regex]::Match(
+      $RawJson,
+      $pattern,
+      [Text.RegularExpressions.RegexOptions]::CultureInvariant
+    )
+    if ($match.Success) {
+      $value = $match.Groups['timestamp'].Value
+      if (-not [string]::IsNullOrWhiteSpace($value)) { return $value }
+    }
+  }
+  return $null
 }
 
 function Get-RecordedDshProcess {
@@ -249,10 +272,16 @@ function Get-RecordedDshProcess {
   # New records carry the actual process start time so a recycled Windows PID
   # cannot be mistaken for the DSH child. Legacy records remain readable and
   # are still accepted when their profile/host/port and PID match.
-  $recordedStart = [string]$record.processStartTimeUtc
+  $rawRecordProperty = $record.PSObject.Properties['__rawJson']
+  $rawRecord = if ($null -eq $rawRecordProperty) { '' } else { [string]$rawRecordProperty.Value }
+  $recordedStart = Get-RawPidRecordTimestamp -RawJson $rawRecord
   if (-not [string]::IsNullOrWhiteSpace($recordedStart)) {
     try {
-      $expectedStart = [DateTime]::Parse($recordedStart).ToUniversalTime()
+      $expectedStart = [DateTimeOffset]::Parse(
+        $recordedStart,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [Globalization.DateTimeStyles]::RoundtripKind
+      ).UtcDateTime
       $actualStart = $candidate.StartTime.ToUniversalTime()
       if ([Math]::Abs(($actualStart - $expectedStart).TotalSeconds) -gt 2) {
         Write-LauncherLog "忽略过期的启动器 PID 记录：pid=$recordPid profile=$Profile port=$Port"
@@ -334,17 +363,33 @@ $GuardAvailable = $false
 $GuardState = $null
 $GuardManifest = $null
 $script:LastGuardReadyResult = $null
+$script:GuardModuleLoaded = $false
 $process = $null
 
-function Initialize-DshCrashGuard {
-  if (-not $EnableCrashGuard) { return }
+function Ensure-DshGuardModule {
+  if ($script:GuardModuleLoaded) { return $true }
   if (-not (Test-Path -LiteralPath $GuardModulePath -PathType Leaf)) {
+    return $false
+  }
+  try {
+    Import-Module $GuardModulePath -Force -ErrorAction Stop
+    $script:GuardModuleLoaded = $true
+    return $true
+  } catch {
+    Write-LauncherLog "DSH inventory/guard module could not be loaded: $($_.Exception.Message)"
+    return $false
+  }
+}
+
+function Initialize-DshCrashGuard {
+  $moduleLoaded = Ensure-DshGuardModule
+  if (-not $EnableCrashGuard) { return }
+  if (-not $moduleLoaded) {
     $message = "crash guard was requested but its module is unavailable: $GuardModulePath"
     Write-LauncherLog $message
     throw $message
   }
   try {
-    Import-Module $GuardModulePath -Force -ErrorAction Stop
     $manifestPath = Join-Path $env:DSH_HOME "profiles\$Profile\package.json"
     $script:GuardManifest = Read-DshProfileManifest -Path $manifestPath
     $script:GuardState = Read-DshGuardState -Path $GuardStateFile -Profile $Profile
@@ -529,8 +574,12 @@ function Get-DshSupervisorSnapshot {
   $entries = @()
   $inventoryError = $null
   if ($probe.Reachable -and $probe.IsDsh) {
-    try { $entries = @(Get-DshPluginInventory -BaseUrl $Url -TimeoutSec 5) }
-    catch { $inventoryError = $_.Exception.Message }
+    if (-not (Ensure-DshGuardModule)) {
+      $inventoryError = 'DSH inventory module is unavailable'
+    } else {
+      try { $entries = @(Get-DshPluginInventory -BaseUrl $Url -TimeoutSec 5) }
+      catch { $inventoryError = $_.Exception.Message }
+    }
   }
   $failed = @($entries | Where-Object { [string]$_.fiberPhase -eq 'failed' })
   # Keep the collection shape explicit. Windows PowerShell unwraps a single
@@ -728,17 +777,36 @@ function Show-LauncherError {
 }
 
 function Get-WebProbe {
+  # This probe targets the local DSH process. Do not let the machine's HTTP
+  # proxy turn a refused localhost connection into a proxy-generated 502 and
+  # make the launcher report a false port conflict. HttpWebRequest remains
+  # available in both Windows PowerShell and PowerShell 7, and setting Proxy
+  # to $null makes the local-only boundary explicit.
+  $request = $null
+  $response = $null
   try {
-    $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 3
-    $content = [string]$response.Content
+    $request = [System.Net.HttpWebRequest]::Create($Url)
+    $request.Method = 'GET'
+    $request.Timeout = 3000
+    $request.ReadWriteTimeout = 3000
+    $request.Proxy = $null
+    $response = $request.GetResponse()
+    $reader = $null
+    try {
+      $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+      $content = [string]$reader.ReadToEnd()
+    } finally {
+      if ($null -ne $reader) { $reader.Dispose() }
+    }
     return [PSCustomObject]@{
       Reachable = $true
       IsDsh = ($content -match '(?i)dsh|deepseek|harness')
       StatusCode = [int]$response.StatusCode
     }
-  } catch {
-    # Invoke-WebRequest throws for some HTTP error statuses. A response still
-    # means that the port is occupied, even when it is not a healthy DSH page.
+  } catch [System.Net.WebException] {
+    # HttpWebRequest exposes HTTP error responses through WebException.Response
+    # just as Invoke-WebRequest did. A real response means the port is occupied,
+    # even when the page is not a healthy DSH page.
     if ($null -ne $_.Exception.Response) {
       return [PSCustomObject]@{
         Reachable = $true
@@ -751,6 +819,14 @@ function Get-WebProbe {
       IsDsh = $false
       StatusCode = 0
     }
+  } catch {
+    return [PSCustomObject]@{
+      Reachable = $false
+      IsDsh = $false
+      StatusCode = 0
+    }
+  } finally {
+    if ($null -ne $response) { $response.Close() }
   }
 }
 
@@ -947,11 +1023,15 @@ function Ensure-DshRuntime {
     if (-not (Test-Path -LiteralPath $runtimeManifest -PathType Leaf)) {
       throw "启动器缺少固定版本清单：$runtimeManifest"
     }
+    $runtimeLock = Join-Path $RuntimeDir 'package-lock.json'
+    if (-not (Test-Path -LiteralPath $runtimeLock -PathType Leaf)) {
+      throw "启动器缺少固定 runtime lockfile，拒绝重新解析依赖：$runtimeLock"
+    }
     Ensure-Directory $LogDir
-    Write-LauncherLog '本机没有可用的 dsh，开始安装固定版本 @deepseek-ai/dsh@0.1.0-rc.6。首次启动可能需要几十秒。'
+    Write-LauncherLog '本机没有可用的 dsh，开始按 package-lock.json 精确安装 @deepseek-ai/dsh@0.1.0-rc.6。首次启动可能需要几十秒。'
     # Keep first-run failures bounded: the launcher must not sit indefinitely
     # in a hidden npm process when a registry mirror or one package is stuck.
-    & $npmPath install --prefix $RuntimeDir --no-audit --no-fund --omit=dev --ignore-scripts --progress=false --fetch-retries=1 --fetch-timeout=30000 --loglevel=warn *> $InstallLog
+    & $npmPath ci --prefix $RuntimeDir --no-audit --no-fund --omit=dev --ignore-scripts --progress=false --fetch-retries=1 --fetch-timeout=30000 --loglevel=warn *> $InstallLog
     $installCode = $LASTEXITCODE
     if ($installCode -ne 0) {
       throw "DSH 安装失败，退出码 $installCode；详见 $InstallLog"

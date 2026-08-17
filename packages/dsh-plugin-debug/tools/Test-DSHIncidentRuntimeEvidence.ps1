@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $root 'DSH-PowerShell.ps1')
 $incidentScript = Join-Path $root 'DSH-Incident.ps1'
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-incident-evidence-' + [guid]::NewGuid().ToString('N'))
 $profileRoot = Join-Path $fixtureRoot 'profiles\fixture'
@@ -38,7 +39,7 @@ try {
     } | ConvertTo-Json -Depth 8),
     [Text.UTF8Encoding]::new($false)
   )
-  $raw = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $incidentScript -DshHome $fixtureRoot -Profile fixture -Port 32992 -StateRoot $stateRoot -MaxMessages 10 2>&1
+  $raw = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $incidentScript -DshHome $fixtureRoot -Profile fixture -Port 32992 -StateRoot $stateRoot -MaxMessages 10 2>&1
   $exitCode = $LASTEXITCODE
   $report = (($raw | Out-String).Trim() | ConvertFrom-Json)
   $diagnostics = $report.components.diagnostics

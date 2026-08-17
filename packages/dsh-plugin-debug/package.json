@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-debug",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "A single DeepSeek Harness debug plugin for diagnostics, recovery, trace inspection, and observer-only task protection",
   "author": "shine-233",
   "repository": {
@@ -24,6 +24,12 @@
     "./repository-check": {
       "default": "./lib/repository-check.js"
     },
+    "./hotswap-check": {
+      "default": "./lib/hotswap-check.js"
+    },
+    "./agent-report": {
+      "default": "./lib/agent-report.js"
+    },
     "./guardian": {
       "default": "./lib/task-guardian.js"
     },
@@ -31,10 +37,13 @@
   },
   "files": [
     "lib",
+    "sbom",
     "bundle-manifest.json",
     "cordis.patch.yml",
     "tool-policy.patch.example.yml",
     "tools",
+    "!tools/runtime/node_modules",
+    "!tools/runtime/node_modules/**",
     "Start-DSH-Debug.ps1",
     "Start-DSH-Debug.cmd",
     "Start-DSH-Debug.vbs",
@@ -56,10 +65,19 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:client": "node scripts/build-client.mjs",
+    "prepack": "npm run build",
     "test": "node --test",
-    "check": "node scripts/build.mjs && node --check lib/index.js && node --check lib/client.js && node --test",
-    "check:standalone": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\Test-DSHStandalone.ps1",
-    "check:integration": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\tools\\Test-DSHPluginIntegration.ps1"
+    "check": "node scripts/build.mjs && node scripts/check-generated.mjs && node scripts/check-syntax.mjs && node --test",
+    "lint": "node scripts/check-quality.mjs",
+    "format:check": "node scripts/check-format.mjs",
+    "typecheck": "node scripts/check-type-surface.mjs",
+    "coverage": "node --test --experimental-test-coverage",
+    "check:runtime-lock": "node scripts/check-runtime-lock.mjs",
+    "check:runtime-lock:installed": "node scripts/check-runtime-lock.mjs --installed",
+    "sbom:generate": "node scripts/generate-sbom.mjs",
+    "sbom:check": "node scripts/generate-sbom.mjs --check",
+    "check:standalone": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\Test-DSHStandalone.ps1",
+    "check:integration": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\tools\\Test-DSHPluginIntegration.ps1"
   },
   "engines": {
     "node": ">=22"
@@ -110,5 +128,9 @@
     "react": {
       "optional": true
     }
+  },
+  "directories": {
+    "lib": "lib",
+    "test": "tests"
   }
 }

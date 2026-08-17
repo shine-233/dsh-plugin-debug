@@ -6,6 +6,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'DSH-PowerShell.ps1')
 
 $packageRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-debug-launcher-conflict-' + [Guid]::NewGuid().ToString('N'))
@@ -50,7 +51,7 @@ function Invoke-Launcher {
   $stderrPath = [IO.Path]::GetTempFileName()
   $process = $null
   try {
-    $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
+    $powershell = Get-DshPowerShellPath
     $arguments = @(
       '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $launcher,
       '-Port', '3080', '-HostName', '127.0.0.1', '-Profile', 'web',

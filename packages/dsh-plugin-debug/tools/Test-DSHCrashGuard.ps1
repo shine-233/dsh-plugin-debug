@@ -6,6 +6,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $packageRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $packageRoot 'DSH-PowerShell.ps1')
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-provenance-crash-guard-' + [Guid]::NewGuid().ToString('N'))
 $fixtureTools = Join-Path $tempRoot 'tools'
 $fixtureRuntime = Join-Path $fixtureTools 'runtime'
@@ -106,8 +107,7 @@ process.on('SIGINT', () => server.close(() => process.exit(0)));
 
   $env:DSH_HOME = $fixtureDshHome
   $env:DSH_CRASH_FIXTURE_BOOT_FILE = $bootFile
-  $powerShellCommand = Get-Command powershell.exe -ErrorAction SilentlyContinue
-  if ($null -eq $powerShellCommand) { throw 'Windows PowerShell executable is required for the crash guard fixture' }
+  $powerShellPath = Get-DshPowerShellPath
   $argumentList = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $launcher,
     '-Port', '32179', '-HostName', '127.0.0.1', '-Profile', 'fixture',
@@ -115,7 +115,7 @@ process.on('SIGINT', () => server.close(() => process.exit(0)));
     '-EnableCrashGuard', '-GuardThreshold', '1', '-NoBrowser', '-NoInstall', '-NoPluginInstall',
     '-StartupTimeoutSec', '15'
   )
-  $script:launcherProcess = Start-Process -FilePath $powerShellCommand.Source -ArgumentList $argumentList -WorkingDirectory $fixtureWorkspace -WindowStyle Hidden -PassThru
+  $script:launcherProcess = Start-Process -FilePath $powerShellPath -ArgumentList $argumentList -WorkingDirectory $fixtureWorkspace -WindowStyle Hidden -PassThru
   if (-not $script:launcherProcess.WaitForExit($TimeoutSec * 1000)) {
     Stop-Process -Id $script:launcherProcess.Id -Force -ErrorAction SilentlyContinue
     throw "crash guard fixture launcher did not finish within ${TimeoutSec}s"

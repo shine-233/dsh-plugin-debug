@@ -34,6 +34,9 @@ function Get-DshRecoveryFileDefinitions {
     [PSCustomObject]@{ relativePath = "profiles\$Profile\pnpm-workspace.yaml"; sensitive = $false }
     [PSCustomObject]@{ relativePath = 'settings.yaml'; sensitive = $false }
     [PSCustomObject]@{ relativePath = '.env'; sensitive = $true }
+    [PSCustomObject]@{ relativePath = '.credentials.yaml'; sensitive = $true }
+    [PSCustomObject]@{ relativePath = '.credentials.yml'; sensitive = $true }
+    [PSCustomObject]@{ relativePath = '.credentials'; sensitive = $true }
   )
 }
 
@@ -62,7 +65,7 @@ function Get-DshRecoveryHash {
 function Test-DshRecoverySensitivePath {
   param([Parameter(Mandatory = $true)][string]$RelativePath)
   $leaf = Split-Path -Leaf $RelativePath
-  return $leaf -match '^(?i:\.env(?:\..*)?)$'
+  return $leaf -match '^(?i:\.env(?:\..*)?|\.credentials(?:\..*)?)$'
 }
 
 function Write-DshRecoveryJson {

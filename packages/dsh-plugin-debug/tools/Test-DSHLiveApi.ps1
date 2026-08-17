@@ -9,6 +9,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'DSH-PowerShell.ps1')
 
 function Write-FixtureJsonResponse {
   param(
@@ -38,6 +39,10 @@ function Get-FixtureProperty {
   $property = $Object.PSObject.Properties[$Name]
   if ($null -eq $property) { return $null }
   return $property.Value
+}
+
+function Get-TestPowerShellPath {
+  return Get-DshPowerShellPath
 }
 
 function Get-FixtureApiResponse {
@@ -166,8 +171,14 @@ function Start-FixtureServer {
         try { $rawBody = $reader.ReadToEnd() } finally { $reader.Dispose() }
         $body = $rawBody | ConvertFrom-Json
         $method = [string](Get-FixtureProperty -Object $body -Name 'method')
-        $bodyArgs = Get-FixtureProperty -Object (Get-FixtureProperty -Object $body -Name 'payload') -Name 'args'
+        $payload = Get-FixtureProperty -Object $body -Name 'payload'
+        $bodyArgs = Get-FixtureProperty -Object $payload -Name 'args'
+        # Typert plugin remotes use payload.args; rc.6 Host API methods use
+        # the direct business payload.  The fixture accepts both so this test
+        # validates the helper's protocol routing instead of freezing the old
+        # wrapper shape for every endpoint.
         if ($null -ne $bodyArgs) { $rpcArgs = $bodyArgs }
+        elseif ($null -ne $payload) { $rpcArgs = $payload }
       } catch {
         $rawBody = ''
         $method = $null
@@ -179,6 +190,7 @@ function Start-FixtureServer {
         bodyType = [string](Get-FixtureProperty -Object $body -Name 'type')
         rpcIdPresent = -not [string]::IsNullOrWhiteSpace([string](Get-FixtureProperty -Object $body -Name 'rpcId'))
         contentType = [string]$context.Request.ContentType
+        payloadStyle = if ($null -ne $bodyArgs) { 'args' } else { 'direct' }
         args = $rpcArgs
       }
       ($record | ConvertTo-Json -Depth 20 -Compress) | Add-Content -LiteralPath $LogFile -Encoding UTF8
@@ -261,11 +273,11 @@ function Invoke-JsonChild {
     [void]$tokens.Add("-$($entry.Key)")
     [void]$tokens.Add([string]$entry.Value)
   }
-  $powershell = Get-Command powershell.exe -ErrorAction Stop
+  $powershell = Get-TestPowerShellPath
   $previousErrorAction = $ErrorActionPreference
   try {
     $ErrorActionPreference = 'Continue'
-    $output = & $powershell.Source -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @tokens 2>&1
+    $output = & $powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @tokens 2>&1
     $exitCode = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $previousErrorAction
@@ -329,13 +341,13 @@ try {
   'defaultPreset: workspace-write' | Set-Content -LiteralPath (Join-Path $dshHome 'settings.yaml') -Encoding UTF8
 
   $port = Get-FreeLoopbackPort
-  $powershell = Get-Command powershell.exe -ErrorAction Stop
+  $powershell = Get-TestPowerShellPath
   $serverArguments = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptPath,
     '-Server', '-ServerPort', [string]$port, '-ReadyPath', $readyPath,
     '-RequestLogPath', $requestLogPath, '-StopPath', $stopPath
   )
-  $serverProcess = Start-Process -FilePath $powershell.Source -ArgumentList $serverArguments -PassThru -WindowStyle Hidden
+  $serverProcess = Start-Process -FilePath $powershell -ArgumentList $serverArguments -PassThru -WindowStyle Hidden
   for ($attempt = 0; $attempt -lt 100; $attempt++) {
     if (Test-Path -LiteralPath $readyPath -PathType Leaf) { break }
     if ($serverProcess.HasExited) { throw 'fixture HttpListener process exited before readiness' }
@@ -425,6 +437,10 @@ try {
   $hostArgsEmpty = $hostRecord.Count -eq 1 -and @((Get-JsonPropertyValue -Object $hostRecord[0] -Name 'args').PSObject.Properties).Count -eq 0
   Assert-LiveApi $inventoryArgsEmpty 'inventory-empty-payload' 'pluginInventory/list did not carry an empty args object'
   Assert-LiveApi $hostArgsEmpty 'host-empty-payload' 'host.describe did not carry an empty args object'
+  Assert-LiveApi ($inventoryRecord.Count -eq 1 -and [string]$inventoryRecord[0].payloadStyle -eq 'args') 'inventory-args-payload-style' 'pluginInventory/list must use the Typert payload.args shape'
+  Assert-LiveApi ($hostRecord.Count -eq 1 -and [string]$hostRecord[0].payloadStyle -eq 'direct') 'host-direct-payload-style' 'host.describe must use the rc.6 direct payload shape'
+  $hostApiRecords = @($records | Where-Object { [string]$_.method -in @('session.history', 'session.fork', 'host.describe') })
+  Assert-LiveApi (@($hostApiRecords | Where-Object { [string]$_.payloadStyle -ne 'direct' }).Count -eq 0) 'host-direct-payload-regression' 'a rc.6 Host API method was wrapped in payload.args'
   $forkRecord = @($records | Where-Object {
     $_.method -eq 'session.fork' -and
     [string](Get-JsonPropertyValue -Object $_.args -Name 'sessionId') -eq 'source-session' -and
@@ -454,6 +470,7 @@ $requestSummary = @($requestRecords | ForEach-Object {
     httpMethod = [string]$_.httpMethod
     path = [string]$_.path
     method = [string]$_.method
+    payloadStyle = [string]$_.payloadStyle
     args = $_.args
   }
 })

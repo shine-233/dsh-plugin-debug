@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $toolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $repairScript = Join-Path $toolRoot 'DSH-SelfRepair.ps1'
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-self-repair-' + [guid]::NewGuid().ToString('N'))
 $dshHome = Join-Path $tempRoot 'dsh-home'
@@ -30,7 +31,7 @@ function Invoke-SelfRepairJson {
     [void]$tokens.Add("-$($entry.Key)")
     [void]$tokens.Add([string]$entry.Value)
   }
-  $output = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $repairScript @tokens 2>&1
+  $output = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $repairScript @tokens 2>&1
   $exitCode = $LASTEXITCODE
   $text = ($output | Out-String).Trim()
   $value = $null

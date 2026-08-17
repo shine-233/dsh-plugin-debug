@@ -9,6 +9,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'DSH-PowerShell.ps1')
 
 function Write-KnownGoodResponse {
   param(
@@ -114,9 +115,9 @@ try {
 
   $step = 'start HTTP fixture'
   $port = Get-FreeKnownGoodPort
-  $powershell = Get-Command powershell.exe -ErrorAction Stop
+  $powershell = Get-DshPowerShellPath
   $serverArgs = @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $MyInvocation.MyCommand.Path, '-Server', '-ServerPort', [string]$port, '-ReadyPath', $readyPath, '-StopPath', $stopPath)
-  $serverProcess = Start-Process -FilePath $powershell.Source -ArgumentList $serverArgs -PassThru -WindowStyle Hidden
+  $serverProcess = Start-Process -FilePath $powershell -ArgumentList $serverArgs -PassThru -WindowStyle Hidden
   for ($attempt = 0; $attempt -lt 100; $attempt++) {
     if (Test-Path -LiteralPath $readyPath -PathType Leaf) { break }
     if ($serverProcess.HasExited) { throw 'known-good HTTP fixture exited before readiness' }

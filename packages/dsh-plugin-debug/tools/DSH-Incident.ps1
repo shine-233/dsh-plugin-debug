@@ -19,6 +19,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $root 'DSH-PowerShell.ps1')
 $stateModulePath = Join-Path $root 'DSH-State.psm1'
 Import-Module $stateModulePath -Force
 $previousDshHome = $env:DSH_HOME
@@ -77,17 +78,21 @@ function Convert-IncidentArguments {
   return @($tokens)
 }
 
+function Get-IncidentPowerShellPath {
+  try { return Get-DshPowerShellPath } catch { return $null }
+}
+
 function Invoke-IncidentJsonScript {
   param([Parameter(Mandatory = $true)][string]$Path, [hashtable]$Arguments = @{})
-  $powerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
-  if ($null -eq $powerShell) {
+  $powerShell = Get-IncidentPowerShellPath
+  if ([string]::IsNullOrWhiteSpace([string]$powerShell)) {
     return [PSCustomObject]@{ exitCode = 1; text = ''; value = $null; status = 'UNAVAILABLE'; error = 'Windows PowerShell executable not found' }
   }
   $tokens = Convert-IncidentArguments -Arguments $Arguments
   $previousErrorAction = $ErrorActionPreference
   try {
     $ErrorActionPreference = 'Continue'
-    $output = & $powerShell.Source -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @tokens 2>&1
+    $output = & $powerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @tokens 2>&1
     $exitCode = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $previousErrorAction

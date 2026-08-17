@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $LauncherRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $LauncherRoot 'DSH-PowerShell.ps1')
 $StateModulePath = Join-Path $LauncherRoot 'DSH-State.psm1'
 Import-Module $StateModulePath -Force
 $LogDir = Resolve-DshDebugLogRoot
@@ -44,14 +45,7 @@ try {
     $env:DSH_HOME = Join-Path $env:USERPROFILE '.dsh'
   }
 
-  $pwshCommand = Get-Command powershell.exe -ErrorAction SilentlyContinue
-  if ($null -eq $pwshCommand) {
-    $pwshCommand = Get-Command pwsh.exe -ErrorAction SilentlyContinue
-  }
-  if ($null -eq $pwshCommand) {
-    throw '找不到 PowerShell。'
-  }
-  $pwsh = $pwshCommand.Source
+  $pwsh = Get-DshPowerShellPath
 
   # Reuse the launcher’s pinned-runtime check without starting a Web process.
   $startArgs = @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $StartScript, '-Profile', $Profile, '-InstallOnly')

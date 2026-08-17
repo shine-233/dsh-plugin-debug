@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $root 'DSH-PowerShell.ps1')
 Import-Module (Join-Path $root 'DSH-ResourcePressure.psm1') -Force
 
 function Assert-ResourcePressure {
@@ -53,7 +54,7 @@ try {
   New-Item -ItemType Directory -Path $fixtureProfile -Force | Out-Null
   [IO.File]::WriteAllText((Join-Path $fixtureProfile 'package.json'), '{"name":"dsh-resource-fixture","dependencies":{},"dsh":{"profile":{"bundles":[]}}}', [Text.UTF8Encoding]::new($false))
   $diagnosticsPath = Join-Path $root 'Get-DSH-Diagnostics.ps1'
-  $diagnosticsRaw = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $diagnosticsPath -DshHome $fixtureRoot -Profile fixture -Port 32991 -StateRoot (Join-Path $fixtureRoot 'state') 2>&1
+  $diagnosticsRaw = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $diagnosticsPath -DshHome $fixtureRoot -Profile fixture -Port 32991 -StateRoot (Join-Path $fixtureRoot 'state') 2>&1
   $diagnosticsExitCode = $LASTEXITCODE
   $diagnostics = (($diagnosticsRaw | Out-String).Trim() | ConvertFrom-Json)
   Assert-ResourcePressure ($diagnosticsExitCode -eq 0) 'diagnostics integration exited non-zero'

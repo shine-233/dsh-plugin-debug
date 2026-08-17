@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $toolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $packageRoot = Split-Path -Parent $toolRoot
 $preflightScript = Join-Path $toolRoot 'DSH-Preflight.ps1'
 $debugEntry = Join-Path $packageRoot 'Debug-DSH.ps1'
@@ -17,7 +18,7 @@ function Assert-DshPreflight {
 
 function Invoke-DshPreflightJson {
   param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][string[]]$Arguments)
-  $raw = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments 2>&1
+  $raw = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments 2>&1
   $exitCode = $LASTEXITCODE
   $text = ($raw | Out-String).Trim()
   $value = $null

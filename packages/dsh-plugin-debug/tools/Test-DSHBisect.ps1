@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $toolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $scriptPath = Join-Path $toolRoot 'DSH-Bisect.ps1'
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-bisect-' + [guid]::NewGuid().ToString('N'))
 
@@ -61,7 +62,7 @@ try {
   }
   $fixture | ConvertTo-Json -Depth 15 | Set-Content -LiteralPath $inputPath -Encoding UTF8
   $before = Get-BisectSha256 -Path $inputPath
-  $raw = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $scriptPath -InputPath $inputPath -OutputPath $outputPath 2>&1
+  $raw = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $scriptPath -InputPath $inputPath -OutputPath $outputPath 2>&1
   $exitCode = $LASTEXITCODE
   $text = ($raw | Out-String).Trim()
   $report = $text | ConvertFrom-Json

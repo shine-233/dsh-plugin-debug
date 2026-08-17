@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $toolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $scriptPath = Join-Path $toolRoot 'DSH-TraceRecursion.ps1'
 $fixturePath = Join-Path $toolRoot 'fixtures\trace-recursion.json'
 $failures = [System.Collections.Generic.List[string]]::new()
@@ -111,9 +112,8 @@ try {
   $overflowReport = Invoke-DshTraceRecursion -InputObject (New-TraceRecursionInput -Events @($overflowEvents)) -MaxDepth 3
   Assert-TraceRecursion ($overflowReport.result -eq 'FAIL' -and $overflowReport.safety.failClosed -eq $true) 'event overflow did not fail closed'
 
-  $powerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
-  if ($null -eq $powerShell) { throw 'Windows PowerShell is required for the CLI fixture' }
-  $cliText = (& $powerShell.Source -NoLogo -NoProfile -ExecutionPolicy Bypass -File $scriptPath -InputPath $fixturePath -MaxDepth 3 2>&1 | Out-String).Trim()
+  $powerShell = Get-DshPowerShellPath
+  $cliText = (& $powerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $scriptPath -InputPath $fixturePath -MaxDepth 3 2>&1 | Out-String).Trim()
   $cliExit = $LASTEXITCODE
   $cliReport = $cliText | ConvertFrom-Json
   Assert-TraceRecursion ($cliExit -eq 0 -and $cliReport.result -eq 'RECURSION_DETECTED') 'CLI fixture did not report recursion'

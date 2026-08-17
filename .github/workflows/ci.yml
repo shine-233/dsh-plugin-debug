@@ -17,16 +17,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  node-tests:
+  node-tests-matrix:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
+      - name: Install locked package dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: packages/dsh-plugin-debug
+      - name: Audit production dependencies via the official npm advisory API
+        run: npm audit --registry=https://registry.npmjs.org --omit=dev --audit-level=high
+        working-directory: packages/dsh-plugin-debug
       - run: npm run check
         working-directory: packages/dsh-plugin-debug
+      - name: Run deterministic policy lint
+        run: npm run lint
+        working-directory: packages/dsh-plugin-debug
+      - name: Check source formatting invariants
+        run: npm run format:check
+        working-directory: packages/dsh-plugin-debug
+      - name: Check type surface
+        run: npm run typecheck
+        working-directory: packages/dsh-plugin-debug
+      - name: Run Node coverage baseline
+        run: npm run coverage
+        working-directory: packages/dsh-plugin-debug
+      - name: Check pinned runtime lockfile metadata
+        run: npm run check:runtime-lock
+        working-directory: packages/dsh-plugin-debug
+      - name: Check committed SPDX and CycloneDX SBOMs
+        run: npm run sbom:check
+        working-directory: packages/dsh-plugin-debug
+      - name: Reject stale generated artifacts
+        shell: bash
+        run: git diff --exit-code -- packages/dsh-plugin-debug/lib packages/dsh-plugin-debug/bundle-manifest.json
+
+  # main branch protection currently requires the historical exact context
+  # `node-tests`. Keep that stable aggregate while the real coverage runs in
+  # the Node 22/24 matrix above.
+  node-tests:
+    name: node-tests
+    needs: node-tests-matrix
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every Node matrix leg to pass
+        shell: bash
+        run: |
+          if [ "${{ needs.node-tests-matrix.result }}" != "success" ]; then
+            echo "Node matrix result: ${{ needs.node-tests-matrix.result }}"
+            exit 1
+          fi
+          echo 'Node 22/24 matrix passed'
 
   windows-debug-suite:
     runs-on: windows-latest
@@ -43,11 +93,17 @@ jobs:
         shell: pwsh
         run: ./scripts/Verify-Publication.ps1
       - name: Run combined plugin integration
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHPluginIntegration.ps1
       - name: Install pinned DSH runtime
         shell: pwsh
         run: npm ci --prefix ./packages/dsh-plugin-debug/tools/runtime --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Audit pinned DSH runtime via the official npm advisory API
+        shell: pwsh
+        run: npm audit --prefix ./packages/dsh-plugin-debug/tools/runtime --registry=https://registry.npmjs.org --omit=dev --audit-level=high
+      - name: Verify installed runtime tree matches its lockfile
+        shell: pwsh
+        run: npm run check:runtime-lock:installed --prefix ./packages/dsh-plugin-debug
       - name: Parse PowerShell sources
         shell: pwsh
         run: |
@@ -63,38 +119,38 @@ jobs:
           if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
       - name: Run standalone combined debug suite
         id: standalone
-        shell: powershell
+        shell: pwsh
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'dsh-standalone.log'
           & .\packages\dsh-plugin-debug\Test-DSHStandalone.ps1 2>&1 | Tee-Object -FilePath $log
           $exitCode = $LASTEXITCODE
           if ($exitCode -ne 0) { exit $exitCode }
       - name: Run resource-pressure regression
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHResourcePressure.ps1
       - name: Run incident runtime-evidence regression
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHIncidentRuntimeEvidence.ps1
       - name: Run diagnostics-diff regression
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHDiagnosticsDiff.ps1
       - name: Run plugin-preflight regression
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHPreflight.ps1
       - name: Run dependency-graph regression
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHDependencyGraph.ps1
       - name: Run trace-loop regression
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHTraceLoop.ps1
       - name: Run trace-recursion regression
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHTraceRecursion.ps1
       - name: Run observer-only Guardian status regression
-        shell: powershell
+        shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHGuardianStatus.ps1
       - name: Run Guard and recovery regressions
-        shell: powershell
+        shell: pwsh
         run: |
           .\packages\dsh-plugin-debug\tools\Test-DSHGuard.ps1
           .\packages\dsh-plugin-debug\tools\Test-DSHPluginHealth.ps1
@@ -141,6 +197,7 @@ jobs:
       - windows-debug-suite
     if: ${{ needs.node-tests.result == 'success' && needs.windows-debug-suite.result == 'success' }}
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - name: Clone the exact GitHub commit into a new directory
         uses: actions/checkout@v7
@@ -151,9 +208,179 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Run fresh-clone package checks
+      - name: Verify publication boundary before dependency installation
         shell: pwsh
         working-directory: fresh-clone
         run: |
-          npm run check --prefix packages/dsh-plugin-debug
           ./scripts/Verify-Publication.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install package and pinned runtime dependencies
+        shell: pwsh
+        working-directory: fresh-clone
+        run: |
+          function Invoke-Native {
+            param([Parameter(Mandatory = $true)][string]$File, [string[]]$Arguments)
+            & $File @Arguments
+            if ($LASTEXITCODE -ne 0) { throw "$File failed with exit code $LASTEXITCODE" }
+          }
+          Invoke-Native -File npm -Arguments @('ci', '--prefix', 'packages/dsh-plugin-debug', '--ignore-scripts', '--no-audit', '--no-fund')
+          Invoke-Native -File npm -Arguments @('ci', '--prefix', 'packages/dsh-plugin-debug/tools/runtime', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund')
+          Invoke-Native -File npm -Arguments @('audit', '--prefix', 'packages/dsh-plugin-debug/tools/runtime', '--registry=https://registry.npmjs.org', '--omit=dev', '--audit-level=high')
+      - name: Run fresh-clone package and recovery checks
+        shell: pwsh
+        working-directory: fresh-clone
+        run: |
+          function Invoke-Native {
+            param([Parameter(Mandatory = $true)][string]$File, [string[]]$Arguments)
+            & $File @Arguments
+            if ($LASTEXITCODE -ne 0) { throw "$File failed with exit code $LASTEXITCODE" }
+          }
+          Invoke-Native -File npm -Arguments @('run', 'check', '--prefix', 'packages/dsh-plugin-debug')
+          Invoke-Native -File npm -Arguments @('run', 'lint', '--prefix', 'packages/dsh-plugin-debug')
+          Invoke-Native -File npm -Arguments @('run', 'format:check', '--prefix', 'packages/dsh-plugin-debug')
+          Invoke-Native -File npm -Arguments @('run', 'typecheck', '--prefix', 'packages/dsh-plugin-debug')
+          Invoke-Native -File npm -Arguments @('run', 'coverage', '--prefix', 'packages/dsh-plugin-debug')
+          Invoke-Native -File npm -Arguments @('run', 'check:runtime-lock:installed', '--prefix', 'packages/dsh-plugin-debug')
+          Invoke-Native -File npm -Arguments @('run', 'sbom:check', '--prefix', 'packages/dsh-plugin-debug')
+          & git diff --exit-code -- packages/dsh-plugin-debug/lib packages/dsh-plugin-debug/bundle-manifest.json
+          if ($LASTEXITCODE -ne 0) { throw 'generated lib or bundle-manifest.json is stale in the committed checkout' }
+          $pairs = @{
+            'src\index.js' = 'lib\index.js'
+            'src\hotswap-check.js' = 'lib\hotswap-check.js'
+            'src\agent-report.js' = 'lib\agent-report.js'
+            'src\tool-adapter.js' = 'lib\tool-adapter.js'
+            'src\task-guardian.js' = 'lib\task-guardian.js'
+            'src\repository-check.js' = 'lib\repository-check.js'
+          }
+          foreach ($pair in $pairs.GetEnumerator()) {
+            $source = (Get-FileHash (Join-Path 'packages/dsh-plugin-debug' $pair.Key) -Algorithm SHA256).Hash
+            $generated = (Get-FileHash (Join-Path 'packages/dsh-plugin-debug' $pair.Value) -Algorithm SHA256).Hash
+            if ($source -ne $generated) { throw "generated artifact mismatch: $($pair.Key) != $($pair.Value)" }
+          }
+          & .\packages\dsh-plugin-debug\Test-DSHStandalone.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\packages\dsh-plugin-debug\tools\Test-DSHRecovery.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\packages\dsh-plugin-debug\tools\Test-DSHKnownGood.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify post-install pack in dependency-free staging
+        shell: pwsh
+        working-directory: fresh-clone
+        run: |
+          $sourceRoot = (Get-Location).Path
+          $stagingRoot = Join-Path $env:RUNNER_TEMP 'dsh-pack-only'
+          New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
+          $excluded = @(
+            (Join-Path $sourceRoot '.git'),
+            (Join-Path $sourceRoot 'packages\dsh-plugin-debug\node_modules'),
+            (Join-Path $sourceRoot 'packages\dsh-plugin-debug\tools\runtime\node_modules')
+          )
+          robocopy $sourceRoot $stagingRoot /E /R:0 /W:0 /XD $excluded | Out-Null
+          if ($LASTEXITCODE -gt 7) { throw "pack-only staging copy failed with exit code $LASTEXITCODE" }
+          & (Join-Path $stagingRoot 'scripts\Verify-Publication.ps1') -RepositoryRoot $stagingRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $stagedPackRoot = Join-Path $env:RUNNER_TEMP 'dsh-staged-pack'
+          $stagedPackageRoot = Join-Path $stagingRoot 'packages\dsh-plugin-debug'
+          New-Item -ItemType Directory -Force -Path $stagedPackRoot | Out-Null
+          Push-Location $stagedPackageRoot
+          try {
+            # This is the real lifecycle path: prepack runs npm run build in a
+            # dependency-free staging copy, without --ignore-scripts.
+            $stagedPackJsonText = (& npm pack --json --pack-destination $stagedPackRoot | Out-String).Trim()
+            $stagedPackExit = $LASTEXITCODE
+          } finally {
+            Pop-Location
+          }
+          if ($stagedPackExit -ne 0) { throw "isolated staging npm pack failed: $stagedPackJsonText" }
+          $stagedPackJsonStart = $stagedPackJsonText.IndexOf('[')
+          if ($stagedPackJsonStart -lt 0) { throw "isolated staging npm pack did not return JSON: $stagedPackJsonText" }
+          $stagedPackReport = @($stagedPackJsonText.Substring($stagedPackJsonStart) | ConvertFrom-Json)[0]
+          $stagedTarball = Join-Path $stagedPackRoot ([string]$stagedPackReport.filename)
+          if (-not (Test-Path -LiteralPath $stagedTarball -PathType Leaf)) { throw "isolated staging npm pack did not create $stagedTarball" }
+          Write-Host "isolated staging prepack/pack passed: $stagedTarball"
+      - name: Extract the actual npm tarball and run package smoke checks
+        shell: pwsh
+        working-directory: fresh-clone
+        run: |
+          $packRoot = Join-Path $env:RUNNER_TEMP 'dsh-tarball-smoke'
+          $extractRoot = Join-Path $packRoot 'extracted'
+          $consumerRoot = Join-Path $packRoot 'consumer'
+          New-Item -ItemType Directory -Force -Path $packRoot, $extractRoot, $consumerRoot | Out-Null
+          $sourcePackageManifest = Get-Content -LiteralPath 'packages/dsh-plugin-debug/package.json' -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ([string]$sourcePackageManifest.scripts.prepack -ne 'npm run build') { throw 'package.json prepack must invoke npm run build' }
+          Push-Location 'packages/dsh-plugin-debug'
+          try {
+            # Run the real pack lifecycle so the prepack build cannot drift
+            # from the generated artifacts that passed the earlier check.
+            $packJsonText = (& npm pack --json --pack-destination $packRoot | Out-String).Trim()
+            $packExit = $LASTEXITCODE
+          } finally {
+            Pop-Location
+          }
+          if ($packExit -ne 0) { throw "npm pack failed: $packJsonText" }
+          $packJsonStart = $packJsonText.IndexOf('[')
+          if ($packJsonStart -lt 0) { throw "npm pack did not return a JSON report: $packJsonText" }
+          $packReport = @($packJsonText.Substring($packJsonStart) | ConvertFrom-Json)[0]
+          $tarball = Join-Path $packRoot ([string]$packReport.filename)
+          if (-not (Test-Path -LiteralPath $tarball -PathType Leaf)) { throw "npm pack did not create $tarball" }
+          & tar.exe -xf $tarball -C $extractRoot
+          if ($LASTEXITCODE -ne 0) { throw 'tarball extraction failed' }
+          $unpacked = Join-Path $extractRoot 'package'
+          foreach ($required in @('package.json', 'bundle-manifest.json', 'lib/index.js', 'lib/client.js', 'lib/hotswap-check.js', 'lib/agent-report.js', 'lib/repository-check.js', 'lib/tool-adapter.js', 'tools/DSH-PowerShell.ps1', 'tools/Test-DSHCompatibility.ps1', 'tools/runtime/package-lock.json')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $unpacked $required) -PathType Leaf)) { throw "tarball is missing $required" }
+          }
+          $actualPaths = @(Get-ChildItem -LiteralPath $unpacked -Recurse -Force -File | ForEach-Object { $_.FullName.Substring($unpacked.Length + 1).Replace('\', '/') } | Sort-Object)
+          $expectedPaths = @($packReport.files | ForEach-Object { ([string]$_.path).Replace('\', '/') } | Sort-Object)
+          if (Compare-Object -ReferenceObject $expectedPaths -DifferenceObject $actualPaths) { throw 'actual tarball paths differ from npm pack report' }
+          foreach ($actualPath in $actualPaths) {
+            if ($actualPath -match '(?i)(^|/)node_modules(/|$)|(^|/)(state|logs|coverage)(/|$)|(^|/)\.env(?:$|\.)|\.(key|pem|pfx|p12|jks|keystore|sqlite|sqlite3|db)$') { throw "tarball contains a forbidden path: $actualPath" }
+          }
+          $expectedLibPaths = @('lib/agent-report.js', 'lib/client.js', 'lib/hotswap-check.js', 'lib/index.js', 'lib/repository-check.js', 'lib/task-guardian.js', 'lib/tool-adapter.js')
+          $actualLibPaths = @($actualPaths | Where-Object { $_ -like 'lib/*' })
+          if (Compare-Object -ReferenceObject ($expectedLibPaths | Sort-Object) -DifferenceObject ($actualLibPaths | Sort-Object)) { throw 'tarball lib file set is not exact' }
+          & node --check (Join-Path $unpacked 'lib/index.js')
+          if ($LASTEXITCODE -ne 0) { throw 'extracted lib/index.js failed node --check' }
+          & node --check (Join-Path $unpacked 'lib/hotswap-check.js')
+          if ($LASTEXITCODE -ne 0) { throw 'extracted lib/hotswap-check.js failed node --check' }
+          & node --check (Join-Path $unpacked 'lib/agent-report.js')
+          if ($LASTEXITCODE -ne 0) { throw 'extracted lib/agent-report.js failed node --check' }
+          & node --check (Join-Path $unpacked 'lib/client.js')
+          if ($LASTEXITCODE -ne 0) { throw 'extracted lib/client.js failed node --check' }
+          $packageManifest = Get-Content -LiteralPath (Join-Path $unpacked 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          foreach ($exportProperty in $packageManifest.exports.PSObject.Properties) {
+            $exportValue = $exportProperty.Value
+            $exportTarget = if ($exportValue -is [string]) { [string]$exportValue } else { [string]$exportValue.default }
+            if ([string]::IsNullOrWhiteSpace($exportTarget) -or -not $exportTarget.StartsWith('./', [StringComparison]::Ordinal)) { continue }
+            $exportPath = $exportTarget.Substring(2).Replace('\', '/')
+            if ($actualPaths -notcontains $exportPath) { throw "tarball export target is missing: $($exportProperty.Name) -> $exportTarget" }
+          }
+          $bundleManifest = Get-Content -LiteralPath (Join-Path $unpacked 'bundle-manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          foreach ($bundleFileProperty in $bundleManifest.files.PSObject.Properties) {
+            $bundlePath = ([string]$bundleFileProperty.Name).Replace('\', '/')
+            if ($actualPaths -notcontains $bundlePath) { throw "tarball is missing bundle manifest file: $bundlePath" }
+          }
+          Push-Location $unpacked
+          try {
+            # Resolve every declared export. The browser-only client export is
+            # loaded with its minimal host contract; package.json is checked
+            # through Node's real package-JSON loader.
+            & node --input-type=module -e "import fs from 'node:fs'; import { createRequire } from 'node:module'; const manifest=JSON.parse(fs.readFileSync('./package.json','utf8')); const require=createRequire(import.meta.url); const targetOf=value=>typeof value==='string'?value:value?.default; globalThis.window={__ModuleLoader__:{load(payload){if(payload?.id!=='dsh-plugin-debug'||typeof payload.factory!=='function')throw new Error('invalid dsh-plugin-debug client loader contract')}}}; for(const [subpath,value] of Object.entries(manifest.exports)){const target=targetOf(value);if(subpath==='./package.json')require('./package.json');else await import(target)} console.log('extracted package exports loaded:',Object.keys(manifest.exports).length)"
+            if ($LASTEXITCODE -ne 0) { throw 'extracted package module smoke import failed' }
+          } finally {
+            Pop-Location
+          }
+          Push-Location $consumerRoot
+          try {
+            & npm init --yes --ignore-scripts
+            if ($LASTEXITCODE -ne 0) { throw 'tarball consumer npm init failed' }
+            & npm install --no-save --ignore-scripts --no-audit --no-fund --offline --legacy-peer-deps $tarball
+            if ($LASTEXITCODE -ne 0) { throw 'tarball consumer install failed' }
+            # Resolve every declared export from the installed tarball. The
+            # client entry is browser-hosted, so provide only its loader shell.
+            & node --input-type=module -e "import { createRequire } from 'node:module'; const require=createRequire(import.meta.url); const manifest=require('dsh-plugin-debug/package.json'); const targetOf=value=>typeof value==='string'?value:value?.default; globalThis.window={__ModuleLoader__:{load(payload){if(payload?.id!=='dsh-plugin-debug'||typeof payload.factory!=='function')throw new Error('invalid dsh-plugin-debug client loader contract')}}}; for(const [subpath,value] of Object.entries(manifest.exports)){const specifier=subpath==='.'?'dsh-plugin-debug':'dsh-plugin-debug/'+subpath.slice(2);const target=targetOf(value);if(subpath==='./package.json')require(specifier);else if(!target)throw new Error('export has no importable target: '+subpath);else await import(specifier)} console.log('consumer package exports loaded:',Object.keys(manifest.exports).length)"
+            if ($LASTEXITCODE -ne 0) { throw 'tarball consumer exports smoke import failed' }
+          } finally {
+            Pop-Location
+          }
+          & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $unpacked 'Test-DSHStandalone.ps1')
+          if ($LASTEXITCODE -ne 0) { throw 'extracted package Standalone smoke failed' }

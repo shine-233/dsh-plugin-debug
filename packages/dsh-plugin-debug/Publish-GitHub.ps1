@@ -3,11 +3,42 @@ param(
   [ValidateSet('public', 'private')]
   [string]$Visibility = '',
   [string]$RepositoryName = 'dsh-plugin-debug',
-  [switch]$SkipPush
+  [switch]$SkipPush,
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
-Set-Location -LiteralPath $PSScriptRoot
+$packageRoot = [IO.Path]::GetFullPath($PSScriptRoot)
+$repoRoot = [IO.Path]::GetFullPath((Split-Path -Parent (Split-Path -Parent $packageRoot)))
+
+function Test-GitMetadata {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  return (Test-Path -LiteralPath (Join-Path $Path '.git') -PathType Container) -or
+    (Test-Path -LiteralPath (Join-Path $Path '.git') -PathType Leaf)
+}
+
+if (-not (Test-GitMetadata -Path $repoRoot)) {
+  throw "未找到仓库根目录的 Git 元数据：$repoRoot。请从真实 clone 运行此脚本；脚本不会在包目录或仓库中自动 git init。"
+}
+
+$nestedGit = Join-Path $packageRoot '.git'
+if (Test-Path -LiteralPath $nestedGit) {
+  throw "检测到包目录存在嵌套 .git：$nestedGit。为避免误发布或污染工作树，请先人工检查并移除/迁移它。"
+}
+
+Set-Location -LiteralPath $repoRoot
+
+if ($DryRun) {
+  Write-Output ([ordered]@{
+      result = 'PASS'
+      repositoryRoot = $repoRoot
+      packageRoot = $packageRoot
+      nestedGit = (Test-Path -LiteralPath $nestedGit)
+      wouldInitializeGit = $false
+      wouldRunNetworkCommand = $false
+    } | ConvertTo-Json -Depth 4)
+  exit 0
+}
 
 function Require-Command {
   param([Parameter(Mandatory = $true)][string]$Name)
@@ -50,11 +81,6 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($account)) {
 }
 Write-Host "Authenticated GitHub account: $account" -ForegroundColor Cyan
 
-if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.git') -PathType Container)) {
-  Invoke-CheckedNative -Command 'git' -Arguments @('init')
-  Invoke-CheckedNative -Command 'git' -Arguments @('branch', '-M', 'main')
-}
-
 $configuredName = (git config --local user.name 2>$null).Trim()
 if ([string]::IsNullOrWhiteSpace($configuredName)) {
   $configuredName = Read-Host "Git commit display name (default: $account)"
@@ -70,7 +96,7 @@ if ([string]::IsNullOrWhiteSpace($configuredEmail)) {
 }
 
 Write-Host 'Running local build and tests...' -ForegroundColor Cyan
-Invoke-CheckedNative -Command 'npm' -Arguments @('run', 'check')
+Invoke-CheckedNative -Command 'npm' -Arguments @('run', 'check', '--prefix', $packageRoot)
 
 Invoke-CheckedNative -Command 'git' -Arguments @('add', '-A')
 $stagedFiles = @(git diff --cached --name-only)

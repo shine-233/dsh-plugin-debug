@@ -3,6 +3,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $toolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $reproScript = Join-Path $toolRoot 'DSH-Repro.ps1'
 $failures = [System.Collections.Generic.List[string]]::new()
 
@@ -43,7 +44,7 @@ function Invoke-ReproJson {
   $previousErrorAction = $ErrorActionPreference
   try {
     $ErrorActionPreference = 'Continue'
-    $output = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @tokens 2>&1
+    $output = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @tokens 2>&1
     $exitCode = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $previousErrorAction

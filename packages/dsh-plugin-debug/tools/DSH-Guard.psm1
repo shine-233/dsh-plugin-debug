@@ -403,19 +403,89 @@ function Resolve-DshGuardApiUri {
   return [Uri]::new("$($BaseUrl.TrimEnd('/'))/api/$Method")
 }
 
+# The rc.6 host API and the Typert plugin remotes share the same
+# client-request envelope, but they do not share the same business-payload
+# shape.  Host API methods receive their arguments directly as `payload`,
+# while Typert remotes (for example pluginInventory/list) receive
+# `payload.args`.  Keep the distinction explicit so a diagnostic call cannot
+# silently turn into a host-side bad-request.
+$script:DshDirectPayloadMethods = @(
+  'session.list',
+  'session.search',
+  'session.create',
+  'session.history',
+  'session.models',
+  'session.selectModel',
+  'session.rename',
+  'session.fork',
+  'session.prompt',
+  'session.attachment',
+  'session.updateQueue',
+  'session.cancel',
+  'subagent.list',
+  'subagent.history',
+  'subagent.prompt',
+  'subagent.interrupt',
+  'host.describe',
+  'host.pickDirectory',
+  'host.listDirectory',
+  'host.createDirectory',
+  'host.openPath',
+  'workspace.list',
+  'workspace.create',
+  'workspace.rename',
+  'workspace.delete',
+  'workspace.insertBefore',
+  'workspace.insertSessionBefore',
+  'workspace.archiveSession',
+  'skill.list',
+  'agentPreset.list',
+  'agentPreset.select',
+  'agentPreset.read',
+  'agentPreset.copy',
+  'agentPreset.openDocument',
+  'agentPreset.remove',
+  'goal.create',
+  'goal.edit',
+  'goal.pause',
+  'goal.resume',
+  'goal.complete',
+  'goal.clear',
+  'settings.describe',
+  'settings.openDocument',
+  'settings.update',
+  'settings.replace',
+  'settings.mutate',
+  'credentials.describe',
+  'credentials.set',
+  'credentials.unset',
+  'llm.providers',
+  'llm.models',
+  'llm.discoverModels'
+)
+
 function Invoke-DshGuardApi {
   param(
     [Parameter(Mandatory = $true)][string]$BaseUrl,
     [Parameter(Mandatory = $true)][string]$Method,
     [hashtable]$Arguments = @{},
-    [int]$TimeoutSec = 5
+    [int]$TimeoutSec = 5,
+    [ValidateSet('auto', 'direct', 'args')][string]$PayloadStyle = 'auto'
   )
   $uri = Resolve-DshGuardApiUri -BaseUrl $BaseUrl -Method $Method
+  $useDirectPayload = if ($PayloadStyle -eq 'direct') {
+    $true
+  } elseif ($PayloadStyle -eq 'args') {
+    $false
+  } else {
+    $script:DshDirectPayloadMethods -contains $Method
+  }
+  $payload = if ($useDirectPayload) { $Arguments } else { @{ args = $Arguments } }
   $body = [ordered]@{
     type = 'client-request'
     rpcId = "dsh-guard-$([guid]::NewGuid().ToString('N'))"
     method = $Method
-    payload = @{ args = $Arguments }
+    payload = $payload
   } | ConvertTo-Json -Depth 12 -Compress
   $response = Invoke-RestMethod -UseBasicParsing -Uri $uri -Method Post -ContentType 'application/json' -Body $body -TimeoutSec $TimeoutSec
   if ($null -eq $response.result) { throw "DSH API response has no result: $Method" }

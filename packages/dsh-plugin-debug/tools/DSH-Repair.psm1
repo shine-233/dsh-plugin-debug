@@ -201,6 +201,22 @@ function Test-DshRepairPluginId {
   return $PluginId -match '(?i)(^|[-/])dsh-plugin([-/.]|$)|(^|[-/])plugin([-/.]|$)'
 }
 
+function ConvertTo-DshRepairUtcTimestamp {
+  param([AllowNull()]$Value)
+  if ($null -eq $Value) { throw 'timestamp is missing' }
+  if ($Value -is [DateTimeOffset]) { return $Value.ToUniversalTime() }
+  if ($Value -is [DateTime]) {
+    if ($Value.Kind -eq [DateTimeKind]::Utc) { return [DateTimeOffset]::new($Value) }
+    if ($Value.Kind -eq [DateTimeKind]::Local) { return ([DateTimeOffset]$Value).ToUniversalTime() }
+    return [DateTimeOffset]::new($Value, [TimeSpan]::Zero)
+  }
+  return [DateTimeOffset]::Parse(
+    [string]$Value,
+    [Globalization.CultureInfo]::InvariantCulture,
+    [Globalization.DateTimeStyles]::RoundtripKind
+  ).ToUniversalTime()
+}
+
 function New-DshRepairPlan {
   param(
     [Parameter(Mandatory = $true)]$Diagnostics,
@@ -311,7 +327,7 @@ function Test-DshRepairPlan {
   if (-not (Test-DshRepairProfileName -Profile $profile)) { [void]$errors.Add('plan.profile is invalid') }
   if ([string](Get-DshRepairProperty -Object $Plan -Name 'mode') -cne 'advisory') { [void]$errors.Add('plan.mode must be advisory') }
   $expiresAt = $null
-  try { $expiresAt = [DateTimeOffset]::Parse([string](Get-DshRepairProperty -Object $Plan -Name 'expiresAt')).ToUniversalTime() }
+  try { $expiresAt = ConvertTo-DshRepairUtcTimestamp -Value (Get-DshRepairProperty -Object $Plan -Name 'expiresAt') }
   catch { [void]$errors.Add('plan.expiresAt must be an ISO timestamp') }
   if ($null -ne $expiresAt -and $expiresAt -le [DateTimeOffset]::UtcNow) { [void]$errors.Add('plan has expired') }
   $observedCandidateIds = @(
@@ -507,7 +523,7 @@ function Invoke-DshRepairPlan {
   $planProfile = [string](Get-DshRepairProperty -Object $Plan -Name 'profile')
   if ($planProfile -cne $Profile) { throw "repair plan Profile '$planProfile' does not match requested Profile '$Profile'" }
   try {
-    $planExpiry = [DateTimeOffset]::Parse([string](Get-DshRepairProperty -Object $Plan -Name 'expiresAt')).ToUniversalTime()
+    $planExpiry = ConvertTo-DshRepairUtcTimestamp -Value (Get-DshRepairProperty -Object $Plan -Name 'expiresAt')
     if ($planExpiry -le [DateTimeOffset]::UtcNow) { throw 'repair plan has expired' }
   } catch {
     if ($_.Exception.Message -eq 'repair plan has expired') { throw }

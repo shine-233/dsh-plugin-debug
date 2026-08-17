@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $toolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $statusScript = Join-Path $toolRoot 'Get-DSHGuardianStatus.ps1'
 $debugEntry = Join-Path (Split-Path -Parent $toolRoot) 'Debug-DSH.ps1'
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-guardian-status-' + [Guid]::NewGuid().ToString('N'))
@@ -20,8 +21,7 @@ function Invoke-GuardianStatus {
     [string]$EntryScript = '',
     [switch]$PublicEntry
   )
-  $powerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
-  if ($null -eq $powerShell) { throw 'Windows PowerShell executable is required for the Guardian status fixture' }
+  $powerShellPath = Get-DshPowerShellPath
   $scriptToRun = if ([string]::IsNullOrWhiteSpace($EntryScript)) { $statusScript } else { $EntryScript }
   $childArguments = if ($PublicEntry) {
     @('-Action', 'guardian-status', '-InputPath', $Path)
@@ -31,7 +31,7 @@ function Invoke-GuardianStatus {
   $outputPath = Join-Path $tempRoot ([Guid]::NewGuid().ToString('N') + '.out')
   $errorPath = Join-Path $tempRoot ([Guid]::NewGuid().ToString('N') + '.err')
   try {
-    $process = Start-Process -FilePath $powerShell.Source -ArgumentList (@('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptToRun) + $childArguments) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $outputPath -RedirectStandardError $errorPath
+    $process = Start-Process -FilePath $powerShellPath -ArgumentList (@('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptToRun) + $childArguments) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $outputPath -RedirectStandardError $errorPath
     $text = (Get-Content -LiteralPath $outputPath -Raw -Encoding UTF8).Trim()
     return [PSCustomObject]@{ ExitCode = [int]$process.ExitCode; Text = $text; Value = ($text | ConvertFrom-Json) }
   } finally {
@@ -43,14 +43,14 @@ function Invoke-GuardianStatusThroughJsonHarness {
   param([Parameter(Mandatory = $true)][string]$Path)
   $childScript = [IO.Path]::GetFullPath($debugEntry)
   $childArgs = ConvertTo-Json -InputObject ([ordered]@{ Action = 'guardian-status'; InputPath = $Path }) -Compress -Depth 8
-  $childCommand = '$parsedArgs = ConvertFrom-Json -InputObject $env:DSH_GUARDIAN_HARNESS_ARGS; $rawArgs = [System.Collections.Generic.List[string]]::new(); if ($null -ne $parsedArgs) { foreach ($property in $parsedArgs.PSObject.Properties) { $name = [string]$property.Name; $value = $property.Value; if ($value -is [bool]) { if ([bool]$value) { [void]$rawArgs.Add("-$name") }; continue }; if ($null -eq $value) { continue }; if ($value -is [System.Array]) { foreach ($item in $value) { if ($null -ne $item) { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$item) } } } else { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$value) } } }; & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $env:DSH_GUARDIAN_HARNESS_SCRIPT @rawArgs; $childExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }; exit $childExit'
+  $childCommand = '$parsedArgs = ConvertFrom-Json -InputObject $env:DSH_GUARDIAN_HARNESS_ARGS; $rawArgs = [System.Collections.Generic.List[string]]::new(); if ($null -ne $parsedArgs) { foreach ($property in $parsedArgs.PSObject.Properties) { $name = [string]$property.Name; $value = $property.Value; if ($value -is [bool]) { if ([bool]$value) { [void]$rawArgs.Add("-$name") }; continue }; if ($null -eq $value) { continue }; if ($value -is [System.Array]) { foreach ($item in $value) { if ($null -ne $item) { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$item) } } } else { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$value) } } }; & $env:DSH_GUARDIAN_HARNESS_HOST -NoLogo -NoProfile -ExecutionPolicy Bypass -File $env:DSH_GUARDIAN_HARNESS_SCRIPT @rawArgs; $childExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }; exit $childExit'
   $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCommand))
   $outputPath = Join-Path $tempRoot ([Guid]::NewGuid().ToString('N') + '.harness.out')
   $errorPath = Join-Path $tempRoot ([Guid]::NewGuid().ToString('N') + '.harness.err')
   $process = $null
   try {
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = 'powershell.exe'
+    $startInfo.FileName = Get-DshPowerShellPath
     $startInfo.Arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand"
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
@@ -58,6 +58,7 @@ function Invoke-GuardianStatusThroughJsonHarness {
     $startInfo.RedirectStandardError = $true
     $startInfo.EnvironmentVariables['DSH_GUARDIAN_HARNESS_SCRIPT'] = $childScript
     $startInfo.EnvironmentVariables['DSH_GUARDIAN_HARNESS_ARGS'] = $childArgs
+    $startInfo.EnvironmentVariables['DSH_GUARDIAN_HARNESS_HOST'] = Get-DshPowerShellPath
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     if (-not $process.Start()) { throw 'could not start JSON guardian harness' }

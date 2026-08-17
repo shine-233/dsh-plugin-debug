@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $toolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $packageRoot = Split-Path -Parent $toolRoot
 $graphScript = Join-Path $toolRoot 'DSH-DependencyGraph.ps1'
 $debugEntry = Join-Path $packageRoot 'Debug-DSH.ps1'
@@ -34,7 +35,7 @@ function Invoke-DshDependencyGraphJson {
   $previousErrorAction = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    $raw = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments 2>&1
+    $raw = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments 2>&1
   } finally {
     $ErrorActionPreference = $previousErrorAction
   }

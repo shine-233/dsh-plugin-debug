@@ -4,6 +4,7 @@ param()
 $ErrorActionPreference = 'Stop'
 $packageRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $toolRoot = Join-Path $packageRoot 'tools'
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
 
 function Assert-Standalone {
@@ -59,6 +60,10 @@ function Read-StandaloneTaskText {
   }
 }
 
+function Get-StandalonePowerShellPath {
+  return Get-DshPowerShellPath
+}
+
 function Invoke-PowerShellJson {
   param(
     [string]$ScriptPath,
@@ -91,7 +96,8 @@ function Invoke-PowerShellJson {
     # masked the fail-closed repair assertions.  Launch the process directly
     # so the operating-system exit code is available after the bounded wait.
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = 'powershell.exe'
+    $childPowerShell = Get-StandalonePowerShellPath
+    $startInfo.FileName = $childPowerShell
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
@@ -106,6 +112,7 @@ function Invoke-PowerShellJson {
     }
     $startInfo.EnvironmentVariables['PSModulePath'] = $modulePath
     $startInfo.EnvironmentVariables['PATH'] = [Environment]::GetEnvironmentVariable('PATH')
+    $startInfo.EnvironmentVariables['DSH_STANDALONE_CHILD_HOST'] = $childPowerShell
     $startInfo.EnvironmentVariables['DSH_STANDALONE_CHILD_SCRIPT'] = [IO.Path]::GetFullPath($ScriptPath)
     $startInfo.EnvironmentVariables['DSH_STANDALONE_CHILD_ARGS'] = (ConvertTo-Json -InputObject $argumentMap -Compress -Depth 12)
     # JSON is parsed in the child, then converted to real command-line tokens
@@ -114,7 +121,7 @@ function Invoke-PowerShellJson {
     # `-Force True`), which Windows PowerShell cannot bind to SwitchParameter.
     # A token array is safe here because the target is the external host, not a
     # PowerShell function or script with positional parameter binding.
-    $childCommand = '$parsedArgs = ConvertFrom-Json -InputObject $env:DSH_STANDALONE_CHILD_ARGS; $rawArgs = [System.Collections.Generic.List[string]]::new(); if ($null -ne $parsedArgs) { foreach ($property in $parsedArgs.PSObject.Properties) { $name = [string]$property.Name; $value = $property.Value; if ($value -is [bool]) { if ([bool]$value) { [void]$rawArgs.Add("-$name") }; continue }; if ($null -eq $value) { continue }; if ($value -is [System.Array]) { foreach ($item in $value) { if ($null -ne $item) { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$item) } } } else { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$value) } } }; & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $env:DSH_STANDALONE_CHILD_SCRIPT @rawArgs; $invocationSucceeded = $LASTEXITCODE -eq 0; $childExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } elseif ($invocationSucceeded) { 0 } else { 1 }; exit $childExit'
+    $childCommand = '$parsedArgs = ConvertFrom-Json -InputObject $env:DSH_STANDALONE_CHILD_ARGS; $rawArgs = [System.Collections.Generic.List[string]]::new(); if ($null -ne $parsedArgs) { foreach ($property in $parsedArgs.PSObject.Properties) { $name = [string]$property.Name; $value = $property.Value; if ($value -is [bool]) { if ([bool]$value) { [void]$rawArgs.Add("-$name") }; continue }; if ($null -eq $value) { continue }; if ($value -is [System.Array]) { foreach ($item in $value) { if ($null -ne $item) { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$item) } } } else { [void]$rawArgs.Add("-$name"); [void]$rawArgs.Add([string]$value) } } }; & $env:DSH_STANDALONE_CHILD_HOST -NoLogo -NoProfile -ExecutionPolicy Bypass -File $env:DSH_STANDALONE_CHILD_SCRIPT @rawArgs; $invocationSucceeded = $LASTEXITCODE -eq 0; $childExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } elseif ($invocationSucceeded) { 0 } else { 1 }; exit $childExit'
     $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCommand))
     $startInfo.Arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCommand"
     $process = [Diagnostics.Process]::new()
@@ -172,7 +179,29 @@ function Invoke-PowerShellJson {
   return [PSCustomObject]@{ exitCode = $exitCode; text = $text; value = $value }
 }
 
+function Invoke-StandaloneFixtureWithStartupRetry {
+  param(
+    [Parameter(Mandatory = $true)][string]$ScriptPath,
+    [Parameter(Mandatory = $true)][hashtable]$Arguments,
+    [int]$TimeoutSec = 90
+  )
+
+  $result = Invoke-PowerShellJson -ScriptPath $ScriptPath -Arguments $Arguments -TimeoutSec $TimeoutSec
+  # HttpListener fixtures are deliberately launched in a child PowerShell.
+  # A cold Windows host can occasionally terminate that child before its
+  # readiness marker is written. Retry only that bounded startup condition;
+  # assertion failures and protocol failures must remain real failures.
+  $startupFailure = [string]$result.text -match '(?i)(?:HttpListener process exited before readiness|HttpListener did not become ready|HTTP fixture exited before readiness)'
+  if ($result.exitCode -ne 0 -and $startupFailure) {
+    Write-Host "[standalone] retry fixture startup: $(Split-Path -Leaf $ScriptPath)"
+    Start-Sleep -Milliseconds 750
+    return Invoke-PowerShellJson -ScriptPath $ScriptPath -Arguments $Arguments -TimeoutSec $TimeoutSec
+  }
+  return $result
+}
+
 $expected = @(
+  'DSH-PowerShell.ps1',
   'DSH-Guard.psm1',
   'DSH-Repair.psm1',
   'DSH-Recovery.psm1',
@@ -191,6 +220,7 @@ $expected = @(
   'Test-DSHTraceAutopsy.ps1',
   'Test-DSHIncidentCorrelation.ps1',
   'Test-DSHLiveApi.ps1',
+  'Test-DSHCompatibility.ps1',
   'DSH-KnownGood.psm1',
   'Test-DSHKnownGood.ps1',
   'Test-DSHPointerBrowser.ps1',
@@ -233,6 +263,22 @@ $expected = @(
   'fixtures\trace-loop.json',
   'fixtures\trace-recursion.json'
 )
+$repoRoot = [IO.Path]::GetFullPath((Split-Path -Parent (Split-Path -Parent $packageRoot)))
+$publishHelper = Join-Path $packageRoot 'Publish-GitHub.ps1'
+$repoGit = Join-Path $repoRoot '.git'
+$hasRepoGit = (Test-Path -LiteralPath $repoGit -PathType Container) -or (Test-Path -LiteralPath $repoGit -PathType Leaf)
+if ((Test-Path -LiteralPath $publishHelper -PathType Leaf) -and $hasRepoGit) {
+  try {
+    $publishDryRun = & $publishHelper -DryRun 2>&1 | Out-String
+    Assert-Standalone ($LASTEXITCODE -eq 0) 'Publish-GitHub.ps1 -DryRun failed'
+    Assert-Standalone ($publishDryRun -match '"wouldInitializeGit"\s*:\s*false') 'Publish-GitHub.ps1 dry run would initialize a repository'
+    Assert-Standalone ($publishDryRun -notmatch '(?i)nestedGit.*true') 'Publish-GitHub.ps1 dry run detected nested .git'
+  } catch {
+    Assert-Standalone $false "Publish-GitHub.ps1 dry run threw: $($_.Exception.Message)"
+  }
+} else {
+  Write-Host '[standalone] publication helper skipped: package-only layout'
+}
 foreach ($relative in $expected) {
   Assert-Standalone (Test-Path -LiteralPath (Join-Path $toolRoot $relative) -PathType Leaf) "missing standalone file: $relative"
 }
@@ -248,6 +294,9 @@ foreach ($file in $powerShellFiles) {
 $standaloneLauncherText = Get-Content -LiteralPath (Join-Path $toolRoot 'Start-DSH.ps1') -Raw -Encoding UTF8
 Assert-Standalone ($standaloneLauncherText -notmatch '(?i)plugin.?store') 'standalone launcher still contains plugin-store coupling'
 Assert-Standalone ($standaloneLauncherText -notmatch '(?i)dsh-one-click') 'standalone launcher references dsh-one-click'
+foreach ($generatedEntry in @('index.js', 'client.js', 'hotswap-check.js', 'agent-report.js', 'repository-check.js', 'tool-adapter.js', 'task-guardian.js')) {
+  Assert-Standalone (Test-Path -LiteralPath (Join-Path $packageRoot "lib\$generatedEntry") -PathType Leaf) "missing generated entry: lib/$generatedEntry"
+}
 
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-provenance-standalone-' + [Guid]::NewGuid().ToString('N'))
 $fixtureRoot = Join-Path $tempRoot 'workspace'
@@ -540,12 +589,12 @@ fs.cpSync(source, installedRoot, { recursive: true });
   Assert-Standalone ($traceAutopsyFixture.value.tests.rawPayloadLeak -eq $false -and $traceAutopsyFixture.value.tests.faultFindingCount -ge 9) 'TraceAutopsy fixture did not preserve metadata-only evidence'
   $fixtureChecks++
 
-  $knownGoodFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'known-good-fixture' }
+  $knownGoodFixture = Invoke-StandaloneFixtureWithStartupRetry -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'known-good-fixture' }
   Assert-Standalone ($knownGoodFixture.exitCode -eq 0 -and $knownGoodFixture.value.result -eq 'PASS') "known-good fixture did not return PASS: $($knownGoodFixture.text)"
   Assert-Standalone ($knownGoodFixture.value.automaticRestoreBounded -eq $true -and $knownGoodFixture.value.failedPluginPreserved -eq $true -and $knownGoodFixture.value.workspaceUntouched -eq $true) "known-good fixture did not prove bounded recovery and workspace safety: $($knownGoodFixture.text)"
   $fixtureChecks++
 
-  $liveApiFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'live-api-fixture' } -TimeoutSec 90
+  $liveApiFixture = Invoke-StandaloneFixtureWithStartupRetry -ScriptPath (Join-Path $packageRoot 'DSH-Provenance.ps1') -Arguments @{ Action = 'live-api-fixture' } -TimeoutSec 90
   Assert-Standalone ($liveApiFixture.exitCode -eq 0 -and $liveApiFixture.value.result -eq 'PASS') "live API fixture did not return PASS: exit=$($liveApiFixture.exitCode); text=$($liveApiFixture.text)"
   Assert-Standalone ($liveApiFixture.value.usedRealDshPort -eq $false -and $liveApiFixture.value.usedRealDshHome -eq $false) 'live API fixture crossed the real DSH boundary'
   $fixtureChecks++
@@ -809,9 +858,10 @@ fs.cpSync(source, installedRoot, { recursive: true });
     PlanPath = $planPath
     Force = $true
   }
-  $receiptPath = [string]$repairApply.value.value.receipt
+  $repairApplyValue = if ($null -ne $repairApply.value -and $null -ne $repairApply.value.PSObject.Properties['value']) { $repairApply.value.value } else { $null }
+  $receiptPath = if ($null -ne $repairApplyValue -and $null -ne $repairApplyValue.PSObject.Properties['receipt']) { [string]$repairApplyValue.receipt } else { '' }
   Assert-Standalone ($repairApply.exitCode -eq 0 -and $repairApply.value.result -eq 'PASS') 'repair apply did not return PASS'
-  Assert-Standalone ($repairApply.value.value.status -eq 'applied') 'repair apply did not report applied'
+  Assert-Standalone ($null -ne $repairApplyValue -and $repairApplyValue.status -eq 'applied') "repair apply did not report applied: $($repairApply.text)"
   Assert-Standalone (-not [string]::IsNullOrWhiteSpace($receiptPath)) "repair apply did not return a receipt path: $($repairApply.text)"
   if ([string]::IsNullOrWhiteSpace($receiptPath)) { $receiptPath = Join-Path $tempRoot 'missing-receipt.json' }
   Assert-Standalone (Test-Path -LiteralPath (Join-Path $fixtureState 'guard-state.json') -PathType Leaf) 'repair apply did not write guard-state.json'
@@ -877,8 +927,9 @@ fs.cpSync(source, installedRoot, { recursive: true });
     PlanPath = $unifiedPlanPath
     Force = $true
   }
-  $unifiedReceiptPath = [string]$unifiedApply.value.value.receipt
-  Assert-Standalone ($unifiedApply.exitCode -eq 0 -and $unifiedApply.value.result -eq 'PASS' -and $unifiedApply.value.value.status -eq 'applied') 'unified repair-apply entry did not apply the reviewed plan'
+  $unifiedApplyValue = if ($null -ne $unifiedApply.value -and $null -ne $unifiedApply.value.PSObject.Properties['value']) { $unifiedApply.value.value } else { $null }
+  $unifiedReceiptPath = if ($null -ne $unifiedApplyValue -and $null -ne $unifiedApplyValue.PSObject.Properties['receipt']) { [string]$unifiedApplyValue.receipt } else { '' }
+  Assert-Standalone ($unifiedApply.exitCode -eq 0 -and $unifiedApply.value.result -eq 'PASS' -and $null -ne $unifiedApplyValue -and $unifiedApplyValue.status -eq 'applied') "unified repair-apply entry did not apply the reviewed plan: $($unifiedApply.text)"
   Assert-Standalone (-not [string]::IsNullOrWhiteSpace($unifiedReceiptPath)) "unified repair-apply entry did not return a receipt: $($unifiedApply.text)"
   if ([string]::IsNullOrWhiteSpace($unifiedReceiptPath)) { $unifiedReceiptPath = Join-Path $tempRoot 'missing-unified-receipt.json' }
   $unifiedRevert = Invoke-PowerShellJson -ScriptPath $unifiedEntry -Arguments @{

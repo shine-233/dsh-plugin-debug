@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-plugin-debug",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "bundleType": "dsh-npm-bundle",
   "independentRuntime": true,
   "features": {
@@ -26,6 +26,69 @@
       "standaloneTool": true,
       "metadataOnly": true,
       "dynamicAccessManualReview": true
+    },
+    "pluginRepositoryHealthCheck": {
+      "embedded": true,
+      "tool": "plugin_check",
+      "actions": [
+        "check",
+        "scan",
+        "schema"
+      ],
+      "reportSchemaVersion": 2,
+      "repositoryForms": [
+        "registry",
+        "skill",
+        "collection",
+        "bundle",
+        "tool-bundle"
+      ],
+      "offlineOnly": true,
+      "executesPluginCode": false,
+      "manualInstallOnlyWarning": true,
+      "missingPrepackWarning": true,
+      "scannedSourceExtensions": [
+        ".js",
+        ".mjs",
+        ".cjs",
+        ".ts",
+        ".mts",
+        ".cts",
+        ".tsx"
+      ]
+    },
+    "pluginHotswapCapabilityCheck": {
+      "embedded": true,
+      "tool": "plugin_hotswap_check",
+      "reportSchemaVersion": 1,
+      "readOnly": true,
+      "actualHotSwap": false,
+      "requiresAuthoritativeLifecycleContract": true,
+      "protectsCoreAndDynamicEntries": true,
+      "observesOfficialHmrWithoutInvokingIt": true,
+      "invokesInternalDisposeOrRefresh": false,
+      "rewritesProfile": false,
+      "installsDependencies": false
+    },
+    "deterministicAgentReport": {
+      "embedded": true,
+      "tool": "dsh_agent_report",
+      "reportSchemaVersion": 1,
+      "readOnly": true,
+      "localDeterministicGeneration": true,
+      "generationTokens": 0,
+      "credentialReads": false,
+      "networkPricingFetch": false,
+      "rawCommandsInReport": false,
+      "rawSecretValuesInReport": false,
+      "dangerousTextDetectionOnly": true,
+      "executionEvidence": false,
+      "rawToolErrorsInReport": false,
+      "persistedHistoryWhenSessionQueryAvailable": true,
+      "liveSessionFallback": true,
+      "boundedSessions": 500,
+      "boundedEvents": 1000000,
+      "costIsEstimate": true
     },
     "readOnlyPluginDependencyGraph": {
       "standaloneTool": true,
@@ -80,16 +143,32 @@
   },
   "files": {
     "package.json": {
-      "bytes": 2930,
-      "sha256": "e207688bc1caa3fa629ec3747f6b8f5c0d61c061dcce6f4b2b2c1014882965b4"
+      "bytes": 3735,
+      "sha256": "d34ef7a4c2c922ccfcc41449e84b8cea14f4c537c05d50cbd2e9d6040d6e5725"
     },
     "cordis.patch.yml": {
       "bytes": 242,
       "sha256": "09add5de1b427332a653d5af802bfed5ecd895c19c3bac15a9acfe4bb3395cbe"
     },
     "lib/index.js": {
-      "bytes": 5448,
-      "sha256": "425f3269aa33c1017ede6908d7bf6077d37a0c3e2c11cc3bcb77197450349e2a"
+      "bytes": 7044,
+      "sha256": "87ee74ede7d8ec67e3147ea68a41908ea845ec82d5922abe7f3dc05bb8c69fb8"
+    },
+    "lib/hotswap-check.js": {
+      "bytes": 19615,
+      "sha256": "251b77b59b7d0696d95745a53270012155affff5e7c33e51f5b7e32d8bde599f"
+    },
+    "lib/agent-report.js": {
+      "bytes": 25452,
+      "sha256": "464d1c1d06ca648fb379d19268e844449e007a264e6549ba00bd7bdf89cc6159"
+    },
+    "lib/repository-check.js": {
+      "bytes": 37224,
+      "sha256": "836234b938b0a77a09305059eaafed5e5eb5b03fc78a986a7c47b6eb8ef16166"
+    },
+    "lib/tool-adapter.js": {
+      "bytes": 3687,
+      "sha256": "9387b229ca79159d57bbbfed45817b0360deaf785f9da5c098e293df171715a6"
     },
     "lib/task-guardian.js": {
       "bytes": 18375,

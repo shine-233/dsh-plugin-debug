@@ -1,24 +1,28 @@
 {
   "schemaVersion": 1,
   "repositoryRole": "dsh-publication-release",
-  "status": "published",
+  "status": "candidate",
   "publication": {
     "githubOwner": "shine-233",
     "repositoryName": "dsh-plugin-debug",
     "visibility": "public",
     "copyrightHolder": "shine-233",
     "remoteConfigured": true,
-    "pushPerformed": true,
+    "pushPerformed": false,
     "remoteUrl": "https://github.com/shine-233/dsh-plugin-debug.git",
     "defaultBranch": "main",
-    "publishedCommit": "b234e79dfe7b349568f7f3e3c63504979f0e74e0"
+    "publishedCommit": null
   },
   "verification": {
-    "sourceSnapshotComparedAt": "2026-08-16",
+    "sourceSnapshotComparedAt": "2026-08-17",
+    "sourceSnapshotScope": "local 0.8.3 candidate working tree",
+    "sourceCommit": null,
+    "workingTreeState": "dirty",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
-    "packageFileCount": 96,
-    "publicationVerifierPassedAt": "2026-08-16 08:30:15.4171738Z",
-    "freshCloneVerifiedAt": "2026-08-16 08:28:54Z"
+    "packageFileCount": 102,
+    "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts",
+    "publicationVerifierPassedAt": null,
+    "freshCloneVerifiedAt": null
   },
   "layout": {
     "packageRoot": "packages/dsh-plugin-debug",
@@ -30,9 +34,9 @@
       "id": "dsh-plugin-debug",
       "path": "packages/dsh-plugin-debug",
       "kind": "dsh-debug-plugin",
-      "version": "0.8.2",
+      "version": "0.8.3",
       "standaloneInstall": true,
-      "includes": ["runtime-provenance", "host-diagnostics", "resource-pressure", "incident-capture-and-correlation", "recovery", "constrained-self-repair", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "trace-eval-profile-autopsy", "metadata-only-repro-export", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
+      "includes": ["runtime-provenance", "host-diagnostics", "resource-pressure", "incident-capture-and-correlation", "recovery", "constrained-self-repair", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "trace-eval-profile-autopsy", "metadata-only-repro-export", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "plugin-repository-health-check", "plugin-hotswap-capability-check", "deterministic-agent-report", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
       "license": "MIT"
     }
   ],

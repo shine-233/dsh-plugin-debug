@@ -54,13 +54,36 @@ function Log([string]$Message) {
   if ($ShowWindow) { Write-Host $Message }
 }
 
+function Get-RawPidRecordTimestamp {
+  param(
+    [Parameter(Mandatory = $true)][string]$RawJson
+  )
+
+  # Windows PowerShell eagerly converts ISO JSON values to DateTime. Read the
+  # two identity fields from the original text so their UTC offset is retained.
+  foreach ($propertyName in @('processStartTimeUtc', 'startedAt')) {
+    $pattern = '"' + [Regex]::Escape($propertyName) + '"\s*:\s*"(?<timestamp>[^"\\]*(?:\\.[^"\\]*)*)"'
+    $match = [Regex]::Match(
+      $RawJson,
+      $pattern,
+      [Text.RegularExpressions.RegexOptions]::CultureInvariant
+    )
+    if ($match.Success) {
+      $value = $match.Groups['timestamp'].Value
+      if (-not [string]::IsNullOrWhiteSpace($value)) { return $value }
+    }
+  }
+  return $null
+}
+
 try {
   $PidFile = Select-PidFile
   if (-not (Test-Path -LiteralPath $PidFile -PathType Leaf)) {
     Log 'no DSH PID file found; it may already be stopped.'
     exit 0
   }
-  $record = Get-Content -Raw -LiteralPath $PidFile -Encoding UTF8 | ConvertFrom-Json
+  $rawPidRecord = Get-Content -Raw -LiteralPath $PidFile -Encoding UTF8
+  $record = $rawPidRecord | ConvertFrom-Json
   if ($null -ne $record.stateRoot -and -not $explicitStateRoot) {
     $StateRoot = [string]$record.stateRoot
     $LogDir = Join-Path $StateRoot 'logs'
@@ -74,7 +97,19 @@ try {
     exit 0
   }
 
-  $expected = [DateTime]::Parse([string]$record.startedAt).ToUniversalTime()
+  # The launcher writes ISO-8601 UTC timestamps. DateTime.Parse can treat a
+  # trailing Z as local time on Windows PowerShell and then apply the local
+  # offset a second time, falsely reporting a reused PID. Prefer the precise
+  # child start timestamp and preserve its offset with DateTimeOffset.
+  $recordedStart = Get-RawPidRecordTimestamp -RawJson $rawPidRecord
+  if ([string]::IsNullOrWhiteSpace($recordedStart)) {
+    throw 'PID record does not contain a usable processStartTimeUtc or startedAt timestamp.'
+  }
+  $expected = [DateTimeOffset]::Parse(
+    $recordedStart,
+    [Globalization.CultureInfo]::InvariantCulture,
+    [Globalization.DateTimeStyles]::RoundtripKind
+  ).UtcDateTime
   $actual = $process.StartTime.ToUniversalTime()
   if ([Math]::Abs(($actual - $expected).TotalSeconds) -gt 10) {
     throw "PID $targetPid appears reused by another process; it was not stopped."

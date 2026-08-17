@@ -34,3 +34,63 @@ export function registerPluginCheckTool(ctx, { defineTool, checker }) {
   })
   return ctx.tools.register(definition)
 }
+
+export function registerPluginHotswapCheckTool(ctx, { defineTool, probe }) {
+  const definition = defineTool({
+    name: 'plugin_hotswap_check',
+    description: 'Read-only report of whether the current DSH Host declares a safe plugin lifecycle contract. It never reloads, disables, installs, or rewrites a plugin.',
+    parameters: {
+      pluginId: {
+        type: 'string',
+        description: 'optional exact plugin id or module name to assess; omit to report Host-wide capability only',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(args) {
+      const pluginId = typeof args?.pluginId === 'string' && args.pluginId.trim() !== '' ? args.pluginId : undefined
+      return JSON.stringify(await probe({ pluginId }))
+    },
+    timeoutMs: 5000,
+  })
+  return ctx.tools.register(definition)
+}
+
+export function registerAgentReportTool(ctx, { defineTool, getSource, generate }) {
+  const definition = defineTool({
+    name: 'dsh_agent_report',
+    description: 'Generate a read-only deterministic report of DSH sessions, tokens, estimated cost, tool calls, risks, and anomalies. It never executes commands, reads credentials, calls a model, or writes session history.',
+    parameters: {
+      preset: {
+        type: 'string',
+        enum: ['daily', '24h', 'weekly', 'monthly', 'yearly', 'custom'],
+        description: 'report range; defaults to weekly',
+      },
+      from: {
+        type: 'string',
+        description: 'ISO start time, required for custom',
+      },
+      to: {
+        type: 'string',
+        description: 'ISO end time, required for custom',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(args) {
+      const result = await generate({
+        source: getSource(),
+        preset: typeof args?.preset === 'string' ? args.preset : 'weekly',
+        from: typeof args?.from === 'string' ? args.from : undefined,
+        to: typeof args?.to === 'string' ? args.to : undefined,
+      })
+      return result.report
+    },
+    timeoutMs: 15000,
+  })
+  return ctx.tools.register(definition)
+}

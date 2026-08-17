@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $toolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $toolRoot 'DSH-PowerShell.ps1')
 $packageRoot = Split-Path -Parent $toolRoot
 $diffScript = Join-Path $toolRoot 'DSH-DiagnosticsDiff.ps1'
 $debugEntry = Join-Path $packageRoot 'Debug-DSH.ps1'
@@ -19,7 +20,7 @@ function Invoke-DshDiagnosticsDiffJson {
   param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][string[]]$Arguments)
   $stderrPath = Join-Path $tempRoot ('stderr-' + [guid]::NewGuid().ToString('N') + '.txt')
   try {
-    $raw = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments 2> $stderrPath
+    $raw = & (Get-DshPowerShellPath) -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments 2> $stderrPath
     $exitCode = $LASTEXITCODE
     $text = ($raw | Out-String).Trim()
     if ([string]::IsNullOrWhiteSpace($text) -and (Test-Path -LiteralPath $stderrPath -PathType Leaf)) {

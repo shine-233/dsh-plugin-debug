@@ -1,5 +1,7 @@
-import { checkRepository, getCheckSchema, scanRepositories } from './repository-check.js'
-import { registerPluginCheckTool } from './tool-adapter.js'
+import { checkRepository, getCheckSchema, scanRepositories, REPORT_SCHEMA_VERSION } from './repository-check.js'
+import { inspectHotswapCapabilities } from './hotswap-check.js'
+import { registerAgentReportTool, registerPluginCheckTool, registerPluginHotswapCheckTool } from './tool-adapter.js'
+import { createLiveSessionsReportSource, generateAgentReport } from './agent-report.js'
 import { registerTaskGuardian } from './task-guardian.js'
 
 // The debug bundle is intentionally standalone.  DSH hosts that expose a
@@ -115,6 +117,16 @@ export function decideToolCall(config, exec) {
 // crashes, file recovery, and Profile mutation. With no config, this hook is a
 // strict no-op so installing the bundle cannot silently change tool behavior.
 export function apply(ctx, config = {}) {
+  let sessionQuery = null
+  let sessions = null
+  if (typeof ctx?.inject === 'function') {
+    ctx.inject(['sessionQuery'], child => {
+      sessionQuery = child.sessionQuery
+    })
+    ctx.inject(['sessions'], child => {
+      sessions = child.sessions
+    })
+  }
   if (ctx?.tools?.register) {
     registerPluginCheckTool(ctx, {
       defineTool,
@@ -123,6 +135,25 @@ export function apply(ctx, config = {}) {
         scan: scanRepositories,
         schema: getCheckSchema,
       },
+    })
+    registerPluginHotswapCheckTool(ctx, {
+      defineTool,
+      probe: ({ pluginId }) => inspectHotswapCapabilities({ context: ctx, targetId: pluginId }),
+    })
+    registerAgentReportTool(ctx, {
+      defineTool,
+      getSource: () => {
+        if (sessionQuery && typeof sessionQuery.listSessions === 'function' && typeof sessionQuery.readSession === 'function') {
+          return {
+            kind: 'session-query',
+            listSessions: signal => sessionQuery.listSessions(signal),
+            readSession: sessionId => sessionQuery.readSession(sessionId),
+          }
+        }
+        if (sessions && typeof sessions.list === 'function') return createLiveSessionsReportSource(sessions)
+        return null
+      },
+      generate: generateAgentReport,
     })
   }
   registerTaskGuardian(ctx, asRecord(config).guardian)
@@ -135,5 +166,7 @@ export function apply(ctx, config = {}) {
   }, { prepend: true })
 }
 
-export { checkRepository, getCheckSchema, scanRepositories }
+export { checkRepository, getCheckSchema, scanRepositories, REPORT_SCHEMA_VERSION }
+export { HOTSWAP_CHECK_SCHEMA_VERSION, getHotswapCheckSchema, inspectHotswapCapabilities } from './hotswap-check.js'
+export { AGENT_REPORT_SCHEMA_VERSION, AGENT_REPORT_PRESETS, aggregateAgentReportEvents, computeAgentReportCost, generateAgentReport, resolveAgentReportRange } from './agent-report.js'
 export { GUARDIAN_STATUS_PATH, guardianToolFingerprint, normalizeGuardianConfig, registerTaskGuardian } from './task-guardian.js'

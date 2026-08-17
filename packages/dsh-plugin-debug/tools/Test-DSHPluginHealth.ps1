@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $root 'DSH-PowerShell.ps1')
 
 function Assert-Health {
   param([bool]$Condition, [string]$Message)
@@ -55,7 +56,7 @@ try {
   [IO.File]::WriteAllText((Join-Path $runtimePackageRoot 'package.json'), ($runtimePackage | ConvertTo-Json -Depth 10), $utf8NoBom)
   [IO.File]::WriteAllText((Join-Path $runtimePackageRoot 'cordis.patch.yml'), "- id: runtime-only`n", $utf8NoBom)
 
-  $raw = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $healthScript -Profile $profile -DshHome $dshHome -RuntimeRoot $runtimeRoot -SkipApi | Out-String)
+  $raw = (& (Get-DshPowerShellPath) -NoProfile -ExecutionPolicy Bypass -File $healthScript -Profile $profile -DshHome $dshHome -RuntimeRoot $runtimeRoot -SkipApi | Out-String)
   $report = $raw | ConvertFrom-Json
   Assert-Health ($report.summary.errorCount -eq 1) 'missing bundle should be an error'
   Assert-Health (@($report.findings | Where-Object { $_.code -eq 'patch.duplicate-id' }).Count -eq 1) 'third-party duplicate patch id should be reported'

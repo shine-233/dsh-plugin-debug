@@ -1,0 +1,64 @@
+name: DSH Real Host/Web Compatibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_real_dsh:
+        description: 'Confirm that the supplied URL is a real DSH Web/Host instance (no fixture)'
+        required: true
+        type: boolean
+      base_url:
+        description: 'Already-running DSH Web base URL'
+        required: true
+        default: 'http://127.0.0.1:3080'
+        type: string
+      expected_plugin_id:
+        description: 'Plugin entry that must be present in the real Host inventory'
+        required: true
+        default: 'dsh-plugin-debug'
+        type: string
+      start_pinned_runtime:
+        description: 'Start the pinned real DSH runtime in a temporary DSH_HOME (otherwise probe an already-running service)'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  real-dsh:
+    if: ${{ inputs.confirm_real_dsh == true }}
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Probe the explicitly confirmed real DSH Web and Host
+        id: compatibility
+        shell: pwsh
+        env:
+          DSH_COMPAT_BASE_URL: ${{ inputs.base_url }}
+          DSH_COMPAT_PLUGIN_ID: ${{ inputs.expected_plugin_id }}
+          DSH_COMPAT_START: ${{ inputs.start_pinned_runtime }}
+        run: |
+          $arguments = @(
+            '-ConfirmRealDsh',
+            '-BaseUrl', $env:DSH_COMPAT_BASE_URL,
+            '-ExpectedPluginId', $env:DSH_COMPAT_PLUGIN_ID,
+            '-OutputPath', (Join-Path $env:RUNNER_TEMP 'dsh-real-compatibility.json')
+          )
+          if ($env:DSH_COMPAT_START -eq 'true') {
+            npm ci --prefix .\packages\dsh-plugin-debug\tools\runtime --omit=dev --ignore-scripts --no-audit --no-fund
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $arguments += '-StartPinnedRuntime'
+            $arguments += @('-RuntimeRoot', (Join-Path (Get-Location) 'packages\dsh-plugin-debug\tools\runtime'))
+          }
+          & .\packages\dsh-plugin-debug\tools\Test-DSHCompatibility.ps1 @arguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload real compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dsh-real-compatibility-${{ github.run_id }}
+          path: ${{ runner.temp }}/dsh-real-compatibility.json
+          if-no-files-found: warn
