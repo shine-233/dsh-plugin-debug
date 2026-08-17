@@ -456,8 +456,17 @@ function Register-DshGuardCandidates {
 }
 
 function Try-DshGuardStartupRecovery {
-  param([Parameter(Mandatory = $true)][string]$ErrorText)
+  param(
+    [Parameter(Mandatory = $true)]
+    [AllowNull()]
+    [AllowEmptyString()]
+    [string]$ErrorText
+  )
   if (-not $script:GuardAvailable -or $null -eq $script:GuardManifest) { return $false }
+  if ([string]::IsNullOrWhiteSpace($ErrorText)) {
+    Write-LauncherLog 'crash guard startup recovery skipped: the runtime produced no error text to attribute.'
+    return $false
+  }
   $candidates = @(Get-DshStartupGuardCandidates -Manifest $script:GuardManifest -ErrorText $ErrorText)
   if ($candidates.Count -eq 0) {
     $fallback = Get-DshSingleStartupGuardCandidate -Manifest $script:GuardManifest -ErrorText $ErrorText

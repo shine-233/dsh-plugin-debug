@@ -58,6 +58,33 @@ export function registerPluginHotswapCheckTool(ctx, { defineTool, probe }) {
   return ctx.tools.register(definition)
 }
 
+export function registerPluginHotswapPreflightTool(ctx, { defineTool, preflight }) {
+  const definition = defineTool({
+    name: 'plugin_hotswap_preflight',
+    description: 'Run a bounded offline static preflight over a hotswap candidate repository. It never imports, installs, executes, reloads, or rewrites the candidate.',
+    parameters: {
+      path: {
+        type: 'string',
+        description: 'absolute candidate repository path; defaults to the current working directory',
+      },
+      strict: {
+        type: 'boolean',
+        description: 'promote static warnings to manual review',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(args) {
+      const path = typeof args?.path === 'string' && args.path !== '' ? args.path : process.cwd()
+      return JSON.stringify(await preflight(path, { strict: args?.strict === true }))
+    },
+    timeoutMs: 10000,
+  })
+  return ctx.tools.register(definition)
+}
+
 export function registerAgentReportTool(ctx, { defineTool, getSource, generate }) {
   const definition = defineTool({
     name: 'dsh_agent_report',

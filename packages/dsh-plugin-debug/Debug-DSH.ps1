@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('doctor', 'start', 'diagnostics', 'plugin-health', 'snapshot', 'restore', 'workspace-list', 'workspace-snapshot', 'workspace-restore', 'session-history', 'session-fork', 'known-good-list', 'known-good-save', 'known-good-restore', 'known-good-fixture', 'plugin-enable', 'plugin-disable', 'repair-plan', 'repair-assist', 'self-repair', 'repair-apply', 'repair-revert', 'plugin-bisect-plan', 'plugin-dependency-graph', 'plugin-preflight', 'diagnostics-diff', 'trace-contract', 'trace-eval', 'trace-live', 'trace-baseline', 'trace-loop', 'trace-recursion', 'trace-autopsy', 'guardian-status', 'live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'trace-recursion-fixture', 'guardian-status-fixture', 'crash-fixture', 'runtime-supervisor-fixture', 'incident-capture', 'incident-correlation', 'repro-export', 'context-doctor', 'security-audit', 'session-health', 'fail-log', 'provenance', 'pointer-evidence')]
+  [ValidateSet('doctor', 'start', 'diagnostics', 'plugin-health', 'snapshot', 'restore', 'workspace-list', 'workspace-snapshot', 'workspace-restore', 'session-history', 'session-fork', 'agent-report', 'known-good-list', 'known-good-save', 'known-good-restore', 'known-good-fixture', 'plugin-enable', 'plugin-disable', 'repair-plan', 'repair-assist', 'self-repair', 'repair-apply', 'repair-revert', 'plugin-bisect-plan', 'plugin-dependency-graph', 'plugin-preflight', 'diagnostics-diff', 'trace-contract', 'trace-eval', 'trace-live', 'trace-baseline', 'trace-loop', 'trace-recursion', 'trace-autopsy', 'guardian-status', 'live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'trace-recursion-fixture', 'guardian-status-fixture', 'crash-fixture', 'runtime-supervisor-fixture', 'incident-capture', 'incident-correlation', 'repro-export', 'context-doctor', 'security-audit', 'session-health', 'fail-log', 'provenance', 'pointer-evidence')]
   [string]$Action,
   [Parameter(ValueFromRemainingArguments = $true)]
   [object[]]$Remaining
@@ -92,6 +92,20 @@ if ($Action -eq 'guardian-status') {
   & $guardianStatusScript @guardianArguments
   $guardianExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
   exit $guardianExit
+}
+
+if ($Action -eq 'agent-report') {
+  if (-not $invokeArguments.ContainsKey('InputPath')) { throw 'agent-report requires -InputPath pointing to one explicitly supplied redacted Session JSON file' }
+  $reportScript = Join-Path $PSScriptRoot 'tools\Generate-DSHAgentReport.ps1'
+  if (-not (Test-Path -LiteralPath $reportScript -PathType Leaf)) { throw "Agent report helper is missing: $reportScript" }
+  $reportArguments = @{ InputPath = [string]@($invokeArguments.InputPath)[0] }
+  if ($invokeArguments.ContainsKey('Preset')) { $reportArguments.Preset = [string]@($invokeArguments.Preset)[0] }
+  if ($invokeArguments.ContainsKey('From')) { $reportArguments.From = [string]@($invokeArguments.From)[0] }
+  if ($invokeArguments.ContainsKey('To')) { $reportArguments.To = [string]@($invokeArguments.To)[0] }
+  $LASTEXITCODE = 0
+  & $reportScript @reportArguments
+  $reportExit = if (Test-Path variable:LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
+  exit $reportExit
 }
 
 $hostPath = Get-DshPowerShellPath

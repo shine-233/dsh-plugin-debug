@@ -419,4 +419,6 @@ test('guardian source has no task or process termination seam', () => {
   const source = readFileSync(new URL('../src/task-guardian.js', import.meta.url), 'utf8')
   assert.doesNotMatch(source, /\.cancel\s*\(|process\.kill\s*\(|Stop-Process|taskkill|child_process|\.dispose\s*\(/iu)
   assert.doesNotMatch(source, /session\.append\s*\(/u)
+  assert.doesNotMatch(source, /String\(error\?\.message\s*\?\?/u)
+  assert.match(source, /messagePresent=/u)
 })

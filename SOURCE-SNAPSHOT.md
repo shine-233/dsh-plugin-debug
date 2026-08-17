@@ -1,11 +1,12 @@
 # Source snapshot status
 
-This is the current single-package publication release source tree. The public remote is
+This is the current single-package publication candidate source tree. The public remote is
 `https://github.com/shine-233/dsh-plugin-debug.git`, default branch `main`.
+The candidate version is `0.8.4`; `v0.8.3` is the previous published baseline.
 
 | Component | Files | Notes |
 | --- | ---: | --- |
-| packages/dsh-plugin-debug | 102 files in the `v0.8.3` pack result | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, startup incident receipts, read-only plugin bisect planning, diagnostics-report diffing, static plugin preflight, offline plugin repository health checks, read-only hotswap capability probing, deterministic metadata-only agent/session reports, dependency graph inspection, offline trace-loop and bounded trace-recursion analysis, observer-only task guardian and its status checker, bounded client breadcrumbs, Workbench and one-click launcher; the small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer/bisect/dependency/trace-loop/recursion tests, while fake runtimes and temporary Profiles are generated at test time |
+| packages/dsh-plugin-debug | 108 files in the current candidate pack result | One combined runtime plugin plus Host-side diagnostics, recovery, Crash Guard, startup incident receipts, read-only plugin bisect planning, diagnostics-report diffing, static plugin preflight, offline plugin repository health checks, read-only hotswap capability probing, bounded hotswap candidate-source preflight, deterministic metadata-only agent/session reports, explicit offline redacted-document report generation, dependency graph inspection, offline trace-loop and bounded trace-recursion analysis, observer-only task guardian and its status checker, bounded client breadcrumbs, Workbench and one-click launcher; the small, synthetic `tools/fixtures` inputs ship for reproducible trace/pointer/bisect/dependency/trace-loop/recursion tests, while fake runtimes and temporary Profiles are generated at test time |
 
 The original provenance, debug-suite and one-click inputs were removed from the
 projects tree after migration review and are not package dependencies. The
@@ -18,14 +19,15 @@ deleted source trees. Current-state proof is limited to the single package tree,
 the exported entry points, the migration manifest and the regression suites; it
 does not claim that a deleted source directory can be re-diffed in place.
 
-Publication evidence is recorded separately in `RELEASE-MANIFEST.json`.
-Version `0.8.3` uses source commit
-`591ca0da959465a1207030cd7eb91372d8e90b2a`; that exact remote commit passed the
-fresh-clone publication gate before the evidence commit was written. The
-manifest records `published`, `pushPerformed=true`, the source commit, both UTC
-verification timestamps, the 102-file pack result and the deterministic 584
-component SPDX/CycloneDX SBOMs. The evidence commit and the `v0.8.3` tag carry
-this publication record; the npm registry is intentionally not used.
+Publication evidence for the previous baseline is recorded separately in
+`RELEASE-MANIFEST.json`; this working tree is a new candidate and has not been
+committed, pushed, tagged or published. The previous `0.8.3` source evidence
+used commit `591ca0da959465a1207030cd7eb91372d8e90b2a` and a 102-file pack.
+The current Agent report enhancement and its reproducible fixture/CLI entries
+are included in the current candidate pack, which contains 108 files. The
+manifest therefore remains `candidate` with null publication timestamps and no
+published commit until a fresh commit, clone, pack and verifier run are
+completed. The npm registry is intentionally not used.
 
 The historical `v0.8.2` release was not a clean evidence baseline: at that
 time, the `main` evidence record named source commit
@@ -38,12 +40,12 @@ publication baseline was `0.8.1` at
 create a new candidate source commit and repeat the same fresh-clone and
 publication gates.
 
-## Published 0.8.3 evidence layers
+## Previous 0.8.3 evidence layers and current candidate boundary
 
 - Source and offline fixture checks cover implementation contracts and privacy
   boundaries. Fake/loopback supervisor checks cover bounded launch, attributed
   quarantine and unresolved-failure fail-closed behavior.
-- A 2026-08-17 isolated run with pinned `@deepseek-ai/dsh@0.1.0-rc.6` and Node
+- The previous 2026-08-17 isolated run with pinned `@deepseek-ai/dsh@0.1.0-rc.6` and Node
   24.15.0 started the real Web/Host, returned a real plugin inventory with
   `dsh-plugin-debug` enabled/active, and successfully dispatched
   `plugin_check`, `plugin_hotswap_check` and `dsh_agent_report` through the
@@ -55,9 +57,14 @@ publication gates.
   `agent-preset-invalid` / duplicate `deployment:persona` condition for
   `standard` and `minimal`. Real business Session history and model requests
   remain unverified; do not attribute that runtime limitation to this plugin.
+- The current dirty working tree also passed the bounded real compatibility lane
+  with a temporary shipped `web` Profile: Web HTTP 200, `host.describe`, and
+  `pluginInventory/list` succeeded; 134 inventory entries were observed and
+  `dsh-plugin-debug` was active. This is fresh working-tree evidence, not a
+  published-commit or data-bearing Session proof.
 
-The exact source commit produced 102 npm pack entries in both the dry-run
-publication check and the real prepack/pack extraction smoke. The unpacked
-tarball contained the seven expected `lib/` modules, both SBOM files and no
-forbidden directories; package-only Standalone and an offline consumer import
-also passed.
+The previous exact source commit produced 102 npm pack entries in both the
+dry-run publication check and the real prepack/pack extraction smoke. The
+current candidate has re-run local Node, PowerShell, standalone and offline
+integration checks, and the current dry-run contains 108 entries; any future fresh-clone evidence
+must be recorded only after the candidate is committed and published.

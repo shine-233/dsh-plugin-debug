@@ -138,6 +138,52 @@ test('a complete authoritative contract can report a safe candidate without exec
   assert.equal(report.targetMutated, false)
 })
 
+test('a target without a live fiber cannot be reported as supported', () => {
+  const entry = makeEntry()
+  delete entry.fiber
+  const report = inspectHotswapCapabilities({
+    inventory: [entry],
+    lifecycleContract: completeContract,
+    targetId: 'safe-entry',
+  })
+
+  assert.equal(report.verdict, 'MANUAL_REVIEW')
+  assert.equal(report.target.entry.live, false)
+  assert.ok(report.findings.some(item => item.code === 'target-not-live'))
+})
+
+test('a truncated inventory fails closed even when the visible target looks unique', () => {
+  const inventory = Array.from({ length: 101 }, (_, index) => makeEntry({
+    id: index === 0 || index === 100 ? 'safe-entry' : `other-${index}`,
+    name: index === 0 || index === 100 ? 'dsh-safe-plugin' : `dsh-other-${index}`,
+  }))
+  const report = inspectHotswapCapabilities({
+    inventory,
+    lifecycleContract: completeContract,
+    targetId: 'safe-entry',
+  })
+
+  assert.equal(report.host.inventory.truncated, true)
+  assert.equal(report.target.matchCount, 1)
+  assert.equal(report.verdict, 'MANUAL_REVIEW')
+  assert.ok(report.findings.some(item => item.code === 'inventory-truncated'))
+})
+
+test('a disabled ancestor beyond the inspection bound cannot be missed silently', () => {
+  const ancestors = Array.from({ length: 33 }, (_, index) => ({
+    options: { id: `group-${index}`, name: `dsh-group-${index}`, disabled: index === 32 },
+  }))
+  const report = inspectHotswapCapabilities({
+    inventory: [makeEntry({ ancestors })],
+    lifecycleContract: completeContract,
+    targetId: 'safe-entry',
+  })
+
+  assert.equal(report.verdict, 'MANUAL_REVIEW')
+  assert.equal(report.target.entry.ancestorChainTruncated, true)
+  assert.ok(report.findings.some(item => item.code === 'ancestor-chain-truncated'))
+})
+
 test('core entries are protected even when a Host claims a complete contract', () => {
   for (const identity of [
     { id: 'web', name: '@deepseek-ai/dsh-web' },

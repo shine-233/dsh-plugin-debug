@@ -13,20 +13,74 @@ $ErrorActionPreference = 'Stop'
 
 function Write-FixtureJsonResponse {
   param(
-    [Parameter(Mandatory = $true)]$Context,
+    [Parameter(Mandatory = $true)][Net.Sockets.TcpClient]$Client,
     [Parameter(Mandatory = $true)]$Payload,
     [int]$StatusCode = 200
   )
   $text = $Payload | ConvertTo-Json -Depth 30 -Compress
-  $bytes = [Text.Encoding]::UTF8.GetBytes($text)
-  $response = $Context.Response
-  $response.StatusCode = $StatusCode
-  $response.ContentType = 'application/json; charset=utf-8'
-  $response.ContentLength64 = $bytes.Length
+  $bodyBytes = [Text.Encoding]::UTF8.GetBytes($text)
+  $statusText = if ($StatusCode -eq 200) { 'OK' } elseif ($StatusCode -eq 400) { 'Bad Request' } else { 'Error' }
+  $headerText = "HTTP/1.1 $StatusCode $statusText`r`nContent-Type: application/json; charset=utf-8`r`nContent-Length: $($bodyBytes.Length)`r`nConnection: close`r`n`r`n"
+  $headerBytes = [Text.Encoding]::ASCII.GetBytes($headerText)
+  $stream = $Client.GetStream()
   try {
-    $response.OutputStream.Write($bytes, 0, $bytes.Length)
+    $stream.Write($headerBytes, 0, $headerBytes.Length)
+    $stream.Write($bodyBytes, 0, $bodyBytes.Length)
+    $stream.Flush()
   } finally {
-    $response.Close()
+    $Client.Close()
+  }
+}
+
+function Read-FixtureHttpRequest {
+  param([Parameter(Mandatory = $true)][Net.Sockets.TcpClient]$Client)
+
+  $stream = $Client.GetStream()
+  $stream.ReadTimeout = 5000
+  $received = [System.Collections.Generic.List[byte]]::new()
+  $buffer = New-Object byte[] 4096
+  $headerEnd = -1
+  while ($headerEnd -lt 0 -and $received.Count -lt 65536) {
+    $count = $stream.Read($buffer, 0, $buffer.Length)
+    if ($count -le 0) { break }
+    for ($index = 0; $index -lt $count; $index++) { [void]$received.Add($buffer[$index]) }
+    $headerText = [Text.Encoding]::ASCII.GetString($received.ToArray())
+    $headerEnd = $headerText.IndexOf("`r`n`r`n", [StringComparison]::Ordinal)
+  }
+  if ($headerEnd -lt 0) { throw 'live API fixture received an incomplete HTTP header' }
+
+  $headerBlock = [Text.Encoding]::ASCII.GetString($received.ToArray(), 0, $headerEnd)
+  $lines = @($headerBlock -split "`r`n")
+  $requestParts = @($lines[0] -split ' ', 3)
+  $headers = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
+  $contentLength = 0
+  foreach ($line in @($lines | Select-Object -Skip 1)) {
+    $separator = $line.IndexOf(':')
+    if ($separator -le 0) { continue }
+    $name = $line.Substring(0, $separator).Trim()
+    $value = $line.Substring($separator + 1).Trim()
+    $headers[$name] = $value
+    if ($name -ieq 'Content-Length') {
+      $parsedLength = 0
+      if ([int]::TryParse($value, [ref]$parsedLength) -and $parsedLength -ge 0) { $contentLength = $parsedLength }
+    }
+  }
+  $bodyStart = $headerEnd + 4
+  $requiredBytes = $bodyStart + $contentLength
+  while ($received.Count -lt $requiredBytes) {
+    $count = $stream.Read($buffer, 0, $buffer.Length)
+    if ($count -le 0) { break }
+    for ($index = 0; $index -lt $count; $index++) { [void]$received.Add($buffer[$index]) }
+  }
+  $body = if ($contentLength -gt 0 -and $received.Count -ge $requiredBytes) {
+    [Text.Encoding]::UTF8.GetString($received.ToArray(), $bodyStart, $contentLength)
+  } else { '' }
+
+  [PSCustomObject]@{
+    Method = if ($requestParts.Count -gt 0) { [string]$requestParts[0] } else { '' }
+    Path = if ($requestParts.Count -gt 1) { [string]$requestParts[1] } else { '' }
+    Headers = $headers
+    Body = $body
   }
 }
 
@@ -151,25 +205,28 @@ function Start-FixtureServer {
     [Parameter(Mandatory = $true)][string]$StopFile
   )
   $prefix = "http://127.0.0.1:$Port/"
-  $listener = [Net.HttpListener]::new()
-  $listener.Prefixes.Add($prefix)
+  # Use a raw loopback TCP listener so this fixture does not require a
+  # machine-level HTTP.sys URL ACL. It is deliberately only a tiny local
+  # HTTP server for testing the RPC contract.
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $Port)
   try {
     $listener.Start()
     [ordered]@{ result = 'READY'; prefix = $prefix; port = $Port } |
       ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ReadyFile -Encoding UTF8
     while (-not (Test-Path -LiteralPath $StopFile -PathType Leaf)) {
-      $contextTask = $listener.GetContextAsync()
-      while (-not $contextTask.Wait(100)) {
-        if (Test-Path -LiteralPath $StopFile -PathType Leaf) { return }
+      if (-not $listener.Pending()) {
+        Start-Sleep -Milliseconds 50
+        continue
       }
-      $context = $contextTask.Result
+      $client = $listener.AcceptTcpClient()
       $method = $null
       $body = $null
       $rpcArgs = [pscustomobject]@{}
+      $bodyArgs = $null
+      $request = $null
       try {
-        $reader = [IO.StreamReader]::new($context.Request.InputStream, $context.Request.ContentEncoding)
-        try { $rawBody = $reader.ReadToEnd() } finally { $reader.Dispose() }
-        $body = $rawBody | ConvertFrom-Json
+        $request = Read-FixtureHttpRequest -Client $client
+        if (-not [string]::IsNullOrWhiteSpace($request.Body)) { $body = $request.Body | ConvertFrom-Json }
         $method = [string](Get-FixtureProperty -Object $body -Name 'method')
         $payload = Get-FixtureProperty -Object $body -Name 'payload'
         $bodyArgs = Get-FixtureProperty -Object $payload -Name 'args'
@@ -184,12 +241,12 @@ function Start-FixtureServer {
         $method = $null
       }
       $record = [ordered]@{
-        httpMethod = [string]$context.Request.HttpMethod
-        path = [string]$context.Request.Url.AbsolutePath
+        httpMethod = if ($null -eq $request) { '' } else { [string]$request.Method }
+        path = if ($null -eq $request) { '' } else { [string]$request.Path }
         method = $method
         bodyType = [string](Get-FixtureProperty -Object $body -Name 'type')
         rpcIdPresent = -not [string]::IsNullOrWhiteSpace([string](Get-FixtureProperty -Object $body -Name 'rpcId'))
-        contentType = [string]$context.Request.ContentType
+        contentType = if ($null -eq $request) { '' } else { [string]$request.Headers['Content-Type'] }
         payloadStyle = if ($null -ne $bodyArgs) { 'args' } else { 'direct' }
         args = $rpcArgs
       }
@@ -199,11 +256,16 @@ function Start-FixtureServer {
       } else {
         Get-FixtureApiResponse -Method $method -RpcArgs $rpcArgs
       }
-      Write-FixtureJsonResponse -Context $context -Payload $response
+      try {
+        Write-FixtureJsonResponse -Client $client -Payload $response
+      } catch {
+        try { Write-FixtureJsonResponse -Client $client -Payload ([ordered]@{ result = [ordered]@{ ok = $false; error = [ordered]@{ code = 'FIXTURE_RESPONSE_ERROR'; message = 'fixture response failed' } } }) -StatusCode 400 } catch { }
+      } finally {
+        $client.Close()
+      }
     }
   } finally {
-    if ($listener.IsListening) { $listener.Stop() }
-    $listener.Close()
+    $listener.Stop()
   }
 }
 
@@ -350,10 +412,10 @@ try {
   $serverProcess = Start-Process -FilePath $powershell -ArgumentList $serverArguments -PassThru -WindowStyle Hidden
   for ($attempt = 0; $attempt -lt 100; $attempt++) {
     if (Test-Path -LiteralPath $readyPath -PathType Leaf) { break }
-    if ($serverProcess.HasExited) { throw 'fixture HttpListener process exited before readiness' }
+    if ($serverProcess.HasExited) { throw 'fixture TCP HTTP process exited before readiness' }
     Start-Sleep -Milliseconds 50
   }
-  if (-not (Test-Path -LiteralPath $readyPath -PathType Leaf)) { throw 'fixture HttpListener did not become ready' }
+  if (-not (Test-Path -LiteralPath $readyPath -PathType Leaf)) { throw 'fixture TCP HTTP server did not become ready' }
   $ready = Get-Content -LiteralPath $readyPath -Raw -Encoding UTF8 | ConvertFrom-Json
   $baseUrl = [string]$ready.prefix
   Assert-LiveApi ($port -gt 0 -and $port -ne 3081) 'ephemeral-loopback-port' "fixture used $baseUrl and did not target the real DSH port"

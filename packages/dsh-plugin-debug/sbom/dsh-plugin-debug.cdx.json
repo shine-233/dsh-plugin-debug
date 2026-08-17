@@ -6,15 +6,15 @@
     "component": {
       "type": "application",
       "name": "dsh-plugin-debug",
-      "version": "0.8.3",
-      "bom-ref": "pkg:npm/dsh-plugin-debug@0.8.3",
-      "purl": "pkg:npm/dsh-plugin-debug@0.8.3"
+      "version": "0.8.4",
+      "bom-ref": "pkg:npm/dsh-plugin-debug@0.8.4",
+      "purl": "pkg:npm/dsh-plugin-debug@0.8.4"
     },
     "tools": [
       {
         "vendor": "shine-233",
         "name": "dsh-plugin-debug-sbom",
-        "version": "0.8.3"
+        "version": "0.8.4"
       }
     ]
   },
@@ -12233,10 +12233,10 @@
     },
     {
       "name": "dsh-plugin-debug",
-      "version": "0.8.3",
+      "version": "0.8.4",
       "type": "library",
-      "bom-ref": "pkg:npm/dsh-plugin-debug@0.8.3",
-      "purl": "pkg:npm/dsh-plugin-debug@0.8.3",
+      "bom-ref": "pkg:npm/dsh-plugin-debug@0.8.4",
+      "purl": "pkg:npm/dsh-plugin-debug@0.8.4",
       "licenses": [
         {
           "license": {
@@ -22448,7 +22448,7 @@
       ]
     },
     {
-      "ref": "pkg:npm/dsh-plugin-debug@0.8.3",
+      "ref": "pkg:npm/dsh-plugin-debug@0.8.4",
       "dependsOn": [
         "pkg:npm/%40deepseek-ai/cordis@4.0.1",
         "pkg:npm/%40deepseek-ai/dsh-tools@0.1.0-rc.6"

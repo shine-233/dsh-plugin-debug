@@ -1,5 +1,18 @@
 # 更新记录
 
+## 工作树候选（0.8.4，基于 0.8.3，尚未发布）
+
+- Agent 报告现在兼容 DSH token meter 的 `assistant/chunk` usage 样本，并按同一 `turn/step` 用最终样本替换早期样本，避免重复计 Token。
+- 增加 `cacheWriteTokens` 展示；由于供应商计费规则不统一，当前内置费用估算不会擅自把缓存写入当成已知计费项。
+- 增加版本化的脱敏 Session JSON 离线入口：`Debug-DSH.ps1 -Action agent-report`；只读取明确文件，拒绝符号链接，不扫描 Profile/凭据目录、不联网、不执行输入命令。
+- 收紧报告历史读取的总事件预算；预算耗尽返回 `PARTIAL`，同时补充中文傻瓜式使用说明和发布候选边界。
+- 收紧 `plugin_hotswap_check` 的 fail-closed 门禁：inventory 被截断、目标没有 live fiber 或祖先链超过扫描上限时，不再返回 `SUPPORTED`，统一留下可审计的人工复核 finding。
+- 增加离线 `plugin_hotswap_preflight` 源码预检：限制文件/字节预算，识别 shell 执行、私有生命周期、缓存清理、无鉴权控制面、非原子 patch、缺少回滚/队列/核心保护/测试/CI 等静态线索；不 import、不安装、不运行候选，也不把静态结果当成漏洞利用证明。
+- CI 的 GitHub Actions 改为完整 40 位 commit SHA，并增加 `check:workflow-pins` 回归；包根目录的开发依赖与 pinned runtime 分开做官方 npm advisory 高危审计，避免只审计生产依赖而漏掉构建工具。
+- 上游 `dsh-whale-report` 已在 2026-08-17 重新核对到 `main` 提交 `b3de4a7d8851f63757078427ecfda52bc908961f`、版本 `0.4.0`；本包只吸收本地确定性报告引擎，不吸收其凭据/余额/网络探针或 `rm -rf lib` 构建步骤。
+- Windows standalone 的 Known-good / Live API 测试夹具改用仅监听 loopback 的原始 TCP HTTP 实现，不再依赖 `HttpListener` 的机器级 URL ACL；这是测试基础设施修复，不会扩大插件的网络或命令执行能力。
+- 这批改动尚未提交、推送、打 tag 或发布 npm/GitHub Release；必须重新完成 fresh clone、真实 tarball 和发布门禁后才能进入正式版本记录。
+
 ## 0.8.3（2026-08-17，GitHub source release）
 
 - 增加离线 `plugin_check` 仓库健康检查，支持 bundle、tool-bundle、registry、skill 和 collection 形态，并限制文件/字节预算。

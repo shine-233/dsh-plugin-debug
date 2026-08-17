@@ -35,6 +35,7 @@ const CORE_NAMES = new Set([
 export const HOTSWAP_CHECK_SCHEMA = Object.freeze([
   { code: 'inventory-unavailable', severity: 'error', description: 'the Host did not expose a readable plugin inventory' },
   { code: 'inventory-read-failed', severity: 'error', description: 'the Host plugin inventory could not be read without executing a lifecycle action' },
+  { code: 'inventory-truncated', severity: 'error', description: 'the observed plugin inventory was truncated, so uniqueness and target absence cannot be proven' },
   { code: 'lifecycle-contract-missing', severity: 'error', description: 'the Host did not declare a stable public plugin lifecycle contract' },
   { code: 'lifecycle-contract-not-authoritative', severity: 'error', description: 'the declared lifecycle contract is not marked as an authoritative DSH Host contract' },
   { code: 'lifecycle-contract-not-stable', severity: 'error', description: 'the declared lifecycle contract is not explicitly marked stable' },
@@ -44,9 +45,11 @@ export const HOTSWAP_CHECK_SCHEMA = Object.freeze([
   { code: 'official-hmr-not-action-contract', severity: 'info', description: 'the official HMR service was observed but it does not authorize this tool to mutate plugin entries' },
   { code: 'target-not-found', severity: 'error', description: 'the requested plugin id or name was not present in the observed inventory' },
   { code: 'target-ambiguous', severity: 'warning', description: 'the requested plugin name matched more than one inventory entry' },
+  { code: 'target-not-live', severity: 'error', description: 'the observed target has no live fiber, so a runtime lifecycle action cannot be safely authorized' },
   { code: 'protected-entry', severity: 'error', description: 'the target is a protected DSH core or Debug entry' },
   { code: 'runtime-only-entry', severity: 'error', description: 'the target is marked runtime-only and needs an explicit host-specific review' },
   { code: 'ancestor-disabled', severity: 'error', description: 'an owning ancestor is disabled; changing the child would not be an isolated operation' },
+  { code: 'ancestor-chain-truncated', severity: 'error', description: 'the owning ancestor chain exceeded the bounded inspection depth' },
   { code: 'dynamic-disabled-expression', severity: 'error', description: 'disabled state uses a dynamic !!js expression and cannot be evaluated by this read-only probe' },
   { code: 'target-disabled', severity: 'warning', description: 'the target is already disabled in its declared entry options' },
   { code: 'target-identity-missing', severity: 'warning', description: 'the observed entry has neither a stable id nor a module name' },
@@ -145,7 +148,12 @@ function isCoreIdentity(id, name) {
 
 function getOwningAncestors(entry) {
   const explicit = safeRead(entry, 'ancestors')
-  if (Array.isArray(explicit)) return explicit.slice(0, MAX_ANCESTORS)
+  if (Array.isArray(explicit)) {
+    return {
+      entries: explicit.slice(0, MAX_ANCESTORS),
+      truncated: explicit.length > MAX_ANCESTORS,
+    }
+  }
 
   const result = []
   const seen = new Set()
@@ -160,7 +168,15 @@ function getOwningAncestors(entry) {
     result.push(ancestor)
     current = ancestor
   }
-  return result
+  let truncated = false
+  if (result.length >= MAX_ANCESTORS) {
+    const parent = safeRead(current, 'parent')
+    const parentContext = safeRead(parent, 'ctx')
+    const parentFiber = safeRead(parentContext, 'fiber')
+    const ancestor = safeRead(parentFiber, 'entry')
+    truncated = Boolean(ancestor && !seen.has(ancestor))
+  }
+  return { entries: result, truncated }
 }
 
 function describeEntry(entry, index) {
@@ -175,13 +191,14 @@ function describeEntry(entry, index) {
   const runtimeOnly = readFlag(entry, options, metadata, 'runtimeOnly', ['runtime_only'])
   const explicitProtected = readFlag(entry, options, metadata, 'protected', ['core', 'protectedCore'])
   const core = explicitProtected || isCoreIdentity(id, name)
+  const live = Boolean(safeRead(entry, 'fiber'))
   const privateApisSeen = ['update', '_dispose', 'dispose', 'refresh']
     .filter(method => typeof safeRead(entry, method) === 'function')
 
   let ancestorDisabled = false
   let ancestorDynamicDisabled = false
-  const ancestors = getOwningAncestors(entry)
-  for (const ancestor of ancestors) {
+  const ancestorState = getOwningAncestors(entry)
+  for (const ancestor of ancestorState.entries) {
     const ancestorOptions = optionsOf(ancestor)
     const ancestorDisabledValue = safeRead(ancestor, 'disabled') ?? safeRead(ancestorOptions, 'disabled')
     if (isJsExpression(ancestorDisabledValue)) ancestorDynamicDisabled = true
@@ -193,8 +210,10 @@ function describeEntry(entry, index) {
   if (core) riskCodes.push('protected-entry')
   if (runtimeOnly) riskCodes.push('runtime-only-entry')
   if (ancestorDisabled) riskCodes.push('ancestor-disabled')
+  if (ancestorState.truncated) riskCodes.push('ancestor-chain-truncated')
   if (ancestorDynamicDisabled || dynamicDisabled) riskCodes.push('dynamic-disabled-expression')
   if (disabled === true) riskCodes.push('target-disabled')
+  if (!live) riskCodes.push('target-not-live')
 
   return {
     index,
@@ -204,11 +223,12 @@ function describeEntry(entry, index) {
     runtimeOnly,
     protected: core,
     ancestorDisabled,
+    ancestorChainTruncated: ancestorState.truncated,
     ancestorDynamicDisabled,
     dynamicDisabled,
     privateApisSeen,
     riskCodes,
-    live: Boolean(safeRead(entry, 'fiber')),
+    live,
   }
 }
 
@@ -375,9 +395,10 @@ function safeTarget(entries, requested) {
 }
 
 function decideVerdict({ inventory, contract, target, findings }) {
-  if (target.requested && target.matches.length === 0) return 'UNAVAILABLE'
+  if (target.requested && target.matches.length === 0) return inventory.truncated ? 'MANUAL_REVIEW' : 'UNAVAILABLE'
   if (target.matches.length > 1 || target.entry?.riskCodes.length > 0) return 'MANUAL_REVIEW'
   if (!inventory.observed || !contract.declared) return 'UNAVAILABLE'
+  if (inventory.truncated) return target.entry ? 'MANUAL_REVIEW' : 'PARTIAL'
   if (!contract.authoritative || !contract.stable || !contract.version) return 'UNAVAILABLE'
   if (contract.missingOperations.length > 0 || contract.missingSafety.length > 0) return 'PARTIAL'
   if (!target.entry) return 'PARTIAL'
@@ -399,6 +420,7 @@ export function inspectHotswapCapabilities({
   const findings = []
 
   if (!observedInventory.observed) findings.push(finding(observedInventory.error?.includes('threw') ? 'inventory-read-failed' : 'inventory-unavailable', observedInventory.error))
+  if (observedInventory.truncated) findings.push(finding('inventory-truncated'))
   if (!contract.declared) findings.push(finding('lifecycle-contract-missing'))
   else {
     if (!contract.authoritative) findings.push(finding('lifecycle-contract-not-authoritative'))

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -147,6 +147,30 @@ test('checkRepository rejects a non-file source entry', async () => {
     assert.ok(report.findings.some(finding => finding.code === 'no-source-entry'))
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('repository checker does not follow symlinked source or scan roots', async (t) => {
+  const root = await makeRepo()
+  const outside = await mkdtemp(join(tmpdir(), 'dsh-debug-outside-source-'))
+  const scanLink = join(tmpdir(), `dsh-debug-scan-link-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+  try {
+    await writeFile(join(outside, 'outside.js'), 'export const leaked = true\n')
+    await rm(join(root, 'src'), { recursive: true, force: true })
+    try {
+      await symlink(outside, join(root, 'src'), 'junction')
+      await symlink(root, scanLink, 'junction')
+    } catch {
+      t.skip('directory junctions are unavailable in this environment')
+      return
+    }
+    const report = await checkRepository(root)
+    assert.ok(report.limitations.includes('skipped symbolic-link or non-directory scan root'))
+    await assert.rejects(scanRepositories(scanLink), /cannot read scan root/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+    await rm(outside, { recursive: true, force: true })
+    await rm(scanLink, { recursive: true, force: true })
   }
 })
 

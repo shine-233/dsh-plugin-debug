@@ -18,6 +18,7 @@ if (!manifest.files || typeof manifest.files !== 'object') {
 const sourcePairs = [
   ['src/index.js', 'lib/index.js'],
   ['src/hotswap-check.js', 'lib/hotswap-check.js'],
+  ['src/hotswap-preflight.js', 'lib/hotswap-preflight.js'],
   ['src/agent-report.js', 'lib/agent-report.js'],
   ['src/repository-check.js', 'lib/repository-check.js'],
   ['src/tool-adapter.js', 'lib/tool-adapter.js'],

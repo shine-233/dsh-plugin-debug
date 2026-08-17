@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
-import { access, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { aggregateAgentReportEvents, generateAgentReport, createLiveSessionsReportSource } from '../src/agent-report.js'
+import { fileURLToPath } from 'node:url'
+import { aggregateAgentReportEvents, createAgentReportDocumentSource, createLiveSessionsReportSource, generateAgentReport, generateAgentReportFromDocument } from '../src/agent-report.js'
 
 const T0 = Date.parse('2026-08-17T00:00:00Z')
 const event = (seq, type, data, time = T0 + seq * 1000) => ({ sessionId: 'session-report-1', event: { seq, type, data, time } })
@@ -60,6 +62,42 @@ test('agent report aggregates tokens, cost, tools, retries, failures, and risks 
   assert.match(result.report, /只读，不执行命令/)
 })
 
+test('agent report follows DSH token-meter replacement semantics for usage chunks', async () => {
+  const result = await generateAgentReport({
+    source: sourceFor([
+      event(0, 'request/header', { header: { config: { provider: 'deepseek', model: 'deepseek-v4-flash' } } }),
+      event(1, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'usage', usage: { inputTokens: 11, outputTokens: 7, cacheReadTokens: 2, cacheWriteTokens: 3 } },
+      }),
+      // The finalized message replaces the early usage sample for turn 1/step 1.
+      event(2, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        usage: { inputTokens: 13, outputTokens: 9, cacheReadTokens: 4, cacheWriteTokens: 5 },
+      }),
+      // A usage-only chunk is still reportable when a later request fails.
+      event(3, 'assistant/chunk', {
+        turn: 1,
+        step: 2,
+        chunk: { type: 'usage', usage: { inputTokens: 5, outputTokens: 2, cacheReadTokens: 1, cacheWriteTokens: 0 } },
+      }),
+    ]),
+    preset: '24h',
+    now: T0 + 3600000,
+  })
+  assert.equal(result.status, 'PASS')
+  assert.deepEqual(result.summary.tokens, {
+    input: 18,
+    output: 11,
+    cacheRead: 5,
+    cacheWrite: 5,
+    reasoning: 0,
+  })
+  assert.match(result.report, /缓存写入 5/)
+})
+
 test('agent report treats executable-looking command text as inert input', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-agent-report-'))
   const marker = join(directory, 'must-not-exist')
@@ -91,6 +129,80 @@ test('agent report uses the live sessions fallback and reports no persistent his
   assert.notEqual(result.summary.sessionsDetail[0].sessionId, 'live-1')
   assert.match(result.summary.sessionsDetail[0].sessionId, /^session-[0-9a-f]{16}$/)
   assert.match(result.report, /仅当前内存会话/)
+})
+
+test('agent report accepts only an explicit bounded redacted Session document', async () => {
+  const document = {
+    schemaVersion: 1,
+    sessions: [{
+      header: { id: 'offline-session', createdAt: T0 - 1000, seedLength: 0 },
+      events: sampleEvents().map(item => ({ ...item.event })),
+    }],
+  }
+  const result = await generateAgentReportFromDocument(document, { preset: '24h', now: T0 + 3600000 })
+  assert.equal(result.status, 'PASS')
+  assert.equal(result.sourceKind, 'redacted-document')
+  assert.equal(result.summary.sessions, 1)
+  assert.notEqual(result.summary.sessionsDetail[0].sessionId, 'offline-session')
+  assert.match(result.report, /明确提供的脱敏 Session JSON/)
+  assert.match(result.report, /只读，不执行命令/)
+})
+
+test('agent report rejects malformed or duplicate offline Session documents before reading events', () => {
+  assert.throws(() => createAgentReportDocumentSource({ schemaVersion: 2, sessions: [] }), /schemaVersion/)
+  assert.throws(() => createAgentReportDocumentSource({
+    schemaVersion: 1,
+    sessions: [
+      { header: { id: 'duplicate', createdAt: T0 }, events: [] },
+      { header: { id: 'duplicate', createdAt: T0 }, events: [] },
+    ],
+}), /重复/)
+})
+
+test('agent report stops after the bounded total event budget', async () => {
+  const events = Array.from({ length: 120000 }, (_, index) => ({
+    seq: index,
+    time: T0 + 1000,
+    type: 'assistant/chunk',
+    data: {},
+  }))
+  const result = await generateAgentReport({
+    source: {
+      kind: 'session-query',
+      async listSessions() {
+        return Array.from({ length: 12 }, (_, index) => ({ header: { id: `bounded-${index}`, createdAt: T0 } }))
+      },
+      async readSession(id) {
+        return { session: { id, createdAt: T0 }, events }
+      },
+    },
+    preset: '24h',
+    now: T0 + 3600000,
+  })
+  assert.equal(result.status, 'PARTIAL')
+  assert.equal(result.coverage.eventsRead <= 1000000, true)
+  assert.equal(result.coverage.truncated, true)
+})
+
+test('offline report CLI input boundary rejects symlinks', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-agent-report-link-'))
+  const target = join(directory, 'document.json')
+  const link = join(directory, 'alias.json')
+  try {
+    await writeFile(target, JSON.stringify({ schemaVersion: 1, sessions: [] }), 'utf8')
+    try {
+      await symlink(target, link, 'file')
+    } catch {
+      t.skip('file symlinks are unavailable in this environment')
+      return
+    }
+    const script = fileURLToPath(new URL('../tools/Generate-DSHAgentReport.mjs', import.meta.url))
+    const result = spawnSync(process.execPath, [script, '--input', link], { encoding: 'utf8' })
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /符号链接/)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 test('aggregate ignores inherited seed events and excludes debug-owned events', () => {

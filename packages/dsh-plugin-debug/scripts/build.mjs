@@ -9,6 +9,7 @@ const POINTER_OBSERVATION_SCHEMA_VERSION = 2
 mkdirSync(resolve(root, 'lib'), { recursive: true })
 cpSync(resolve(root, 'src', 'index.js'), resolve(root, 'lib', 'index.js'))
   cpSync(resolve(root, 'src', 'hotswap-check.js'), resolve(root, 'lib', 'hotswap-check.js'))
+  cpSync(resolve(root, 'src', 'hotswap-preflight.js'), resolve(root, 'lib', 'hotswap-preflight.js'))
   cpSync(resolve(root, 'src', 'agent-report.js'), resolve(root, 'lib', 'agent-report.js'))
 cpSync(resolve(root, 'src', 'repository-check.js'), resolve(root, 'lib', 'repository-check.js'))
 cpSync(resolve(root, 'src', 'tool-adapter.js'), resolve(root, 'lib', 'tool-adapter.js'))
@@ -20,6 +21,7 @@ const bundleFiles = [
   'cordis.patch.yml',
   'lib/index.js',
   'lib/hotswap-check.js',
+  'lib/hotswap-preflight.js',
   'lib/agent-report.js',
   'lib/repository-check.js',
   'lib/tool-adapter.js',
@@ -87,6 +89,21 @@ const bundleManifest = {
       rewritesProfile: false,
       installsDependencies: false,
     },
+    pluginHotswapSourcePreflight: {
+      embedded: true,
+      tool: 'plugin_hotswap_preflight',
+      reportSchemaVersion: 1,
+      offlineOnly: true,
+      readOnly: true,
+      networkAccessed: false,
+      commandsExecuted: false,
+      executesPluginCode: false,
+      targetMutated: false,
+      boundedFiles: 400,
+      boundedFileBytes: 524288,
+      boundedTotalBytes: 4194304,
+      staticIndicatorsAreNotRuntimeProof: true,
+    },
     deterministicAgentReport: {
       embedded: true,
       tool: 'dsh_agent_report',
@@ -104,8 +121,18 @@ const bundleManifest = {
       persistedHistoryWhenSessionQueryAvailable: true,
       liveSessionFallback: true,
       boundedSessions: 500,
+      boundedEventsPerSession: 100000,
       boundedEvents: 1000000,
       costIsEstimate: true,
+      offlineDocumentReport: {
+        embedded: true,
+        schemaVersion: 1,
+        explicitFileOnly: true,
+        credentialReads: false,
+        networkAccess: false,
+        executesInputCommands: false,
+        rejectsSymlinkInput: true,
+      },
     },
     readOnlyPluginDependencyGraph: {
       standaloneTool: true,

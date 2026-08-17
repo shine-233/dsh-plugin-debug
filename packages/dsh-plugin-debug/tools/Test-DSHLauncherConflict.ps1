@@ -17,11 +17,14 @@ $fixtureDshHome = Join-Path $tempRoot 'dsh-home'
 $fixtureWorkspace = Join-Path $tempRoot 'workspace'
 $fixtureState = Join-Path $tempRoot 'state'
 $externalServer = Join-Path $tempRoot 'external-dsh.js'
+$externalStdout = Join-Path $tempRoot 'external.stdout.log'
+$externalStderr = Join-Path $tempRoot 'external.stderr.log'
 $launcher = Join-Path $fixtureTools 'Start-DSH.ps1'
 $launcherLog = Join-Path $fixtureState 'logs\launcher.log'
 $previousDshHome = $env:DSH_HOME
 $externalProcess = $null
 $debugProcess = $null
+$fixtureStartedAtUtc = [DateTime]::UtcNow
 $step = 'initialise'
 
 function Write-FixtureText {
@@ -37,13 +40,46 @@ function Write-FixtureText {
 function Stop-FixtureProcess {
   param([AllowNull()][System.Diagnostics.Process]$Process)
   if ($null -eq $Process) { return }
+  $processId = [int]$Process.Id
   try {
     $Process.Refresh()
     if (-not $Process.HasExited) {
-      Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+      Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Milliseconds 100
+      $Process.Refresh()
+      if (-not $Process.HasExited) {
+        # This PID belongs to the fixture's own staged runtime.  Use the
+        # process-tree fallback only when the direct stop left a child alive.
+        & taskkill.exe /PID $processId /T /F | Out-Null
+      }
       [void]$Process.WaitForExit(3000)
     }
   } catch { }
+}
+
+function Stop-FixturePortListener {
+  param([int]$Port)
+  if ($Port -lt 1 -or $Port -gt 65535) { return }
+  $pattern = "^\s*TCP\s+\S+:$Port\s+\S+\s+LISTENING\s+(?<pid>\d+)\s*$"
+  foreach ($line in @(netstat.exe -ano 2>$null | Select-String -Pattern $pattern)) {
+    $match = [Regex]::Match($line.ToString(), $pattern)
+    if (-not $match.Success) { continue }
+    $processId = [int]$match.Groups['pid'].Value
+    try {
+      $process = Get-Process -Id $processId -ErrorAction Stop
+      $pathProperty = $process.PSObject.Properties['Path']
+      $path = if ($null -eq $pathProperty) { '' } else { [string]$pathProperty.Value }
+      $startedAt = $process.StartTime.ToUniversalTime()
+      if ([IO.Path]::GetFileName($path) -ine 'node.exe' -or $startedAt -lt $fixtureStartedAtUtc.AddSeconds(-5)) { continue }
+      # The port came from this fixture's launcher log and the process passed
+      # both the Node-path and start-time checks above.
+      Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Milliseconds 100
+      if (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
+        & taskkill.exe /PID $processId /T /F 2>$null | Out-Null
+      }
+    } catch { }
+  }
 }
 
 function Invoke-Launcher {
@@ -135,7 +171,7 @@ process.on('SIGINT', () => server.close(() => process.exit(0)));
 
   $step = 'start-external-dsh'
   $node = (Get-Command node.exe -ErrorAction Stop).Source
-  $externalProcess = Start-Process -FilePath $node -ArgumentList @($externalServer, '3080') -WorkingDirectory $fixtureWorkspace -WindowStyle Hidden -PassThru
+  $externalProcess = Start-Process -FilePath $node -ArgumentList @($externalServer, '3080') -WorkingDirectory $fixtureWorkspace -RedirectStandardOutput $externalStdout -RedirectStandardError $externalStderr -WindowStyle Hidden -PassThru
   $deadline = [DateTime]::UtcNow.AddSeconds(10)
   do {
     try {
@@ -189,7 +225,33 @@ process.on('SIGINT', () => server.close(() => process.exit(0)));
   exit 1
 } finally {
   Stop-FixtureProcess -Process $debugProcess
+  # The staged launcher records the exact child PID. If the Process object
+  # was unavailable or a direct stop raced with launcher exit, use that
+  # fixture-owned PID record as the final bounded cleanup path.
+  try {
+    $pidPath = Join-Path $fixtureState 'dsh-web.pid.json'
+    if (Test-Path -LiteralPath $pidPath -PathType Leaf) {
+      $record = Get-Content -LiteralPath $pidPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $recordedRoot = if ($null -eq $record.stateRoot) { '' } else { [IO.Path]::GetFullPath([string]$record.stateRoot) }
+      if ($recordedRoot -eq [IO.Path]::GetFullPath($fixtureState)) {
+        $recordedPid = [int]$record.pid
+        Stop-Process -Id $recordedPid -Force -ErrorAction SilentlyContinue
+        if (Get-Process -Id $recordedPid -ErrorAction SilentlyContinue) {
+          & taskkill.exe /PID $recordedPid /T /F 2>$null | Out-Null
+        }
+      }
+    }
+  } catch { }
   Stop-FixtureProcess -Process $externalProcess
+  try {
+    $isolatedPort = 0
+    if (Test-Path -LiteralPath $launcherLog -PathType Leaf) {
+      $launchText = Get-Content -LiteralPath $launcherLog -Raw -Encoding UTF8
+      $portMatches = [Regex]::Matches($launchText, 'web-debug-\d+.*?port=(\d+)')
+      if ($portMatches.Count -gt 0) { $isolatedPort = [int]$portMatches[$portMatches.Count - 1].Groups[1].Value }
+    }
+    Stop-FixturePortListener -Port $isolatedPort
+  } catch { }
   $fixtureProcessIds = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
     $_.ProcessId -ne $PID -and
     -not [string]::IsNullOrWhiteSpace($_.CommandLine) -and

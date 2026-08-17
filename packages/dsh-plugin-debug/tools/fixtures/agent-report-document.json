@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "sessions": [
+    {
+      "header": {
+        "id": "example-redacted-session",
+        "createdAt": 1786924800000,
+        "seedLength": 0,
+        "delegationDepth": 0
+      },
+      "events": [
+        {
+          "seq": 0,
+          "time": 1786924801000,
+          "type": "request/header",
+          "data": {
+            "header": {
+              "config": {
+                "provider": "deepseek",
+                "model": "deepseek-v4-flash"
+              }
+            }
+          }
+        },
+        {
+          "seq": 1,
+          "time": 1786924802000,
+          "type": "assistant/message",
+          "data": {
+            "turn": 1,
+            "step": 1,
+            "usage": {
+              "inputTokens": 1200,
+              "outputTokens": 240,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 40
+            }
+          }
+        },
+        {
+          "seq": 2,
+          "time": 1786924803000,
+          "type": "tool/call",
+          "data": {
+            "name": "bash",
+            "arguments": {
+              "command": "echo redacted-fixture"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -25,12 +25,18 @@ jobs:
       matrix:
         node-version: [22, 24]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Check immutable GitHub Action pins
+        run: npm run check:workflow-pins
+        working-directory: packages/dsh-plugin-debug
       - name: Install locked package dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: packages/dsh-plugin-debug
+      - name: Audit all package dependencies via the official npm advisory API
+        run: npm audit --registry=https://registry.npmjs.org --audit-level=high
         working-directory: packages/dsh-plugin-debug
       - name: Audit production dependencies via the official npm advisory API
         run: npm audit --registry=https://registry.npmjs.org --omit=dev --audit-level=high
@@ -82,8 +88,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
       - name: Verify publication boundary (Windows PowerShell)
@@ -92,6 +98,12 @@ jobs:
       - name: Verify publication boundary (PowerShell 7)
         shell: pwsh
         run: ./scripts/Verify-Publication.ps1
+      - name: Install locked package dependencies for the complete audit
+        shell: pwsh
+        run: npm ci --prefix ./packages/dsh-plugin-debug --ignore-scripts --no-audit --no-fund
+      - name: Audit all package dependencies via the official npm advisory API
+        shell: pwsh
+        run: npm audit --prefix ./packages/dsh-plugin-debug --registry=https://registry.npmjs.org --audit-level=high
       - name: Run combined plugin integration
         shell: pwsh
         run: .\packages\dsh-plugin-debug\tools\Test-DSHPluginIntegration.ps1
@@ -184,7 +196,7 @@ jobs:
           }
       - name: Upload Windows debug-suite diagnostics
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dsh-debug-suite-diagnostics-${{ github.run_id }}
           path: ${{ runner.temp }}/dsh-debug-suite-artifacts
@@ -200,12 +212,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Clone the exact GitHub commit into a new directory
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           path: fresh-clone
           fetch-depth: 1
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
       - name: Verify publication boundary before dependency installation
@@ -225,6 +237,7 @@ jobs:
           }
           Invoke-Native -File npm -Arguments @('ci', '--prefix', 'packages/dsh-plugin-debug', '--ignore-scripts', '--no-audit', '--no-fund')
           Invoke-Native -File npm -Arguments @('ci', '--prefix', 'packages/dsh-plugin-debug/tools/runtime', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund')
+          Invoke-Native -File npm -Arguments @('audit', '--prefix', 'packages/dsh-plugin-debug', '--registry=https://registry.npmjs.org', '--audit-level=high')
           Invoke-Native -File npm -Arguments @('audit', '--prefix', 'packages/dsh-plugin-debug/tools/runtime', '--registry=https://registry.npmjs.org', '--omit=dev', '--audit-level=high')
       - name: Run fresh-clone package and recovery checks
         shell: pwsh

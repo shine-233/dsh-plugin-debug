@@ -815,7 +815,10 @@ window.__ModuleLoader__.load({
     }
 
     function getClientErrors() {
-      return clientErrors.slice()
+      // Public callers only need metadata. Keep the already-redacted message and
+      // stack inside the private scanner so a copied/downloaded client report
+      // cannot become an error-text exfiltration channel.
+      return clientErrors.slice().map(projectPublicError)
     }
 
     function clearClientErrors() {
@@ -1728,7 +1731,7 @@ window.__ModuleLoader__.load({
       return clues.slice(0, MAX_REPORTED_CLUES)
     }
 
-    function scanDiagnostics(documentObject, errors = getClientErrors()) {
+    function scanDiagnostics(documentObject, errors = clientErrors) {
       const errorCount = Array.isArray(errors) ? errors.length : 0
       const errorItems = Array.isArray(errors) ? errors.slice(-MAX_REPORTED_ERRORS).map(projectPublicError) : []
       const breadcrumbs = getDiagnosticBreadcrumbs()

@@ -4,8 +4,8 @@
 
 本手册说明当前源码能做什么、明确不会做什么，以及如何测试、更新和发布。候选版本是否已经推送，以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准；本地测试通过不等于生产 DSH 已验证。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
-`v0.8.3` 已作为 GitHub source release 发布，source commit 为
-`591ca0da959465a1207030cd7eb91372d8e90b2a`；精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前没有发布到 npm registry。真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。
+公开证据记录中的 `v0.8.3` source commit 是
+`591ca0da959465a1207030cd7eb91372d8e90b2a`；该提交的精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前工作树是基于它的 `0.8.4` 候选，新增的 Agent 报告、hotswap 预检和门禁修复在重新提交、重新跑门禁前，不属于这份已记录的发布证据。当前没有发布到 npm registry；远端是否存在正式 tag/release 不能只靠这段文案推断，应以 GitHub 远端 ref 和 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json) 为准。真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。
 
 ## 先看结论（普通用户版）
 
@@ -63,7 +63,7 @@
 
 ### 真实 DSH rc.6 验证到哪里
 
-截至 `2026-08-17`，在隔离的临时 Profile 中用 pinned `@deepseek-ai/dsh@0.1.0-rc.6` 验证到的范围只有：Web 返回 `HTTP 200`；`host.describe`、`session.list` 和 `pluginInventory/list` 可以调用；Host inventory 观察到 `dsh-plugin-debug` 为 active。
+截至 `2026-08-17`，在隔离的临时 Profile 中用 pinned `@deepseek-ai/dsh@0.1.0-rc.6` 验证到的范围包括：Web 返回 `HTTP 200`；`host.describe`、`session.list` 和 `pluginInventory/list` 可以调用；Host inventory 观察到 `dsh-plugin-debug` 为 active。本轮还用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：134 条 inventory 中确认 Debug 插件为 active；这只是当前 dirty 工作树的启动/注册证据，不是发布 commit 或有数据 Session 证据。
 
 还验证了三个工具都能通过真实 ToolRuntime 注册和调用：`plugin_check`、`plugin_hotswap_check`、`dsh_agent_report` 的 schema 均已注册，dispatch 均返回 `isError=false`。其中热切换检查仍给出 `UNAVAILABLE`，执行标记为 `NOT_ATTEMPTED`；这符合安全设计。
 
@@ -121,6 +121,7 @@ pwsh -NoLogo -NoProfile -File .\tools\Test-DSHCompatibility.ps1 `
 - 根据脱敏插件清单、失败证据和 Profile manifest 生成只读插件二分定位计划，给出安全第三方候选顺序；不会自动禁用插件、不会写 Profile、不会执行命令。
 - 注册只读 `plugin_check` 工具，按 registry、skill、collection、bundle/tool-bundle 形态检查 manifest、patch、构建陷阱、Profile Bundle 安装文档和受保护核心 row；不执行目标插件、不安装依赖、不联网。
 - 注册只读 `plugin_hotswap_check` 工具，观察 Host 是否声明稳定、权威、带串行队列/核心保护/回滚的生命周期合同，并检查目标插件的核心、runtime-only、ancestor-disabled、动态 `!!js` 风险；即使返回 `SUPPORTED` 也不执行切换。
+- 注册只读 `plugin_hotswap_preflight` 工具，对一个明确指定的候选仓库做有界源码静态预检；它会提示 shell/包管理器执行、私有生命周期 API、缓存清理、无鉴权控制面、非原子 patch、缺少回滚/串行队列/核心保护/测试/CI 等线索，但绝不 import、安装、执行或修改候选。
 - 注册只读 `dsh_agent_report` 工具，在 Host 提供持久化 SessionQuery 或当前内存会话时生成 Token、工具调用、失败、风险和内置估算费用报告；没有可读 Session 服务时返回 `UNAVAILABLE`，不会调用模型、执行命令、读取凭据或写回历史。
 - 离线静态预检 JS/MJS/CJS 的 `inject` 与 `ctx.*` 服务依赖；不执行插件代码，动态访问或超出扫描上限时只返回人工复核。
 - 根据 Profile/package 元数据（metadata）生成离线依赖图，报告缺失依赖、循环和未引用本地包；不运行 npm/pnpm、不安装依赖、不执行 package code。
@@ -228,11 +229,25 @@ Web Client 会把 Host inventory 中的 failed plugin、动态插件运行错误
 
 这是吸收 `dsh-hotswap` 研究结论后的安全接口：它只读取 Host inventory、公开能力合同和目标条目的元数据，不执行 `update`、`dispose`、`refresh`、`_dispose`，不清理 ESM/CJS 缓存，不写 `cordis.patch.yml`，不安装依赖，也不监听 `package.json`。`@deepseek-ai/*`、`include:*` 组合条目、Debug 自身和已知 DSH 核心名称都会进入保护门；即使 loader 给它们分配了自定义 ID，也不会被当成安全第三方候选。可选的 `pluginId` 只用于精确匹配一个条目；省略时报告 Host 全局能力。
 
+它还会对证据完整性 fail-closed：如果 inventory 被截断、目标没有 live fiber，或目标的祖先链超过有界扫描深度，就不会把候选标成 `SUPPORTED`，而是返回 `MANUAL_REVIEW`/`PARTIAL` 并给出对应 finding。这样未来即使有人把报告接到独立的执行器，也不会因为“只看到了前 100 条”或“看起来像运行中”而错误授权。
+
 返回的 `verdict` 只有四种：`SUPPORTED`（Host 明确声明稳定、权威、带可审计版本的完整合同，并且指定目标通过元数据门禁，仍未执行切换）、`PARTIAL`（合同来源/稳定性/版本可审计，但缺少部分操作或安全字段；省略 `pluginId` 时只做 Host 级观察，即使合同完整也不会针对具体插件返回 `SUPPORTED`）、`UNAVAILABLE`（没有可读 inventory，或合同没有被官方 DSH Host 标记为权威、稳定并带版本）和 `MANUAL_REVIEW`（核心、runtime-only、祖先禁用、动态 `!!js` 或歧义匹配）。最小可审计合同必须包含 `source=dsh-host`（或 `official=true`）、`stable=true`、非空 `version`、`entry.update`/`entry.dispose`/`entry.refresh` 三个操作，以及 `serialQueue=true`、`coreProtection=true`、`rollback=true`；缺少操作/安全字段是 `PARTIAL`，缺少权威来源/稳定标记/版本是 `UNAVAILABLE`。`execution` 永远是 `NOT_ATTEMPTED`，`executionAttempted`/`executionVerified` 永远是 `false`，`actionsExecuted` 为空，`targetMutated` 永远是 `false`；任何人都不能把 `SUPPORTED` 当成模块已经重载或真实业务仍可用。当前 rc.6 runtime 可能加载官方 HMR 服务，但“观察到 HMR”不等于获得插件修改权；没有公开生命周期合同时仍返回 `UNAVAILABLE`。
+
+## 热切换候选源码预检（`plugin_hotswap_preflight`）
+
+这个工具解决的是“要不要吸收某个 hotswap 仓库”的前置判断，不是热切换执行器。它只读取你明确传入的候选目录，最多扫描 400 个文件、单文件 512 KiB、总计 4 MiB；会跳过 `.git`、`node_modules`、`sbom` 等依赖/生成目录，拒绝符号链接，并把扫描截断或读取失败报告出来。
+
+```powershell
+.\tools\Preflight-DSHHotswap.ps1 -Path C:\path\to\candidate
+# 严格模式：任何静态 warning 都要求人工复核
+.\tools\Preflight-DSHHotswap.ps1 -Path C:\path\to\candidate -Strict
+```
+
+它可以发现 shell/`npm install`、`_dispose`/`refresh`、模块缓存清理、无更强认证的控制面、`cordis.patch.yml` 写入、缺少原子写入/回滚/串行队列/核心保护、缺测试/CI/许可证等静态信号。`PASS` 只表示在这组有界规则中没有发现线索，不表示候选兼容 DSH；`MANUAL_REVIEW` 也不是“已确认漏洞”。整个过程固定返回 `networkAccessed=false`、`commandsExecuted=false`、`executesPluginCode=false`、`targetMutated=false`、`execution=NOT_ATTEMPTED` 和 `actualHotSwap=false`。
 
 ## Agent 运行报告（`dsh_agent_report`）
 
-这是吸收 [dsh-whale-report](https://github.com/SenmuuuuW/dsh-whale-report) 后保留的“可读报告”能力。它把 Session、Token、模型、工具调用、失败、重试、风险和本地估算费用整理成一份中文报告，报告本身由确定性代码生成，不调用模型，所以生成报告消耗 0 token。
+这是吸收 [dsh-whale-report](https://github.com/SenmuuuuW/dsh-whale-report) 后保留的“可读报告”能力。它把 Session、Token（含缓存命中和缓存写入）、模型、工具调用、失败、重试、风险和本地估算费用整理成一份中文报告，报告本身由确定性代码生成，不调用模型，所以生成报告消耗 0 token。
 
 调用示例：
 
@@ -258,6 +273,17 @@ dsh_agent_report(
 - 原始命令、Tool 错误正文、密钥原文和完整 Session ID 不进入报告；
 - `rm -rf`、删库、关机等内容只是 Session 事件里的风险文本线索，不代表 Debug 执行过这些命令；
 - 上游的余额探针、浏览器 UI、外部价格/凭据读取和 `rm -rf lib` 构建脚本没有被复制进本包。
+
+真实 Host 没有历史 Session 时，可以用明确提供的脱敏 JSON 复现报告算法：
+
+```powershell
+.\Debug-DSH.ps1 `
+  -Action agent-report `
+  -InputPath .\tools\fixtures\agent-report-document.json `
+  -Preset weekly
+```
+
+输入必须是 `schemaVersion: 1` 的版本化文档，示例见 [`tools/fixtures/agent-report-document.json`](tools/fixtures/agent-report-document.json)。入口只读取这个明确文件，不自动扫描 `DSH_HOME`、Profile 或目录，不联网、不执行 JSON 中的命令，并拒绝符号链接输入。不要把 `.env`、`.credentials*`、密钥、私钥、证书或未脱敏的 Session 文件交给它；报告默认输出到 stdout，且不输出原始 Session ID、命令、错误正文或 Secret 原文。离线 JSON 能证明报告算法和脱敏边界可用，但不能替代真实 DSH 有数据 SessionQuery 的验证。
 
 因此，这个功能可以吸收并使用，但它是“本地只读 Agent 报告”，不是账单系统、命令审计的执行证明，也不是把上游完整插件作为运行时依赖安装进来。
 

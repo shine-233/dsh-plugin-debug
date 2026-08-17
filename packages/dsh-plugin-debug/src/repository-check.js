@@ -163,6 +163,15 @@ async function isRegularFile(path) {
 
 async function collectTextFiles(root, extensions, limitations, budget, maxDepth = 8) {
   const texts = []
+  try {
+    const rootStat = await lstat(root)
+    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+      limitations.push('skipped symbolic-link or non-directory scan root')
+      return texts
+    }
+  } catch {
+    return texts
+  }
   const walk = async (directory, depth) => {
     if (depth > maxDepth || budget.truncated) return
     let entries
@@ -525,7 +534,11 @@ async function findSkillManifests(root) {
   if (await exists(rootSkill)) candidates.push(rootSkill)
   const skillsRoot = join(root, 'skills')
   let entries
-  try { entries = await readdir(skillsRoot, { withFileTypes: true }) } catch { return candidates }
+  try {
+    const skillsStat = await lstat(skillsRoot)
+    if (!skillsStat.isDirectory() || skillsStat.isSymbolicLink()) return candidates
+    entries = await readdir(skillsRoot, { withFileTypes: true })
+  } catch { return candidates }
   for (const entry of entries) {
     if (candidates.length >= 50 || entry.name.startsWith('.') || entry.isSymbolicLink()) continue
     if (entry.isDirectory()) {
@@ -664,7 +677,11 @@ export async function scanRepositories(parent, { strict = false, maxRepositories
   const root = resolve(String(parent ?? ''))
   const reports = []
   let entries
-  try { entries = await readdir(root, { withFileTypes: true }) } catch { throw new Error(`cannot read scan root: ${root}`) }
+  try {
+    const rootStat = await lstat(root)
+    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('scan root is not a real directory')
+    entries = await readdir(root, { withFileTypes: true })
+  } catch { throw new Error(`cannot read scan root: ${root}`) }
   const requestedLimit = Number.isFinite(Number(maxRepositories)) ? Math.floor(Number(maxRepositories)) : MAX_REPOSITORIES
   const limit = Math.min(MAX_REPOSITORIES, Math.max(1, requestedLimit))
   let candidateCount = 0

@@ -1,6 +1,7 @@
 import { checkRepository, getCheckSchema, scanRepositories, REPORT_SCHEMA_VERSION } from './repository-check.js'
 import { inspectHotswapCapabilities } from './hotswap-check.js'
-import { registerAgentReportTool, registerPluginCheckTool, registerPluginHotswapCheckTool } from './tool-adapter.js'
+import { getHotswapPreflightSchema, preflightHotswapSource } from './hotswap-preflight.js'
+import { registerAgentReportTool, registerPluginCheckTool, registerPluginHotswapCheckTool, registerPluginHotswapPreflightTool } from './tool-adapter.js'
 import { createLiveSessionsReportSource, generateAgentReport } from './agent-report.js'
 import { registerTaskGuardian } from './task-guardian.js'
 
@@ -140,6 +141,10 @@ export function apply(ctx, config = {}) {
       defineTool,
       probe: ({ pluginId }) => inspectHotswapCapabilities({ context: ctx, targetId: pluginId }),
     })
+    registerPluginHotswapPreflightTool(ctx, {
+      defineTool,
+      preflight: preflightHotswapSource,
+    })
     registerAgentReportTool(ctx, {
       defineTool,
       getSource: () => {
@@ -168,5 +173,6 @@ export function apply(ctx, config = {}) {
 
 export { checkRepository, getCheckSchema, scanRepositories, REPORT_SCHEMA_VERSION }
 export { HOTSWAP_CHECK_SCHEMA_VERSION, getHotswapCheckSchema, inspectHotswapCapabilities } from './hotswap-check.js'
-export { AGENT_REPORT_SCHEMA_VERSION, AGENT_REPORT_PRESETS, aggregateAgentReportEvents, computeAgentReportCost, generateAgentReport, resolveAgentReportRange } from './agent-report.js'
+export { HOTSWAP_PREFLIGHT_SCHEMA_VERSION, getHotswapPreflightSchema, preflightHotswapSource } from './hotswap-preflight.js'
+export { AGENT_REPORT_SCHEMA_VERSION, AGENT_REPORT_DOCUMENT_SCHEMA_VERSION, AGENT_REPORT_PRESETS, aggregateAgentReportEvents, computeAgentReportCost, createAgentReportDocumentSource, generateAgentReport, generateAgentReportFromDocument, resolveAgentReportRange } from './agent-report.js'
 export { GUARDIAN_STATUS_PATH, guardianToolFingerprint, normalizeGuardianConfig, registerTaskGuardian } from './task-guardian.js'

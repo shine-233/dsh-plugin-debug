@@ -2,8 +2,8 @@
   "SPDXID": "SPDXRef-DOCUMENT",
   "spdxVersion": "SPDX-2.3",
   "dataLicense": "CC0-1.0",
-  "name": "dsh-plugin-debug-0.8.3",
-  "documentNamespace": "https://github.com/shine-233/dsh-plugin-debug/sbom/0.8.3",
+  "name": "dsh-plugin-debug-0.8.4",
+  "documentNamespace": "https://github.com/shine-233/dsh-plugin-debug/sbom/0.8.4",
   "creationInfo": {
     "created": "1970-01-01T00:00:00Z",
     "creators": [
@@ -8775,9 +8775,9 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-Package-pkg-npm-dsh-plugin-debug-0.8.3",
+      "SPDXID": "SPDXRef-Package-pkg-npm-dsh-plugin-debug-0.8.4",
       "name": "dsh-plugin-debug",
-      "versionInfo": "0.8.3",
+      "versionInfo": "0.8.4",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "MIT",
@@ -8787,7 +8787,7 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:npm/dsh-plugin-debug@0.8.3"
+          "referenceLocator": "pkg:npm/dsh-plugin-debug@0.8.4"
         }
       ]
     },
@@ -13436,7 +13436,7 @@
     {
       "spdxElementId": "SPDXRef-DOCUMENT",
       "relationshipType": "DESCRIBES",
-      "relatedSpdxElement": "SPDXRef-Package-pkg-npm-dsh-plugin-debug-0.8.3"
+      "relatedSpdxElement": "SPDXRef-Package-pkg-npm-dsh-plugin-debug-0.8.4"
     },
     {
       "spdxElementId": "SPDXRef-DOCUMENT",
@@ -23174,12 +23174,12 @@
       "relatedSpdxElement": "SPDXRef-Package-pkg-npm--40deepseek-ai-dsh-0.1.0-rc.6"
     },
     {
-      "spdxElementId": "SPDXRef-Package-pkg-npm-dsh-plugin-debug-0.8.3",
+      "spdxElementId": "SPDXRef-Package-pkg-npm-dsh-plugin-debug-0.8.4",
       "relationshipType": "DEPENDS_ON",
       "relatedSpdxElement": "SPDXRef-Package-pkg-npm--40deepseek-ai-cordis-4.0.1"
     },
     {
-      "spdxElementId": "SPDXRef-Package-pkg-npm-dsh-plugin-debug-0.8.3",
+      "spdxElementId": "SPDXRef-Package-pkg-npm-dsh-plugin-debug-0.8.4",
       "relationshipType": "DEPENDS_ON",
       "relatedSpdxElement": "SPDXRef-Package-pkg-npm--40deepseek-ai-dsh-tools-0.1.0-rc.6"
     },

@@ -4,8 +4,8 @@
 
 完整的中文操作手册在 [packages/dsh-plugin-debug/README.zh-CN.md](packages/dsh-plugin-debug/README.zh-CN.md)，维护顺序见 [ROADMAP.md](ROADMAP.md)，GitHub 首页简要说明在 [README.md](README.md)。
 
-`v0.8.3` 已作为 GitHub source release 发布，source commit 为
-`591ca0da959465a1207030cd7eb91372d8e90b2a`；精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前没有发布到 npm registry；离线 fixture、Host 注册和工具分发证据也不等于真实有数据 Session、模型请求、第三方安装或跨平台兼容证明。
+公开证据记录中的 `v0.8.3` source commit 是
+`591ca0da959465a1207030cd7eb91372d8e90b2a`；该提交的精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke；当前工作树是基于它的 `0.8.4` 候选，新增的 Agent 报告、hotswap 预检和门禁修复尚未进入远端发布证据；远端是否存在正式 tag/release 应以 GitHub 远端 ref 和 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准。当前没有发布到 npm registry；离线 fixture、Host 注册和工具分发证据也不等于真实有数据 Session、模型请求、第三方安装或跨平台兼容证明。
 
 如果你要找的是“系统学习 DSH”的仓库，请看公开的 [`shine-233/deepseek-harness-study`](https://github.com/shine-233/deepseek-harness-study)：它有 `START-HERE.md`、中文 README、00–27 分层学习入口、15 分钟任务单和固定版本索引。本仓库是可运行的调试插件和研究记录，不是教程；有数据 Session、模型请求、完整 Web/CLI E2E 和跨平台运行仍需另行验证。
 
@@ -54,7 +54,7 @@ Guardian 本身是 observer-only：它观察 Tool Call、Agent/Workflow 递归�
 
 ## 当前真实验证的边界
 
-截至 2026-08-17，使用隔离临时根目录、`@deepseek-ai/dsh@0.1.0-rc.6` 和 Node 24.15.0 做过真实 Host/Web 验证：页面 readiness 为 200，Host 被识别为 DSH，inventory 正常，并且上述三个工具都完成了真实 ToolRuntime 注册和 dispatch。这个验证没有访问真实用户 Profile 或凭据。
+截至 2026-08-17，使用隔离临时根目录、`@deepseek-ai/dsh@0.1.0-rc.6` 和 Node 24.15.0 做过真实 Host/Web 验证：页面 readiness 为 200，Host 被识别为 DSH，inventory 正常，并且此前的隔离探针已证明上述三个工具完成真实 ToolRuntime 注册和 dispatch。本轮工作树又用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：HTTP 200、`host.describe`、`pluginInventory/list` 成功，134 条 inventory 中确认 `dsh-plugin-debug` active。这个验证没有访问真实用户 Profile 或凭据。
 
 但隔离 Profile 没有历史 Session，所以 `dsh_agent_report` 返回的是合法的空报告（0 个 Session、0 个事件），不能据此声称 Token、费用和风险已经在真实业务数据上验证。直接调用 `session.create` 还被 rc.6 的外部 `agent-preset-invalid` 阻塞，`standard` 和 `minimal` 都遇到 `deployment:persona` 重复注册；这是 DSH 运行时限制，不是 Debug 插件主动执行了错误操作。真实有数据 Session、模型请求、完整报告体验、第三方安装和跨平台兼容仍待验证。
 

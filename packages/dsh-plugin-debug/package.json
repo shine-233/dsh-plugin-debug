@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-debug",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "A single DeepSeek Harness debug plugin for diagnostics, recovery, trace inspection, and observer-only task protection",
   "author": "shine-233",
   "repository": {
@@ -26,6 +26,9 @@
     },
     "./hotswap-check": {
       "default": "./lib/hotswap-check.js"
+    },
+    "./hotswap-preflight": {
+      "default": "./lib/hotswap-preflight.js"
     },
     "./agent-report": {
       "default": "./lib/agent-report.js"
@@ -67,9 +70,10 @@
     "build:client": "node scripts/build-client.mjs",
     "prepack": "npm run build",
     "test": "node --test",
-    "check": "node scripts/build.mjs && node scripts/check-generated.mjs && node scripts/check-syntax.mjs && node --test",
+    "check": "node scripts/build.mjs && node scripts/check-generated.mjs && node scripts/check-syntax.mjs && node scripts/check-workflow-action-pins.mjs && node --test",
     "lint": "node scripts/check-quality.mjs",
     "format:check": "node scripts/check-format.mjs",
+    "check:workflow-pins": "node scripts/check-workflow-action-pins.mjs",
     "typecheck": "node scripts/check-type-surface.mjs",
     "coverage": "node --test --experimental-test-coverage",
     "check:runtime-lock": "node scripts/check-runtime-lock.mjs",

@@ -41,7 +41,7 @@ function New-Summary {
     expectedPluginId = $ExpectedPluginId
     web = [ordered]@{ reachable = $false; statusCode = $null; isDsh = $false }
     host = [ordered]@{ reachable = $false; fields = @() }
-    inventory = [ordered]@{ reachable = $false; count = 0; expectedPluginObserved = $false }
+    inventory = [ordered]@{ reachable = $false; count = 0; expectedPluginObserved = $false; sample = @(); lastError = $null }
     modelRequests = $false
     processStarted = $false
     cleanupPerformed = $false
@@ -66,7 +66,7 @@ function Stop-StartedRuntime {
   try {
     $stopScript = Join-Path $toolRoot 'Stop-DSH.ps1'
     if ((Test-Path -LiteralPath $stopScript -PathType Leaf) -and -not [string]::IsNullOrWhiteSpace($script:StartedStateRoot)) {
-      & $script:CompatibilityPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $stopScript -StateRoot $script:StartedStateRoot -Profile 'compatibility' -Port $script:StartedPort 2>$null
+      & $script:CompatibilityPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $stopScript -StateRoot $script:StartedStateRoot -Profile 'web' -Port $script:StartedPort 2>$null
     }
   } catch { }
   try {
@@ -101,6 +101,36 @@ function Get-FreeLoopbackPort {
   try { $probe.Start(); return ([Net.IPEndPoint]$probe.LocalEndpoint).Port } finally { $probe.Stop() }
 }
 
+function Get-StartedRuntimeFailureDetail {
+  $paths = @(
+    (Join-Path $script:StartedStateRoot 'logs\launcher.log'),
+    (Join-Path $script:StartedStateRoot 'logs\dsh.stderr.log'),
+    (Join-Path $script:StartedStateRoot 'logs\dsh.stdout.log')
+  )
+  $parts = @()
+  foreach ($path in $paths) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+    try {
+      $text = ((Get-Content -LiteralPath $path -Tail 80 -ErrorAction Stop) -join "`n").Trim()
+      if ([string]::IsNullOrWhiteSpace($text)) { continue }
+      if ($text.Length -gt 8000) { $text = $text.Substring($text.Length - 8000) }
+      $parts += "$(Split-Path -Leaf $path): $text"
+    } catch { }
+  }
+  return ($parts -join ' | ')
+}
+
+function Get-OptionalTextProperty {
+  param(
+    $InputObject,
+    [Parameter(Mandatory = $true)][string]$Name
+  )
+  if ($null -eq $InputObject) { return '' }
+  $property = $InputObject.PSObject.Properties[$Name]
+  if ($null -eq $property -or $null -eq $property.Value) { return '' }
+  return ([string]$property.Value).Trim()
+}
+
 function Start-PinnedRealDsh {
   param([Parameter(Mandatory = $true)]$Summary)
   $runtime = if ([string]::IsNullOrWhiteSpace($RuntimeRoot)) { Join-Path $toolRoot 'runtime' } else { [IO.Path]::GetFullPath($RuntimeRoot) }
@@ -108,7 +138,10 @@ function Start-PinnedRealDsh {
   if (-not (Test-Path -LiteralPath $runtimeEntry -PathType Leaf)) {
     throw "pinned runtime is not installed at $runtime; run npm ci --prefix tools/runtime --omit=dev --ignore-scripts first"
   }
-  $script:StartedTempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-real-compatibility-' + [Guid]::NewGuid().ToString('N'))
+  # Use the runtime's shipped Web profile. A newly invented profile would only
+  # contain dsh-base plus the candidate plugin and would never mount the real
+  # dsh-web-app server, producing a false "runtime hung" result.
+  $script:StartedTempRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-real-web-compatibility-' + [Guid]::NewGuid().ToString('N'))
   $script:StartedStateRoot = Join-Path $script:StartedTempRoot 'state'
   $dshHome = Join-Path $script:StartedTempRoot 'dsh-home'
   New-Item -ItemType Directory -Path $script:StartedStateRoot, $dshHome -Force | Out-Null
@@ -125,7 +158,7 @@ function Start-PinnedRealDsh {
   $env:DSH_RUNTIME_ROOT = $runtime
   $arguments = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $startScript,
-    '-Profile', 'compatibility', '-Port', [string]$script:StartedPort,
+    '-Profile', 'web', '-Port', [string]$script:StartedPort,
     '-NoBrowser', '-NoInstall', '-NoErrorDialog', '-StateRoot', $script:StartedStateRoot
   )
   $script:StartedProcess = Start-Process -FilePath $script:CompatibilityPowerShell -ArgumentList $arguments -PassThru -WindowStyle Hidden
@@ -151,7 +184,9 @@ function Start-PinnedRealDsh {
     try {
       $script:StartedProcess.Refresh()
       if ($script:StartedProcess.HasExited) {
-        throw "pinned real DSH launcher exited before Web readiness with code $($script:StartedProcess.ExitCode)"
+        $detail = Get-StartedRuntimeFailureDetail
+        $suffix = if ([string]::IsNullOrWhiteSpace($detail)) { '' } else { "; $detail" }
+        throw "pinned real DSH launcher exited before Web readiness with code $($script:StartedProcess.ExitCode)$suffix"
       }
     } catch {
       if ($_.Exception.Message -match '(?i)exited before Web readiness') { throw }
@@ -159,7 +194,9 @@ function Start-PinnedRealDsh {
     Start-Sleep -Milliseconds 500
   }
   if (-not $ready) {
-    throw "pinned real DSH launcher did not expose a DSH Web page within $([int]($waitMilliseconds / 1000)) seconds"
+    $detail = Get-StartedRuntimeFailureDetail
+    $suffix = if ([string]::IsNullOrWhiteSpace($detail)) { '' } else { "; $detail" }
+    throw "pinned real DSH launcher did not expose a DSH Web page within $([int]($waitMilliseconds / 1000)) seconds$suffix"
   }
 }
 
@@ -242,24 +279,52 @@ try {
   }
 
   $inventoryError = $null
-  try {
-    # Invoke the real Host API directly.  Do not call the fixture-backed
-    # Test-DSHLiveApi.ps1 or use any fallback inventory from local state.
-    $inventoryValue = Invoke-DshGuardApi -BaseUrl $summary.baseUrl -Method 'pluginInventory/list' -Arguments @{} -TimeoutSec $TimeoutSec
-    $entries = @()
-    if ($null -ne $inventoryValue -and $null -ne $inventoryValue.PSObject.Properties['entries']) {
-      $entries = @($inventoryValue.entries)
+  $inventoryDeadline = [DateTime]::UtcNow.AddSeconds([Math]::Max(1, [Math]::Min(15, $TimeoutSec)))
+  do {
+    try {
+      # Invoke the real Host API directly.  Do not call the fixture-backed
+      # Test-DSHLiveApi.ps1 or use any fallback inventory from local state.
+      # Web readiness can precede the first stable plugin inventory snapshot,
+      # so poll the read-only endpoint for a bounded interval.
+      $inventoryValue = Invoke-DshGuardApi -BaseUrl $summary.baseUrl -Method 'pluginInventory/list' -Arguments @{} -TimeoutSec $TimeoutSec
+      $entries = @()
+      if ($null -ne $inventoryValue -and $null -ne $inventoryValue.PSObject.Properties['entries']) {
+        $entries = @($inventoryValue.entries)
+      }
+      $summary.inventory.reachable = $true
+      $summary.inventory.count = $entries.Count
+      $sample = @()
+      $expectedObserved = $false
+      foreach ($entry in $entries) {
+        if ($sample.Count -lt 12) {
+          $sample += [ordered]@{
+            entryId = Get-OptionalTextProperty -InputObject $entry -Name 'entryId'
+            moduleName = Get-OptionalTextProperty -InputObject $entry -Name 'moduleName'
+            name = Get-OptionalTextProperty -InputObject $entry -Name 'name'
+            fiberPhase = Get-OptionalTextProperty -InputObject $entry -Name 'fiberPhase'
+          }
+        }
+        $entryId = Get-OptionalTextProperty -InputObject $entry -Name 'entryId'
+        $moduleName = Get-OptionalTextProperty -InputObject $entry -Name 'moduleName'
+        $name = Get-OptionalTextProperty -InputObject $entry -Name 'name'
+        if ($entryId -eq $ExpectedPluginId -or
+            $entryId -eq "include:$ExpectedPluginId" -or
+            $moduleName -eq $ExpectedPluginId -or
+            $name -eq $ExpectedPluginId) {
+          $expectedObserved = $true
+        }
+      }
+      $summary.inventory.sample = $sample
+      $summary.inventory.expectedPluginObserved = $expectedObserved
+      $inventoryError = $null
+      $summary.inventory.lastError = $null
+    } catch {
+      $inventoryError = $_.Exception.Message
+      $summary.inventory.lastError = $inventoryError
     }
-    $summary.inventory.reachable = $true
-    $summary.inventory.count = $entries.Count
-    $summary.inventory.expectedPluginObserved = @($entries | Where-Object {
-        [string]$_.entryId -eq $ExpectedPluginId -or
-        [string]$_.moduleName -eq $ExpectedPluginId -or
-        [string]$_.name -eq $ExpectedPluginId
-      }).Count -gt 0
-  } catch {
-    $inventoryError = $_.Exception.Message
-  }
+    if ($summary.inventory.expectedPluginObserved -or [DateTime]::UtcNow -ge $inventoryDeadline) { break }
+    Start-Sleep -Milliseconds 500
+  } while ($true)
   if (-not $summary.inventory.reachable) {
     $summary.result = 'FAIL'
     $summary.error = "real DSH pluginInventory/list is unavailable: $inventoryError"

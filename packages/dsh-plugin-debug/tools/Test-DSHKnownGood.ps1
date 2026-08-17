@@ -11,17 +11,73 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'DSH-PowerShell.ps1')
 
+function Read-KnownGoodHttpRequest {
+  param([Parameter(Mandatory = $true)][Net.Sockets.TcpClient]$Client)
+
+  $stream = $Client.GetStream()
+  $stream.ReadTimeout = 5000
+  $received = [System.Collections.Generic.List[byte]]::new()
+  $buffer = New-Object byte[] 4096
+  $headerEnd = -1
+  while ($headerEnd -lt 0 -and $received.Count -lt 65536) {
+    $count = $stream.Read($buffer, 0, $buffer.Length)
+    if ($count -le 0) { break }
+    for ($index = 0; $index -lt $count; $index++) { [void]$received.Add($buffer[$index]) }
+    $headerText = [Text.Encoding]::ASCII.GetString($received.ToArray())
+    $headerEnd = $headerText.IndexOf("`r`n`r`n", [StringComparison]::Ordinal)
+  }
+  if ($headerEnd -lt 0) { throw 'known-good fixture received an incomplete HTTP header' }
+
+  $headerBlock = [Text.Encoding]::ASCII.GetString($received.ToArray(), 0, $headerEnd)
+  $lines = @($headerBlock -split "`r`n")
+  $requestParts = @($lines[0] -split ' ', 3)
+  $contentLength = 0
+  foreach ($line in @($lines | Select-Object -Skip 1)) {
+    $separator = $line.IndexOf(':')
+    if ($separator -gt 0 -and $line.Substring(0, $separator).Trim() -ieq 'Content-Length') {
+      $parsedLength = 0
+      if ([int]::TryParse($line.Substring($separator + 1).Trim(), [ref]$parsedLength) -and $parsedLength -ge 0) {
+        $contentLength = $parsedLength
+      }
+    }
+  }
+  $bodyStart = $headerEnd + 4
+  $requiredBytes = $bodyStart + $contentLength
+  while ($received.Count -lt $requiredBytes) {
+    $count = $stream.Read($buffer, 0, $buffer.Length)
+    if ($count -le 0) { break }
+    for ($index = 0; $index -lt $count; $index++) { [void]$received.Add($buffer[$index]) }
+  }
+  $body = if ($contentLength -gt 0 -and $received.Count -ge $requiredBytes) {
+    [Text.Encoding]::UTF8.GetString($received.ToArray(), $bodyStart, $contentLength)
+  } else { '' }
+
+  [PSCustomObject]@{
+    Method = if ($requestParts.Count -gt 0) { [string]$requestParts[0] } else { '' }
+    Path = if ($requestParts.Count -gt 1) { [string]$requestParts[1] } else { '' }
+    Body = $body
+  }
+}
+
 function Write-KnownGoodResponse {
   param(
-    [Parameter(Mandatory = $true)]$Context,
+    [Parameter(Mandatory = $true)][Net.Sockets.TcpClient]$Client,
     [Parameter(Mandatory = $true)][string]$Text,
-    [string]$ContentType = 'text/html; charset=utf-8'
+    [string]$ContentType = 'text/html; charset=utf-8',
+    [int]$StatusCode = 200,
+    [string]$StatusText = 'OK'
   )
-  $bytes = [Text.Encoding]::UTF8.GetBytes($Text)
-  $Context.Response.StatusCode = 200
-  $Context.Response.ContentType = $ContentType
-  $Context.Response.ContentLength64 = $bytes.Length
-  try { $Context.Response.OutputStream.Write($bytes, 0, $bytes.Length) } finally { $Context.Response.Close() }
+  $bodyBytes = [Text.Encoding]::UTF8.GetBytes($Text)
+  $headerText = "HTTP/1.1 $StatusCode $StatusText`r`nContent-Type: $ContentType`r`nContent-Length: $($bodyBytes.Length)`r`nConnection: close`r`n`r`n"
+  $headerBytes = [Text.Encoding]::ASCII.GetBytes($headerText)
+  $stream = $Client.GetStream()
+  try {
+    $stream.Write($headerBytes, 0, $headerBytes.Length)
+    $stream.Write($bodyBytes, 0, $bodyBytes.Length)
+    $stream.Flush()
+  } finally {
+    $Client.Close()
+  }
 }
 
 function Start-KnownGoodServer {
@@ -30,27 +86,35 @@ function Start-KnownGoodServer {
     [Parameter(Mandatory = $true)][string]$ReadyFile,
     [Parameter(Mandatory = $true)][string]$StopFile
   )
-  $listener = [Net.HttpListener]::new()
-  $listener.Prefixes.Add("http://127.0.0.1:$Port/")
+  # Use a raw loopback TCP listener so this fixture does not require a
+  # machine-level HTTP.sys URL ACL. It is intentionally only a tiny local
+  # HTTP server for the test contract; it is not production HTTP code.
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $Port)
   try {
     $listener.Start()
     [ordered]@{ result = 'READY'; port = $Port } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ReadyFile -Encoding UTF8
     while (-not (Test-Path -LiteralPath $StopFile -PathType Leaf)) {
-      $task = $listener.GetContextAsync()
-      while (-not $task.Wait(100)) {
-        if (Test-Path -LiteralPath $StopFile -PathType Leaf) { return }
+      if (-not $listener.Pending()) {
+        Start-Sleep -Milliseconds 50
+        continue
       }
-      $context = $task.Result
-      if ($context.Request.HttpMethod -eq 'GET') {
-        Write-KnownGoodResponse -Context $context -Text '<html><body>DSH fixture ready</body></html>'
-      } else {
-        $payload = @{ result = @{ ok = $true; value = @{ entries = @(@{ entryId = 'fixture-plugin'; moduleName = 'fixture-plugin'; enabled = $false; fiberPhase = 'failed' }) } } } | ConvertTo-Json -Depth 12 -Compress
-        Write-KnownGoodResponse -Context $context -Text $payload -ContentType 'application/json; charset=utf-8'
+      $client = $listener.AcceptTcpClient()
+      try {
+        $request = Read-KnownGoodHttpRequest -Client $client
+        if ($request.Method -eq 'GET') {
+          Write-KnownGoodResponse -Client $client -Text '<html><body>DSH fixture ready</body></html>'
+        } else {
+          $payload = @{ result = @{ ok = $true; value = @{ entries = @(@{ entryId = 'fixture-plugin'; moduleName = 'fixture-plugin'; enabled = $false; fiberPhase = 'failed' }) } } } | ConvertTo-Json -Depth 12 -Compress
+          Write-KnownGoodResponse -Client $client -Text $payload -ContentType 'application/json; charset=utf-8'
+        }
+      } catch {
+        try { Write-KnownGoodResponse -Client $client -Text '{"error":"bad fixture request"}' -ContentType 'application/json; charset=utf-8' -StatusCode 400 -StatusText 'Bad Request' } catch { }
+      } finally {
+        $client.Close()
       }
     }
   } finally {
-    if ($listener.IsListening) { $listener.Stop() }
-    $listener.Close()
+    $listener.Stop()
   }
 }
 

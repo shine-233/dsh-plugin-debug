@@ -4,7 +4,7 @@
 
 GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-plugin-debug)。包内的 [`README.zh-CN.md`](packages/dsh-plugin-debug/README.zh-CN.md) 是更完整的中文操作手册；包内默认显示的 [`README.md`](packages/dsh-plugin-debug/README.md) 同样是中文，不要求读者先看英文文档。
 
-当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准。`v0.8.3` 已作为 GitHub source release 发布：source commit 是 `591ca0da959465a1207030cd7eb91372d8e90b2a`，精确远端 fresh clone 通过了发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke；证据记录在随后的 evidence commit 中。当前仍没有发布到 npm registry。
+当前发布状态以 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 和 GitHub 远端 ref 为准。公开证据记录中的 `v0.8.3` source commit 是 `591ca0da959465a1207030cd7eb91372d8e90b2a`，该提交的精确远端 fresh clone 通过了发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke；当前工作树是基于它的 `0.8.4` 候选，新增的 Agent 报告、hotswap 预检和门禁修复尚未进入远端发布证据。当前仍没有发布到 npm registry，也不应仅凭文案把 source commit 说成正式 tag/release。
 
 功能变化、维护路线和门禁记录见 [`CHANGELOG.md`](CHANGELOG.md)、[`ROADMAP.md`](ROADMAP.md) 与 [`CONTRIBUTING.md`](CONTRIBUTING.md)。不要把 GitHub source release 当成 npm 安装包，也不要把离线 fixture/注册分发证据扩大成真实有数据 Session、模型请求、第三方插件安装或跨平台兼容证明。
 
@@ -88,6 +88,7 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 | 插件静态预检 | 离线扫描静态 `inject` 和 `ctx.*` 服务依赖，不执行插件代码 | `tools/DSH-Preflight.ps1`、`-Action plugin-preflight` |
 | 插件仓库健康检查 | 离线检查清单协议、patch 形态、构建陷阱和 hub 收录线索；限制文件/字节预算，不安装或执行候选 | `plugin_check`、`lib/repository-check.js` |
 | 插件热切换能力探测 | 只读检查 Host 生命周期合同、inventory、核心保护和动态表达式风险；不执行切换 | `plugin_hotswap_check`、`lib/hotswap-check.js` |
+| 热切换候选源码预检 | 有界静态检查 shell、私有生命周期、无鉴权控制面、patch 写入和缺少回滚/队列/核心保护/CI 等线索；不 import 或执行候选 | `plugin_hotswap_preflight`、`tools/Preflight-DSHHotswap.ps1` |
 | Agent/Session 报告 | 借鉴 `dsh-whale-report` 的确定性报告形状，从 Host 可提供的持久化或当前内存会话生成 Token、工具调用、失败、风险和内置估算费用的脱敏报告 | `dsh_agent_report`、`lib/agent-report.js`；费用是内置估算而非账单，不调用模型、不执行命令、不读取凭据、不写回 Session |
 | 依赖图检查 | 离线读取 Profile/package metadata，识别缺失依赖、循环和未引用本地包 | `tools/DSH-DependencyGraph.ps1`、`-Action plugin-dependency-graph` |
 | Trace 循环分析 | 在有限窗口内识别重复工具调用/事件指纹，输出脱敏的事后复核线索 | `tools/DSH-TraceLoop.ps1`、`-Action trace-loop` |
@@ -169,6 +170,7 @@ Invoke-RestMethod http://127.0.0.1:3081/api/dsh-plugin-debug/guardian/status
 - Host API 默认只接受 loopback；远端 Host 必须通过 `DSH_DEBUG_API_ALLOWED_HOSTS` 明确列入主机白名单，禁止把不可信 `BaseUrl` 直接用于 session/history 查询。
 - Recovery 对敏感文件只记录“存在但排除”，不会复制或恢复 `.env` 内容；公开 trace fixture 只保留调用键名、权限枚举、错误代码和事件顺序等元数据。
 - `plugin_hotswap_check` 只有能力探测：缺少权威、稳定、带版本的生命周期合同就返回 `UNAVAILABLE`，绝不调用 `_dispose`、`refresh`、`update` 或缓存清理。
+- `plugin_hotswap_preflight` 只做候选源码静态预检；`PASS` 不是 DSH 兼容认证，`MANUAL_REVIEW` 也不是已确认漏洞。它固定不联网、不执行命令、不执行候选代码、不修改候选。
 - `dsh_agent_report` 读取 Session 时受有界数量/事件上限约束；它只输出脱敏汇总和风险类型，不输出原始命令、Tool 错误正文、密钥或完整 Session ID。报告中的费用是本地内置估算，不是服务商账单。
 - 风险识别只会把 Session 里已有的命令文本（包括 `rm -rf` 这类线索）分类为风险，不会把它交给 shell 执行；上游报告项目的构建清理命令也没有被吸收到本候选。
 - 受限修复（Repair）只允许经过允许列表（allowlist）的本地 Guard 状态；递归危险字段、核心包、Profile/workspace 路径和未观察候选都会被拒绝。

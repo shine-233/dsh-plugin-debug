@@ -1,28 +1,28 @@
 {
   "schemaVersion": 1,
   "repositoryRole": "dsh-publication-release",
-  "status": "published",
+  "status": "candidate",
   "publication": {
     "githubOwner": "shine-233",
     "repositoryName": "dsh-plugin-debug",
     "visibility": "public",
     "copyrightHolder": "shine-233",
     "remoteConfigured": true,
-    "pushPerformed": true,
+    "pushPerformed": false,
     "remoteUrl": "https://github.com/shine-233/dsh-plugin-debug.git",
     "defaultBranch": "main",
-    "publishedCommit": "591ca0da959465a1207030cd7eb91372d8e90b2a"
+    "publishedCommit": null
   },
   "verification": {
     "sourceSnapshotComparedAt": "2026-08-17",
-    "sourceSnapshotScope": "remote 0.8.3 source commit verified from an exact fresh clone",
-    "sourceCommit": "591ca0da959465a1207030cd7eb91372d8e90b2a",
-    "workingTreeState": "clean",
+    "sourceSnapshotScope": "local 0.8.4 candidate working tree with Agent report and hotswap-preflight enhancements",
+    "sourceCommit": null,
+    "workingTreeState": "dirty",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
-    "packageFileCount": 102,
-    "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts and npm pack --json with prepack lifecycle",
-    "publicationVerifierPassedAt": "2026-08-17T05:22:52Z",
-    "freshCloneVerifiedAt": "2026-08-17T05:12:38Z",
+    "packageFileCount": 108,
+    "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts",
+    "publicationVerifierPassedAt": null,
+    "freshCloneVerifiedAt": null,
     "sbom": {
       "spdxVersion": "2.3",
       "spdxPath": "packages/dsh-plugin-debug/sbom/dsh-plugin-debug.spdx.json",
@@ -42,16 +42,16 @@
       "id": "dsh-plugin-debug",
       "path": "packages/dsh-plugin-debug",
       "kind": "dsh-debug-plugin",
-      "version": "0.8.3",
+      "version": "0.8.4",
       "standaloneInstall": true,
-      "includes": ["runtime-provenance", "host-diagnostics", "resource-pressure", "incident-capture-and-correlation", "recovery", "constrained-self-repair", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "trace-eval-profile-autopsy", "metadata-only-repro-export", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "plugin-repository-health-check", "plugin-hotswap-capability-check", "deterministic-agent-report", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
+      "includes": ["runtime-provenance", "host-diagnostics", "resource-pressure", "incident-capture-and-correlation", "recovery", "constrained-self-repair", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "trace-eval-profile-autopsy", "metadata-only-repro-export", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "plugin-repository-health-check", "plugin-hotswap-capability-check", "plugin-hotswap-source-preflight", "deterministic-agent-report", "offline-redacted-agent-report", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
       "license": "MIT"
     }
   ],
   "removedComponents": [
     {
       "id": "dsh-plugin-store",
-      "reason": "User requested the plugin-store be disabled for this release; its source and capability are not part of v0.8.3."
+      "reason": "User requested the plugin-store be disabled for this release; its source and capability are not part of v0.8.4."
     }
   ],
   "excludedFromPublication": [

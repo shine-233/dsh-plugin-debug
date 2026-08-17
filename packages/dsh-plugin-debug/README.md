@@ -4,8 +4,8 @@
 
 本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
-`v0.8.3` 已作为 GitHub source release 发布，source commit 为
-`591ca0da959465a1207030cd7eb91372d8e90b2a`；精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前没有发布到 npm registry。真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。
+公开证据记录中的 `v0.8.3` source commit 是
+`591ca0da959465a1207030cd7eb91372d8e90b2a`；该提交的精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、Recovery、Known-good、SBOM 和 tarball smoke。当前工作树是基于它的 `0.8.4` 候选，新增的 Agent 报告、hotswap 预检和门禁修复在重新提交、重新跑门禁前，不属于这份已记录的发布证据；当前没有发布到 npm registry；远端是否存在正式 tag/release 不能只靠这段文案推断，应以 GitHub 远端 ref 和 `RELEASE-MANIFEST.json` 为准。真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。
 
 ## 小白快速开始
 
@@ -48,6 +48,8 @@ npm run lint
 npm run format:check
 npm run typecheck
 npm run coverage
+npm run check:workflow-pins
+npm audit --registry=https://registry.npmjs.org --audit-level=high
 npm run check:runtime-lock
 npm run sbom:check
 ```
@@ -120,6 +122,7 @@ dsh plugin --profile debug add . --offline
 | 依赖图检查 | 读取 Profile/package manifest 和已有 package metadata，报告缺失依赖、循环和未引用本地包 | 不安装、不执行 package code、不修改 Profile；核心 DSH 包受保护 |
 | 插件仓库健康检查（`plugin_check`） | 按 registry/skill/collection/bundle/tool-bundle 形态检查 manifest、patch、构建陷阱、安装文档和核心 row | 只读、离线、固定资源预算；不执行目标插件、不调用 gh/Git、不证明 Hub 收录或真实构建 |
 | hotswap 能力探测（`plugin_hotswap_check`） | 只读观察 Host inventory、官方生命周期合同、核心保护、ancestor/runtime-only/`!!js` 状态和 HMR 线索 | 不调用任何生命周期方法，不重载、不启停、不改 Profile；`SUPPORTED` 也只表示“带版本的权威合同和具体目标通过安全门禁”，不是运行成功证明 |
+| hotswap 源码预检（`plugin_hotswap_preflight`） | 对候选仓库做有界静态检查，标出 shell、私有 API、无鉴权控制面、patch 写入和缺少回滚/队列/测试/CI 等线索 | 不 import、不安装、不执行、不联网、不改候选；静态 finding 只是人工复核线索，不是运行时漏洞证明 |
 | Agent/Session 报告（`dsh_agent_report`） | 从持久化 SessionQuery 或当前内存会话生成 Token、工具调用、失败、风险和内置估算费用的确定性报告 | 有界、metadata-only；不调用模型、不执行命令、不读取凭据、不写回 Session；没有可读 Session 服务时返回 `UNAVAILABLE` |
 | Trace 循环与递归分析 | 在有界窗口/深度内识别重复调用和 Agent/Workflow 嵌套；输出脱敏事后线索 | 不阻塞运行时、不创建 Session、不执行 Tool；非法或不完整输入失败即停止 |
 | 任务守护（Guardian） | 观察运行中的 Tool Call、子任务递归和中断，必要时发送一次短提示，提供状态接口并有界轮转事件日志 | observer-only：不终止任务、不杀进程、不重启 Host、不禁用插件、不修改 Profile |
@@ -154,6 +157,8 @@ dsh plugin --profile debug add . --offline
 ## 热切换能力检查（`plugin_hotswap_check`）
 
 这是一个独立的只读 Host 能力报告，不是 `plugin_check` 的第四个 action，也不是热切换执行器。它只读取当前 Host 能公开提供的 loader inventory、生命周期合同和 HMR 线索，然后检查目标插件是否存在核心保护、runtime-only、祖先禁用、目标禁用或动态 `!!js` 风险。`@deepseek-ai/*`、`include:*` 组合条目、Debug 自身和已知 DSH 核心名称都会进入保护门；即使 loader 给它们分配了自定义 ID，也不会被当成安全第三方候选。
+
+它还会对证据完整性 fail-closed：inventory 被截断、目标没有 live fiber，或祖先链超过有界扫描深度时，不会返回 `SUPPORTED`，而是降级到 `MANUAL_REVIEW`/`PARTIAL` 并给出对应 finding。这样只读报告不会把不完整观察结果误当成可执行授权。
 
 调用工具时可以省略目标，先看 Host 级能力；也可以传入一个精确的插件 ID 或模块名：
 
@@ -203,7 +208,7 @@ dsh_agent_report(preset="custom", from="2026-08-01T00:00:00Z", to="2026-08-17T00
 ToolRuntime 对外返回的是一个字符串（`output.schema.type=string`），内容是 Markdown 报告。内部结果还带有 `schemaVersion=1`、`status`、`sourceKind`、时间范围、覆盖统计、汇总和费用对象，便于测试或 Host 适配层审阅。报告会展示：
 
 - Session、subagent Session、turn、step、user/assistant message 和事件数量；
-- input/output/cache-read/reasoning Token，以及按 model/provider 分组的用量；
+- input/output/cache-read/cache-write/reasoning Token，以及按 model/provider 分组的用量；
 - Tool Call 总数、工具名排行、Tool error、turn failure、abort、interruption 和 retry burst；
 - 危险操作的红/黄级别与类型、疑似密钥/令牌的类型、费用最高的 Session；
 - 数据源、列出/读取/使用了多少 Session 和事件，以及是否为 `PARTIAL` 覆盖。
@@ -215,6 +220,21 @@ ToolRuntime 对外返回的是一个字符串（`output.schema.type=string`）�
 费用是本地内置价格的估算，币种标为 CNY，未知模型按 flash 档估算；它不是 DSH/模型供应商账单、余额或结算结果，不联网抓价格，也不请求余额。报告中的费用必须理解为“内置估算价，非账单”。
 
 工具只读：不调用模型，不执行命令、shell 或 PowerShell，不写回 Session，不修改 Profile/Workspace，不读取凭据，不上传数据。报告不输出原始命令、Tool 错误正文、密钥原文或完整 Session ID，只保留脱敏短 ID 和风险类型。`rm -rf`、删库、关机/重启、格式化磁盘、force push 等内容如果已经存在于 Session 事件文本中，只会被正则识别为风险线索；这些字符串不会传给 `child_process`、shell 或任何执行器，识别结果也不证明 Debug 插件执行过命令。
+
+### 脱敏 JSON 离线报告
+
+真实 Host 没有历史 Session 时，可以把经过人工脱敏的、明确指定的 JSON 文件交给本地报告入口：
+
+```powershell
+.\Debug-DSH.ps1 `
+  -Action agent-report `
+  -InputPath .\tools\fixtures\agent-report-document.json `
+  -Preset weekly
+```
+
+输入必须是 `schemaVersion: 1` 的版本化文档；入口只读取这个明确文件，不扫描 `DSH_HOME`、Profile 或目录，不联网，不执行其中的命令，并拒绝符号链接输入。示例格式见 [`tools/fixtures/agent-report-document.json`](tools/fixtures/agent-report-document.json)。不要把 `.env`、`.credentials*`、密钥、私钥、证书或未脱敏的 Session 文件交给它；它是离线算法复现入口，不是凭据扫描器。报告默认输出到 stdout，不输出原始 Session ID、命令、错误正文或 Secret 原文。
+
+离线 JSON 报告可以证明报告算法、Token replacement 和脱敏边界可用，但不能替代真实 DSH 的有数据 SessionQuery 验证。缓存写入 Token 会被显示；由于供应商计费规则不统一，当前内置费用估算不把缓存写入自动当成可计费价格项。
 
 ### 对 `dsh-whale-report` 的吸收边界
 

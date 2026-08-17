@@ -187,11 +187,12 @@ function Invoke-StandaloneFixtureWithStartupRetry {
   )
 
   $result = Invoke-PowerShellJson -ScriptPath $ScriptPath -Arguments $Arguments -TimeoutSec $TimeoutSec
-  # HttpListener fixtures are deliberately launched in a child PowerShell.
-  # A cold Windows host can occasionally terminate that child before its
-  # readiness marker is written. Retry only that bounded startup condition;
-  # assertion failures and protocol failures must remain real failures.
-  $startupFailure = [string]$result.text -match '(?i)(?:HttpListener process exited before readiness|HttpListener did not become ready|HTTP fixture exited before readiness)'
+  # Loopback TCP HTTP fixtures are deliberately launched in a child
+  # PowerShell. A cold Windows host can occasionally terminate that child
+  # before its readiness marker is written. Retry only that bounded startup
+  # condition; assertion failures and protocol failures must remain real
+  # failures.
+  $startupFailure = [string]$result.text -match '(?i)(?:fixture TCP HTTP process exited before readiness|fixture TCP HTTP server did not become ready|known-good HTTP fixture exited before readiness)'
   if ($result.exitCode -ne 0 -and $startupFailure) {
     Write-Host "[standalone] retry fixture startup: $(Split-Path -Leaf $ScriptPath)"
     Start-Sleep -Milliseconds 750
@@ -294,7 +295,7 @@ foreach ($file in $powerShellFiles) {
 $standaloneLauncherText = Get-Content -LiteralPath (Join-Path $toolRoot 'Start-DSH.ps1') -Raw -Encoding UTF8
 Assert-Standalone ($standaloneLauncherText -notmatch '(?i)plugin.?store') 'standalone launcher still contains plugin-store coupling'
 Assert-Standalone ($standaloneLauncherText -notmatch '(?i)dsh-one-click') 'standalone launcher references dsh-one-click'
-foreach ($generatedEntry in @('index.js', 'client.js', 'hotswap-check.js', 'agent-report.js', 'repository-check.js', 'tool-adapter.js', 'task-guardian.js')) {
+foreach ($generatedEntry in @('index.js', 'client.js', 'hotswap-check.js', 'hotswap-preflight.js', 'agent-report.js', 'repository-check.js', 'tool-adapter.js', 'task-guardian.js')) {
   Assert-Standalone (Test-Path -LiteralPath (Join-Path $packageRoot "lib\$generatedEntry") -PathType Leaf) "missing generated entry: lib/$generatedEntry"
 }
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "dsh-plugin-debug",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "bundleType": "dsh-npm-bundle",
   "independentRuntime": true,
   "features": {
@@ -70,6 +70,21 @@
       "rewritesProfile": false,
       "installsDependencies": false
     },
+    "pluginHotswapSourcePreflight": {
+      "embedded": true,
+      "tool": "plugin_hotswap_preflight",
+      "reportSchemaVersion": 1,
+      "offlineOnly": true,
+      "readOnly": true,
+      "networkAccessed": false,
+      "commandsExecuted": false,
+      "executesPluginCode": false,
+      "targetMutated": false,
+      "boundedFiles": 400,
+      "boundedFileBytes": 524288,
+      "boundedTotalBytes": 4194304,
+      "staticIndicatorsAreNotRuntimeProof": true
+    },
     "deterministicAgentReport": {
       "embedded": true,
       "tool": "dsh_agent_report",
@@ -87,8 +102,18 @@
       "persistedHistoryWhenSessionQueryAvailable": true,
       "liveSessionFallback": true,
       "boundedSessions": 500,
+      "boundedEventsPerSession": 100000,
       "boundedEvents": 1000000,
-      "costIsEstimate": true
+      "costIsEstimate": true,
+      "offlineDocumentReport": {
+        "embedded": true,
+        "schemaVersion": 1,
+        "explicitFileOnly": true,
+        "credentialReads": false,
+        "networkAccess": false,
+        "executesInputCommands": false,
+        "rejectsSymlinkInput": true
+      }
     },
     "readOnlyPluginDependencyGraph": {
       "standaloneTool": true,
@@ -143,40 +168,44 @@
   },
   "files": {
     "package.json": {
-      "bytes": 3735,
-      "sha256": "d34ef7a4c2c922ccfcc41449e84b8cea14f4c537c05d50cbd2e9d6040d6e5725"
+      "bytes": 3938,
+      "sha256": "b587841c6fcb26e032d9a30b9f70aa2abb9df0405d8b0c94fe671249278fe5d6"
     },
     "cordis.patch.yml": {
       "bytes": 242,
       "sha256": "09add5de1b427332a653d5af802bfed5ecd895c19c3bac15a9acfe4bb3395cbe"
     },
     "lib/index.js": {
-      "bytes": 7044,
-      "sha256": "87ee74ede7d8ec67e3147ea68a41908ea845ec82d5922abe7f3dc05bb8c69fb8"
+      "bytes": 7512,
+      "sha256": "0d9ed9424760cf8b3028d4161c4c4ed56fd13c0af8160bcc1ba320a8dfb78c3e"
     },
     "lib/hotswap-check.js": {
-      "bytes": 19615,
-      "sha256": "251b77b59b7d0696d95745a53270012155affff5e7c33e51f5b7e32d8bde599f"
+      "bytes": 20923,
+      "sha256": "548b2d3d93b1013c49b65c0a2f7add94921a6aa78910c190a12265b770206898"
+    },
+    "lib/hotswap-preflight.js": {
+      "bytes": 16279,
+      "sha256": "307bc349801ac5d9c6c05c40a586f615e40555b2c596a458741d855ba66211a0"
     },
     "lib/agent-report.js": {
-      "bytes": 25452,
-      "sha256": "464d1c1d06ca648fb379d19268e844449e007a264e6549ba00bd7bdf89cc6159"
+      "bytes": 33143,
+      "sha256": "9b46f49537622009bf6ffc0ff6b979963dd101dfc1e494c1380d6327b5210c4a"
     },
     "lib/repository-check.js": {
-      "bytes": 37224,
-      "sha256": "836234b938b0a77a09305059eaafed5e5eb5b03fc78a986a7c47b6eb8ef16166"
+      "bytes": 37765,
+      "sha256": "551811d3fcbe6a14f806eb5af02a887bef8914593f8a9e739d3499688570f13b"
     },
     "lib/tool-adapter.js": {
-      "bytes": 3687,
-      "sha256": "9387b229ca79159d57bbbfed45817b0360deaf785f9da5c098e293df171715a6"
+      "bytes": 4710,
+      "sha256": "9f4702a762ac81c5e133053df4c9c672c53d7c1219107dfb8d73382905976b75"
     },
     "lib/task-guardian.js": {
-      "bytes": 18375,
-      "sha256": "cddbf73374dbcdefaf15e53f866de5a19aa3454445eac7dbb1ff86e801ba3db8"
+      "bytes": 18742,
+      "sha256": "57cd44d1fa6b4df2a78917dce9a097ee08cef439b9420664c8fc83f55aa8f4be"
     },
     "lib/client.js": {
-      "bytes": 124590,
-      "sha256": "e862ce14c67a8c557ee2cc2958ab0085cc683c59cede58f4049cf0db17699c7e"
+      "bytes": 124829,
+      "sha256": "533b2082f1693cf7e42ca7bdd94a3a9e476db84be1230e25736d0716cc97e428"
     }
   }
 }

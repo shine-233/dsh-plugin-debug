@@ -259,12 +259,22 @@ Assert-Publication ($null -ne (Get-Command node -ErrorAction SilentlyContinue)) 
 Assert-Publication ($LASTEXITCODE -eq 0) 'package-lock.json is not valid JSON'
 
 $packJsonText = ''
-Push-Location $packageRoot
+$packExit = 1
+$packCacheRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-publication-npm-cache-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $packCacheRoot -Force | Out-Null
 try {
-  $packJsonText = (& npm pack --dry-run --json --ignore-scripts 2>&1 | Out-String).Trim()
-  $packExit = $LASTEXITCODE
+  Push-Location $packageRoot
+  try {
+    # Keep the publication verifier independent from a user's locked or
+    # corrupted global npm cache. `npm pack --dry-run` only needs package
+    # metadata here, so the cache is disposable and never enters the repo.
+    $packJsonText = (& npm pack --cache $packCacheRoot --dry-run --json --ignore-scripts 2>&1 | Out-String).Trim()
+    $packExit = $LASTEXITCODE
+  } finally {
+    Pop-Location
+  }
 } finally {
-  Pop-Location
+  Remove-Item -LiteralPath $packCacheRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 Assert-Publication ($packExit -eq 0) "npm pack --dry-run failed: $packJsonText"
 try {
@@ -294,6 +304,7 @@ $expectedPackedLibFiles = @(
   'lib/agent-report.js',
   'lib/client.js',
   'lib/hotswap-check.js',
+  'lib/hotswap-preflight.js',
   'lib/index.js',
   'lib/repository-check.js',
   'lib/task-guardian.js',

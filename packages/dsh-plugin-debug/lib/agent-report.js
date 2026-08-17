@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto'
  */
 
 export const AGENT_REPORT_SCHEMA_VERSION = 1
+export const AGENT_REPORT_DOCUMENT_SCHEMA_VERSION = 1
 export const AGENT_REPORT_PRESETS = ['daily', '24h', 'weekly', 'monthly', 'yearly', 'custom']
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -71,12 +72,20 @@ function stringValue(value) {
   return typeof value === 'string' ? value : ''
 }
 
+function dictionary() {
+  return Object.create(null)
+}
+
 // Session metadata is not a trusted presentation string. Keep labels bounded
 // and markdown-safe so a hostile model/tool/provider name cannot inject a
 // table row, control character, or an unbounded report line.
 function safeLabel(value, max = 80) {
   const normalized = String(value ?? '')
-    .replace(/[\u0000-\u001f\u007f`|]/g, ' ')
+    .replace(/\bsk-[A-Za-z0-9]{16,}\b/g, '[redacted-secret]')
+    .replace(/\bghp_[A-Za-z0-9]{20,}\b/g, '[redacted-secret]')
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, '[redacted-secret]')
+    .replace(/(\b(?:api[_-]?key|token|password|secret)\b\s*[=:]\s*)['"]?[A-Za-z0-9_.-]{12,}/gi, '$1[redacted-secret]')
+    .replace(/[\u0000-\u001f\u007f`|<>()[\]{}&]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   return normalized.slice(0, max) || 'unknown'
@@ -115,13 +124,33 @@ function modelAndProvider(state, data) {
 }
 
 function usageOf(data) {
-  const usage = record(data).usage
+  const usage = record(record(data).usage)
   return {
     input: nonNegativeNumber(usage.inputTokens),
     output: nonNegativeNumber(usage.outputTokens),
     cacheRead: nonNegativeNumber(usage.cacheReadTokens),
+    cacheWrite: nonNegativeNumber(usage.cacheWriteTokens),
     reasoning: nonNegativeNumber(usage.reasoningTokens),
   }
+}
+
+// DSH's token meter may publish an early `assistant/chunk` usage sample and
+// then replace it with the final `assistant/message` sample for the same
+// turn/step.  Keep the latest sample instead of double-counting it.  The
+// fallback key is event-specific when a malformed/legacy event has no
+// turn/step pair, so unrelated samples cannot collapse into one another.
+function usageSampleOf(event) {
+  const value = record(event)
+  const data = record(value.data)
+  if (value.type === 'assistant/chunk') {
+    const chunk = record(data.chunk)
+    if (chunk.type !== 'usage') return null
+    return { usage: usageOf({ usage: chunk.usage }), turn: data.turn, step: data.step }
+  }
+  if (value.type === 'assistant/message' && data.usage !== undefined) {
+    return { usage: usageOf(data), turn: data.turn, step: data.step }
+  }
+  return null
 }
 
 function textValues(data) {
@@ -166,6 +195,51 @@ function resultFailed(data) {
   return typeof message.content === 'string' && /error|failed|EACCES|ENOENT|command not found/i.test(message.content)
 }
 
+function normalizeAgentReportDocument(document) {
+  const value = record(document)
+  if (value.schemaVersion !== AGENT_REPORT_DOCUMENT_SCHEMA_VERSION) {
+    throw new Error(`脱敏 Session 文档 schemaVersion 必须是 ${AGENT_REPORT_DOCUMENT_SCHEMA_VERSION}`)
+  }
+  if (!Array.isArray(value.sessions)) throw new Error('脱敏 Session 文档必须包含 sessions 数组')
+  if (value.sessions.length > MAX_SESSIONS) throw new Error(`脱敏 Session 文档最多允许 ${MAX_SESSIONS} 个 Session`)
+
+  const ids = new Set()
+  let totalEvents = 0
+  const sessions = value.sessions.map((item, index) => {
+    const source = record(item)
+    const header = record(source.header ?? source.session)
+    const id = stringValue(header.id)
+    if (!id) throw new Error(`脱敏 Session 文档第 ${index + 1} 项缺少 header.id`)
+    if (ids.has(id)) throw new Error(`脱敏 Session 文档包含重复的 Session ID（第 ${index + 1} 项）`)
+    ids.add(id)
+    if (!Number.isSafeInteger(header.createdAt) || header.createdAt < 0) {
+      throw new Error(`脱敏 Session 文档第 ${index + 1} 项的 createdAt 必须是毫秒时间戳`)
+    }
+    const events = source.events
+    if (!Array.isArray(events)) throw new Error(`脱敏 Session 文档第 ${index + 1} 项缺少 events 数组`)
+    if (events.length > MAX_EVENTS_PER_SESSION) throw new Error(`单个 Session 事件数不能超过 ${MAX_EVENTS_PER_SESSION}`)
+    totalEvents += events.length
+    if (totalEvents > MAX_TOTAL_EVENTS) throw new Error(`脱敏 Session 文档事件总数不能超过 ${MAX_TOTAL_EVENTS}`)
+    const normalizedEvents = events.map((event, eventIndex) => {
+      const normalized = record(event)
+      if (!stringValue(normalized.type)) throw new Error(`脱敏 Session 文档第 ${index + 1} 项事件 ${eventIndex + 1} 缺少 type`)
+      if (!Number.isSafeInteger(normalized.seq) || normalized.seq < 0) throw new Error(`脱敏 Session 文档第 ${index + 1} 项事件 ${eventIndex + 1} 的 seq 无效`)
+      if (!Number.isSafeInteger(normalized.time) || normalized.time < 0) throw new Error(`脱敏 Session 文档第 ${index + 1} 项事件 ${eventIndex + 1} 的 time 无效`)
+      return normalized
+    })
+    return {
+      header: {
+        id,
+        createdAt: header.createdAt,
+        ...(Number.isSafeInteger(header.seedLength) && header.seedLength >= 0 ? { seedLength: header.seedLength } : {}),
+        ...(Number.isSafeInteger(header.delegationDepth) && header.delegationDepth >= 0 ? { delegationDepth: header.delegationDepth } : {}),
+      },
+      events: normalizedEvents,
+    }
+  })
+  return sessions
+}
+
 function emptyAggregate(period) {
   return {
     period,
@@ -183,18 +257,18 @@ function emptyAggregate(period) {
     turnInterruptions: 0,
     commands: 0,
     retryBursts: 0,
-    tokens: { input: 0, output: 0, cacheRead: 0, reasoning: 0 },
-    models: {},
-    toolCalls: {},
-    dangerous: { total: 0, red: 0, amber: 0, byLabel: {} },
-    secrets: { total: 0, byLabel: {}, bySource: { user: 0, tool: 0 } },
+    tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 },
+    models: dictionary(),
+    toolCalls: dictionary(),
+    dangerous: { total: 0, red: 0, amber: 0, byLabel: dictionary() },
+    secrets: { total: 0, byLabel: dictionary(), bySource: { user: 0, tool: 0 } },
     unknownEvents: 0,
     sessionsDetail: [],
   }
 }
 
 function ensureModel(models, key) {
-  return (models[key] ??= { input: 0, output: 0, cacheRead: 0, reasoning: 0 })
+  return (models[key] ??= { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 })
 }
 
 function ensureSession(sessions, id, time) {
@@ -216,7 +290,7 @@ function ensureSession(sessions, id, time) {
       retryBursts: 0,
       dangerCount: 0,
       redDanger: 0,
-      modelTokens: {},
+      modelTokens: dictionary(),
       cost: 0,
     }
     sessions.set(id, current)
@@ -249,6 +323,7 @@ function addUsage(target, usage) {
   target.input += usage.input
   target.output += usage.output
   target.cacheRead += usage.cacheRead
+  target.cacheWrite += usage.cacheWrite
   target.reasoning += usage.reasoning
 }
 
@@ -311,20 +386,40 @@ async function collectAgentReportEvents(source, period) {
     return { available: false, sourceKind: source.kind ?? 'unknown', headers: [], events: [], coverage: { listedSessions: 0, selectedSessions: 0, readSessions: 0, readFailures: 1, eventsRead: 0, eventsUsed: 0, truncated: false } }
   }
   const list = Array.isArray(records) ? records : []
-  const candidates = list
-    .map(item => ({ record: record(item), header: record(item).header ?? record(item).session }))
-    .filter(item => sessionIdOf(item.header) && finiteNumber(item.header.createdAt) < period.to)
-  const selected = candidates.slice(0, MAX_SESSIONS)
+  const candidates = []
+  let candidateOverflow = false
+  for (const item of list) {
+    const candidate = { record: record(item), header: record(item).header ?? record(item).session }
+    if (!sessionIdOf(candidate.header) || !Number.isFinite(finiteNumber(candidate.header.createdAt, NaN)) || finiteNumber(candidate.header.createdAt) >= period.to) continue
+    if (candidates.length >= MAX_SESSIONS) {
+      candidateOverflow = true
+      break
+    }
+    candidates.push(candidate)
+  }
+  const selected = candidates
   const headers = selected.map(item => item.header)
   const events = []
   let readSessions = 0
   let readFailures = 0
   let eventsRead = 0
+  let reservedEvents = 0
+  let budgetExhausted = false
   let cursor = 0
   const worker = async () => {
     for (;;) {
       const index = cursor++
       if (index >= selected.length) return
+      const remainingBudget = MAX_TOTAL_EVENTS - reservedEvents
+      if (remainingBudget <= 0) {
+        budgetExhausted = true
+        return
+      }
+      const sessionEventBudget = Math.min(MAX_EVENTS_PER_SESSION, remainingBudget)
+      // Reserve the budget before awaiting the source. JavaScript runs this
+      // synchronous section atomically, so concurrent workers cannot reserve
+      // more than MAX_TOTAL_EVENTS for parsing and aggregation.
+      reservedEvents += sessionEventBudget
       const id = sessionIdOf(selected[index].header)
       try {
         const snapshot = await source.readSession(id)
@@ -332,9 +427,10 @@ async function collectAgentReportEvents(source, period) {
         const sessionId = sessionIdOf(session) || id
         const seedLength = Math.max(0, Math.floor(finiteNumber(session.seedLength)))
         const rawEvents = Array.isArray(record(snapshot).events) ? record(snapshot).events : []
-        const bounded = rawEvents.slice(0, MAX_EVENTS_PER_SESSION)
+        const bounded = rawEvents.slice(0, sessionEventBudget)
         readSessions += 1
         eventsRead += bounded.length
+        if (rawEvents.length > sessionEventBudget) budgetExhausted = true
         for (const event of bounded) {
           if (events.length >= MAX_TOTAL_EVENTS) break
           if (finiteNumber(event.seq) < seedLength) continue
@@ -359,7 +455,7 @@ async function collectAgentReportEvents(source, period) {
       readFailures,
       eventsRead,
       eventsUsed,
-      truncated: list.length > selected.length || eventsRead >= MAX_TOTAL_EVENTS || selected.some(item => item.record.events > MAX_EVENTS_PER_SESSION),
+      truncated: candidateOverflow || budgetExhausted || selected.length > readSessions + readFailures,
     },
   }
 }
@@ -370,6 +466,7 @@ export function aggregateAgentReportEvents(collected, period) {
   const headerById = new Map((collected.headers ?? []).map(header => [sessionIdOf(header), header]))
   const seenSessions = new Set()
   const modelState = new Map()
+  const usageSamples = new Map()
   const lastCommand = new Map()
   const commandStreak = new Map()
   const days = new Set()
@@ -406,12 +503,35 @@ export function aggregateAgentReportEvents(collected, period) {
       for (const text of textValues(data)) addSecret(aggregate, secretLabels(text), 'user')
     } else if (type === 'assistant/message') {
       aggregate.assistantMessages += 1
-      const usage = usageOf(data)
-      addUsage(aggregate.tokens, usage)
-      const state = modelState.get(sessionId) ?? { model: 'unknown', provider: 'unknown' }
-      const key = modelKey(state.provider, state.model)
-      addUsage(ensureModel(aggregate.models, key), usage)
-      addUsage(ensureModel(session.modelTokens, key), usage)
+      const usageSample = usageSampleOf(event)
+      if (usageSample) {
+        const state = modelState.get(sessionId) ?? { model: 'unknown', provider: 'unknown' }
+        const turn = finiteNumber(usageSample.turn, NaN)
+        const step = finiteNumber(usageSample.step, NaN)
+        const sampleKey = Number.isFinite(turn) && Number.isFinite(step)
+          ? `${sessionId}\u0000${turn}\u0000${step}`
+          : `${sessionId}\u0000seq:${finiteNumber(event.seq, 0)}`
+        usageSamples.set(sampleKey, {
+          sessionId,
+          usage: usageSample.usage,
+          modelKey: modelKey(state.provider, state.model),
+        })
+      }
+    } else if (type === 'assistant/chunk') {
+      const usageSample = usageSampleOf(event)
+      if (usageSample) {
+        const state = modelState.get(sessionId) ?? { model: 'unknown', provider: 'unknown' }
+        const turn = finiteNumber(usageSample.turn, NaN)
+        const step = finiteNumber(usageSample.step, NaN)
+        const sampleKey = Number.isFinite(turn) && Number.isFinite(step)
+          ? `${sessionId}\u0000${turn}\u0000${step}`
+          : `${sessionId}\u0000seq:${finiteNumber(event.seq, 0)}`
+        usageSamples.set(sampleKey, {
+          sessionId,
+          usage: usageSample.usage,
+          modelKey: modelKey(state.provider, state.model),
+        })
+      }
     } else if (type === 'request/header' || type === 'request/context') {
       const state = modelState.get(sessionId) ?? { model: 'unknown', provider: 'unknown' }
       modelAndProvider(state, data)
@@ -458,6 +578,16 @@ export function aggregateAgentReportEvents(collected, period) {
     }
   }
 
+  // Fold one latest provider usage sample per turn/step.  This mirrors the
+  // runtime token-meter projection: an early chunk survives a failed request,
+  // while a later finalized assistant message replaces the same step's sample.
+  for (const sample of usageSamples.values()) {
+    addUsage(aggregate.tokens, sample.usage)
+    addUsage(ensureModel(aggregate.models, sample.modelKey), sample.usage)
+    const session = sessionAgg.get(sample.sessionId)
+    if (session) addUsage(ensureModel(session.modelTokens, sample.modelKey), sample.usage)
+  }
+
   for (const header of collected.headers ?? []) {
     const createdAt = finiteNumber(header.createdAt, NaN)
     if (Number.isFinite(createdAt) && createdAt >= period.from && createdAt < period.to) {
@@ -472,7 +602,7 @@ export function aggregateAgentReportEvents(collected, period) {
 }
 
 export function computeAgentReportCost(models) {
-  const perModel = {}
+  const perModel = dictionary()
   let total = 0
   for (const [model, usage] of Object.entries(models ?? {})) {
     const cost = costOfUsage(usage, model)
@@ -494,24 +624,24 @@ export function renderAgentReport(result) {
   lines.push(`# DSH Agent 报告（${result.status}）`)
   lines.push('')
   lines.push(`- 区间：${new Date(result.range.from).toISOString()} → ${new Date(result.range.to).toISOString()}`)
-  lines.push(`- 数据源：${result.sourceKind === 'session-query' ? 'SessionQuery（持久化 + 当前会话）' : result.sourceKind === 'live-sessions' ? 'ctx.sessions（仅当前内存会话）' : '未连接'}`)
+  lines.push(`- 数据源：${result.sourceKind === 'session-query' ? 'SessionQuery（持久化 + 当前会话）' : result.sourceKind === 'live-sessions' ? 'ctx.sessions（仅当前内存会话）' : result.sourceKind === 'redacted-document' ? '明确提供的脱敏 Session JSON' : '未连接'}`)
   lines.push(`- 覆盖：列出 ${formatNumber(coverage.listedSessions)} 个会话，读取 ${formatNumber(coverage.readSessions)} 个，使用 ${formatNumber(coverage.eventsUsed)} 条事件`)
   if (coverage.readFailures > 0 || coverage.truncated) lines.push('- 注意：部分会话读取失败或达到有界扫描上限，下面的数字是部分覆盖，不能当作完整账单。')
   lines.push('')
   lines.push('## 一句话结论')
   lines.push('')
-  lines.push(`本区间有 **${formatNumber(s.sessions)}** 个会话、**${formatNumber(s.turns)}** 个回合，产生 **${formatNumber(s.toolCallsTotal)}** 次工具调用；Token 约 **${formatTokens(s.tokens.input + s.tokens.output + s.tokens.cacheRead + s.tokens.reasoning)}**，费用约 **${renderCost(c)}**。`)
+  lines.push(`本区间有 **${formatNumber(s.sessions)}** 个会话、**${formatNumber(s.turns)}** 个回合，产生 **${formatNumber(s.toolCallsTotal)}** 次工具调用；Token 约 **${formatTokens(s.tokens.input + s.tokens.output + s.tokens.cacheRead + s.tokens.cacheWrite + s.tokens.reasoning)}**，费用约 **${renderCost(c)}**。`)
   lines.push('')
   lines.push('## Token 与成本')
   lines.push('')
-  lines.push(`- 输入 ${formatTokens(s.tokens.input)} · 输出 ${formatTokens(s.tokens.output)} · 缓存命中 ${formatTokens(s.tokens.cacheRead)} · 思考 ${formatTokens(s.tokens.reasoning)}`)
+  lines.push(`- 输入 ${formatTokens(s.tokens.input)} · 输出 ${formatTokens(s.tokens.output)} · 缓存命中 ${formatTokens(s.tokens.cacheRead)} · 缓存写入 ${formatTokens(s.tokens.cacheWrite)} · 思考 ${formatTokens(s.tokens.reasoning)}`)
   lines.push(`- 费用：${renderCost(c)}；当前只使用本地内置价格，未知模型按 flash 档估算。`)
   const models = Object.entries(s.models).sort((a, b) => costOfUsage(b[1], b[0]) - costOfUsage(a[1], a[0])).slice(0, 8)
   if (models.length) {
     lines.push('')
-    lines.push('| 模型 | 输入 | 输出 | 缓存 | 思考 | 估算费用 |')
-    lines.push('| --- | ---: | ---: | ---: | ---: | ---: |')
-    for (const [model, usage] of models) lines.push(`| ${model} | ${formatTokens(usage.input)} | ${formatTokens(usage.output)} | ${formatTokens(usage.cacheRead)} | ${formatTokens(usage.reasoning)} | ¥${costOfUsage(usage, model).toFixed(4)} |`)
+    lines.push('| 模型 | 输入 | 输出 | 缓存命中 | 缓存写入 | 思考 | 估算费用 |')
+    lines.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |')
+    for (const [model, usage] of models) lines.push(`| ${model} | ${formatTokens(usage.input)} | ${formatTokens(usage.output)} | ${formatTokens(usage.cacheRead)} | ${formatTokens(usage.cacheWrite)} | ${formatTokens(usage.reasoning)} | ¥${costOfUsage(usage, model).toFixed(4)} |`)
   }
   lines.push('')
   lines.push('## 工具调用与异常')
@@ -587,4 +717,28 @@ export function createLiveSessionsReportSource(sessions) {
       return { session: session.header, events: session.events }
     },
   }
+}
+
+/**
+ * Create a bounded, read-only report source from one explicitly supplied
+ * redacted JSON document.  It never discovers DSH_HOME/Profile files and it
+ * never exposes the document's raw IDs or event payloads to the report.
+ */
+export function createAgentReportDocumentSource(document) {
+  const sessions = normalizeAgentReportDocument(document)
+  return {
+    kind: 'redacted-document',
+    async listSessions() {
+      return sessions.map(({ header }) => ({ header: structuredClone(header), offline: true }))
+    },
+    async readSession(id) {
+      const session = sessions.find(item => item.header.id === String(id))
+      if (!session) throw new Error('脱敏 Session 文档中不存在请求的 Session')
+      return { session: structuredClone(session.header), events: structuredClone(session.events) }
+    },
+  }
+}
+
+export async function generateAgentReportFromDocument(document, options = {}) {
+  return generateAgentReport({ ...options, source: createAgentReportDocumentSource(document) })
 }

@@ -26,6 +26,15 @@ function boundedMessage(value, fallback) {
   return text.length > 0 && text.length <= 1000 ? text : fallback
 }
 
+function errorLogMetadata(value) {
+  const error = recordOf(value)
+  const token = (candidate) => {
+    const text = typeof candidate === 'string' ? candidate.trim() : ''
+    return /^[A-Za-z0-9_.:-]{1,64}$/u.test(text) ? text : 'unknown'
+  }
+  return `name=${token(error.name)} code=${token(error.code)} messagePresent=${typeof error.message === 'string'} stackPresent=${typeof error.stack === 'string'}`
+}
+
 export function normalizeGuardianConfig(input = {}) {
   const source = recordOf(input)
   const maxLoopRepeats = boundedInteger(source.maxLoopRepeats, 5, 2, 20)
@@ -221,7 +230,7 @@ function makeEventWriter(configProvider, options, log) {
         }
         appendFileSync(file, line, 'utf8')
       } catch (error) {
-        log(`Guardian event report could not be written: ${String(error?.message ?? error)}`)
+        log(`Guardian event report could not be written (${errorLogMetadata(error)})`)
       }
     },
   }
@@ -322,7 +331,7 @@ export function registerTaskGuardian(ctx, input = {}, options = {}) {
       return true
     } catch (error) {
       record('GUIDANCE_UNAVAILABLE', entry, { for: detectedKind })
-      logger(`Guidance was unavailable for ${entry.sessionRef}: ${String(error?.message ?? error)}`)
+      logger(`Guidance was unavailable for ${entry.sessionRef} (${errorLogMetadata(error)})`)
       return false
     }
   }
@@ -345,7 +354,7 @@ export function registerTaskGuardian(ctx, input = {}, options = {}) {
       entry.lineageDepth = getLineageDepth(ctx, agent)
       detectRecursion(entry, 'agent-lineage')
     } catch (error) {
-      logger(`Agent creation observation failed: ${String(error?.message ?? error)}`)
+      logger(`Agent creation observation failed (${errorLogMetadata(error)})`)
     }
   }
 
@@ -363,7 +372,7 @@ export function registerTaskGuardian(ctx, input = {}, options = {}) {
         entry.workflowDepth = 0
       }
     } catch (error) {
-      logger(`Agent status observation failed: ${String(error?.message ?? error)}`)
+      logger(`Agent status observation failed (${errorLogMetadata(error)})`)
     }
   }
 
@@ -414,7 +423,7 @@ export function registerTaskGuardian(ctx, input = {}, options = {}) {
         }
       }
     } catch (error) {
-      logger(`Session observation failed: ${String(error?.message ?? error)}`)
+      logger(`Session observation failed (${errorLogMetadata(error)})`)
     }
   }
 
@@ -469,7 +478,7 @@ export function registerTaskGuardian(ctx, input = {}, options = {}) {
         currentConfig = () => normalizeGuardianConfig(scope.get())
         if (typeof scope.watch === 'function') scope.watch(() => record('CONFIG_UPDATED', null, { policy: currentConfig().policy }))
       } catch (error) {
-        logger(`Guardian settings integration was unavailable: ${String(error?.message ?? error)}`)
+        logger(`Guardian settings integration was unavailable (${errorLogMetadata(error)})`)
       }
     })
   }
