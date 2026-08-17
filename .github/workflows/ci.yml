@@ -332,14 +332,16 @@ jobs:
           }
           if ($packExit -ne 0) { throw "npm pack failed: $packJsonText" }
           $packJsonStart = $packJsonText.IndexOf('[')
-          if ($packJsonStart -lt 0) { throw "npm pack did not return a JSON report: $packJsonText" }
-          $packReport = @($packJsonText.Substring($packJsonStart) | ConvertFrom-Json)[0]
+          $packJsonEnd = $packJsonText.LastIndexOf(']')
+          if ($packJsonStart -lt 0 -or $packJsonEnd -lt $packJsonStart) { throw "npm pack did not return a JSON report: $packJsonText" }
+          $packPayload = $packJsonText.Substring($packJsonStart, $packJsonEnd - $packJsonStart + 1)
+          $packReport = @($packPayload | ConvertFrom-Json)[0]
           $tarball = Join-Path $packRoot ([string]$packReport.filename)
           if (-not (Test-Path -LiteralPath $tarball -PathType Leaf)) { throw "npm pack did not create $tarball" }
           & tar.exe -xf $tarball -C $extractRoot
           if ($LASTEXITCODE -ne 0) { throw 'tarball extraction failed' }
           $unpacked = Join-Path $extractRoot 'package'
-          foreach ($required in @('package.json', 'bundle-manifest.json', 'lib/index.js', 'lib/client.js', 'lib/hotswap-check.js', 'lib/agent-report.js', 'lib/repository-check.js', 'lib/tool-adapter.js', 'tools/DSH-PowerShell.ps1', 'tools/Test-DSHCompatibility.ps1', 'tools/runtime/package-lock.json')) {
+          foreach ($required in @('package.json', 'bundle-manifest.json', 'lib/index.js', 'lib/client.js', 'lib/hotswap-check.js', 'lib/hotswap-preflight.js', 'lib/agent-report.js', 'lib/repository-check.js', 'lib/tool-adapter.js', 'tools/DSH-PowerShell.ps1', 'tools/Test-DSHCompatibility.ps1', 'tools/runtime/package-lock.json')) {
             if (-not (Test-Path -LiteralPath (Join-Path $unpacked $required) -PathType Leaf)) { throw "tarball is missing $required" }
           }
           $actualPaths = @(Get-ChildItem -LiteralPath $unpacked -Recurse -Force -File | ForEach-Object { $_.FullName.Substring($unpacked.Length + 1).Replace('\', '/') } | Sort-Object)
@@ -348,13 +350,15 @@ jobs:
           foreach ($actualPath in $actualPaths) {
             if ($actualPath -match '(?i)(^|/)node_modules(/|$)|(^|/)(state|logs|coverage)(/|$)|(^|/)\.env(?:$|\.)|\.(key|pem|pfx|p12|jks|keystore|sqlite|sqlite3|db)$') { throw "tarball contains a forbidden path: $actualPath" }
           }
-          $expectedLibPaths = @('lib/agent-report.js', 'lib/client.js', 'lib/hotswap-check.js', 'lib/index.js', 'lib/repository-check.js', 'lib/task-guardian.js', 'lib/tool-adapter.js')
+          $expectedLibPaths = @('lib/agent-report.js', 'lib/client.js', 'lib/hotswap-check.js', 'lib/hotswap-preflight.js', 'lib/index.js', 'lib/repository-check.js', 'lib/task-guardian.js', 'lib/tool-adapter.js')
           $actualLibPaths = @($actualPaths | Where-Object { $_ -like 'lib/*' })
           if (Compare-Object -ReferenceObject ($expectedLibPaths | Sort-Object) -DifferenceObject ($actualLibPaths | Sort-Object)) { throw 'tarball lib file set is not exact' }
           & node --check (Join-Path $unpacked 'lib/index.js')
           if ($LASTEXITCODE -ne 0) { throw 'extracted lib/index.js failed node --check' }
           & node --check (Join-Path $unpacked 'lib/hotswap-check.js')
           if ($LASTEXITCODE -ne 0) { throw 'extracted lib/hotswap-check.js failed node --check' }
+          & node --check (Join-Path $unpacked 'lib/hotswap-preflight.js')
+          if ($LASTEXITCODE -ne 0) { throw 'extracted lib/hotswap-preflight.js failed node --check' }
           & node --check (Join-Path $unpacked 'lib/agent-report.js')
           if ($LASTEXITCODE -ne 0) { throw 'extracted lib/agent-report.js failed node --check' }
           & node --check (Join-Path $unpacked 'lib/client.js')

@@ -4,8 +4,8 @@
 
 完整的中文操作手册在 [packages/dsh-plugin-debug/README.zh-CN.md](packages/dsh-plugin-debug/README.zh-CN.md)，维护顺序见 [ROADMAP.md](ROADMAP.md)，GitHub 首页简要说明在 [README.md](README.md)。
 
-`0.8.4` 的 source commit 是
-`7fce25118098cbceb7f3f24fa391d75324318b11`，已经推送到 GitHub；从该远端提交创建的精确 fresh clone 已通过 95/95 Node 测试、canonical integration、61 文件 standalone、108 文件 pack、SBOM/锁定依赖与发布验证器。这个版本是 GitHub source release，不发布到 npm registry；离线 fixture、Host 注册和工具分发证据也不等于真实有数据 Session、模型请求、第三方安装或跨平台兼容证明。正式状态仍以 GitHub 远端 ref 和 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准。
+`0.8.4` 仍是候选版本：source commit
+`7fce25118098cbceb7f3f24fa391d75324318b11` 的本地 fresh clone 功能检查通过，但 GitHub CI 发现 tarball exact-lib 白名单漏了新增的 `lib/hotswap-preflight.js`，所以还没有创建 tag 或 GitHub Release；修复后必须重新跑 CI 和 fresh clone。最终版本是 GitHub source release，不发布到 npm registry；离线 fixture、Host 注册和工具分发证据也不等于真实有数据 Session、模型请求、第三方安装或跨平台兼容证明。正式状态仍以 GitHub 远端 ref 和 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准。
 
 如果你要找的是“系统学习 DSH”的仓库，请看公开的 [`shine-233/deepseek-harness-study`](https://github.com/shine-233/deepseek-harness-study)：它有 `START-HERE.md`、中文 README、00–27 分层学习入口、15 分钟任务单和固定版本索引。本仓库是可运行的调试插件和研究记录，不是教程；有数据 Session、模型请求、完整 Web/CLI E2E 和跨平台运行仍需另行验证。
 

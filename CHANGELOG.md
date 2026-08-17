@@ -1,6 +1,6 @@
 # 更新记录
 
-## 0.8.4（2026-08-17，GitHub source release）
+## 工作树候选（0.8.4，基于 0.8.3，尚未发布）
 
 - Agent 报告现在兼容 DSH token meter 的 `assistant/chunk` usage 样本，并按同一 `turn/step` 用最终样本替换早期样本，避免重复计 Token。
 - 增加 `cacheWriteTokens` 展示；由于供应商计费规则不统一，当前内置费用估算不会擅自把缓存写入当成已知计费项。
@@ -11,7 +11,7 @@
 - CI 的 GitHub Actions 改为完整 40 位 commit SHA，并增加 `check:workflow-pins` 回归；包根目录的开发依赖与 pinned runtime 分开做官方 npm advisory 高危审计，避免只审计生产依赖而漏掉构建工具。
 - 上游 `dsh-whale-report` 已在 2026-08-17 重新核对到 `main` 提交 `b3de4a7d8851f63757078427ecfda52bc908961f`、版本 `0.4.0`；本包只吸收本地确定性报告引擎，不吸收其凭据/余额/网络探针或 `rm -rf lib` 构建步骤。
 - Windows standalone 的 Known-good / Live API 测试夹具改用仅监听 loopback 的原始 TCP HTTP 实现，不再依赖 `HttpListener` 的机器级 URL ACL；这是测试基础设施修复，不会扩大插件的网络或命令执行能力。
-- 这批改动已提交为 `7fce25118098cbceb7f3f24fa391d75324318b11` 并推送到 GitHub `main`；远端精确 fresh clone 已通过 95/95 Node 测试、canonical integration、61 文件 standalone、108 文件 pack 和发布验证器。版本发布到 GitHub source release，不发布到 npm registry。
+- 本地 `7fce25118098cbceb7f3f24fa391d75324318b11` 的 fresh clone 功能检查通过，但 GitHub CI 的 tarball exact-lib smoke 暴露出新 `lib/hotswap-preflight.js` 没有同步进 CI 白名单；因此当前仍是候选，修复门禁后必须重新跑 CI、fresh clone、tag 和 GitHub Release，不发布到 npm registry。
 
 ## 0.8.3（2026-08-17，GitHub source release）
 

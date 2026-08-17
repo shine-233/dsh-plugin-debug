@@ -261,6 +261,8 @@ Assert-Publication ($LASTEXITCODE -eq 0) 'package-lock.json is not valid JSON'
 $packJsonText = ''
 $packExit = 1
 $packCacheRoot = Join-Path ([IO.Path]::GetTempPath()) ('dsh-publication-npm-cache-' + [Guid]::NewGuid().ToString('N'))
+$previousNpmUpdateNotifier = $env:NPM_CONFIG_UPDATE_NOTIFIER
+$env:NPM_CONFIG_UPDATE_NOTIFIER = 'false'
 New-Item -ItemType Directory -Path $packCacheRoot -Force | Out-Null
 try {
   Push-Location $packageRoot
@@ -275,10 +277,15 @@ try {
   }
 } finally {
   Remove-Item -LiteralPath $packCacheRoot -Recurse -Force -ErrorAction SilentlyContinue
+  if ($null -eq $previousNpmUpdateNotifier) { Remove-Item Env:NPM_CONFIG_UPDATE_NOTIFIER -ErrorAction SilentlyContinue } else { $env:NPM_CONFIG_UPDATE_NOTIFIER = $previousNpmUpdateNotifier }
 }
 Assert-Publication ($packExit -eq 0) "npm pack --dry-run failed: $packJsonText"
 try {
-  $packReport = @($packJsonText | ConvertFrom-Json -ErrorAction Stop)[0]
+  $packJsonStart = $packJsonText.IndexOf('[')
+  $packJsonEnd = $packJsonText.LastIndexOf(']')
+  if ($packJsonStart -lt 0 -or $packJsonEnd -lt $packJsonStart) { throw 'npm pack output has no JSON array' }
+  $packPayload = $packJsonText.Substring($packJsonStart, $packJsonEnd - $packJsonStart + 1)
+  $packReport = @($packPayload | ConvertFrom-Json -ErrorAction Stop)[0]
 } catch {
   throw "npm pack --dry-run did not return JSON: $packJsonText"
 }

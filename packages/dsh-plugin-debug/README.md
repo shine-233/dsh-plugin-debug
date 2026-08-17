@@ -4,8 +4,8 @@
 
 本包不依赖插件商店，也不会安装或调用 `dsh-plugin-store`。旧的 provenance、debug-suite 和 one-click 目录已经迁移后从项目树移除；已有旧 provenance Profile 需要显式迁移或重新安装。发布状态、实际 npm 文件清单和 GitHub 推送状态分别以仓库中的 [`RELEASE-MANIFEST.json`](../../RELEASE-MANIFEST.json)、[`SOURCE-SNAPSHOT.md`](../../SOURCE-SNAPSHOT.md) 和远端提交为准。这里使用相对链接，打开 tag/source archive 时会继续指向同一份快照，不会跳到另一个 `main` 提交。
 
-公开证据记录中的 `0.8.4` source commit 是
-`7fce25118098cbceb7f3f24fa391d75324318b11`；该提交已经推送到 GitHub，精确远端 fresh clone 已通过发布边界、依赖审计、Node/PowerShell、Standalone、离线 integration、SBOM 和 108 文件 pack 检查。本包是 GitHub source release，不发布到 npm registry；真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行。
+公开证据记录中的 `0.8.4` 仍是候选版本：source commit
+`7fce25118098cbceb7f3f24fa391d75324318b11` 的本地 fresh clone 功能检查通过，但 GitHub CI 的 tarball exact-lib smoke 发现白名单漏了新增的 `lib/hotswap-preflight.js`，所以尚未创建 tag 或 GitHub Release；修复后必须重新跑 CI、fresh clone 和发布门禁。本包最终作为 GitHub source release 发布，不发布到 npm registry；真实有数据 Session、模型请求、第三方插件安装和跨平台兼容仍未证明；真实 Host/Web compatibility lane 仍需显式 opt-in，不能把 `UNAVAILABLE` 写成 `PASS`。`dsh_agent_report`、`plugin_check` 和 hotswap 能力仍按只读、脱敏、fail-closed 合同运行。
 
 ## 小白快速开始
 
