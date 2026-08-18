@@ -63,7 +63,7 @@ GitHub 仓库：[shine-233/dsh-plugin-debug](https://github.com/shine-233/dsh-pl
 | 隔离的真实 `@deepseek-ai/dsh@0.1.0-rc.6` | 真实 Web/Host 能启动，inventory 能看到 `dsh-plugin-debug` active，`plugin_check`、`plugin_hotswap_check`、`dsh_agent_report` 能通过 ToolRuntime 注册和 dispatch。 |
 | 尚未证明 | 成功的真实模型响应、真实 Token/供应商账单、模型生成 Tool Call、生产第三方安装、生产 hotswap 和跨平台兼容。 |
 
-这次真实隔离验证已经通过了有数据但失败的报告路径：`SessionQuery` 读取 1 个 Session、15 条事件，报告识别 1 个失败回合、0 Tool Call、0 Token、`¥0.0000`，模型请求以 `MISSING_CREDENTIAL` 失败。当前隔离 Profile 的 `session.create(minimal)` 已通过；此前另一个外部实例曾出现 `agent-preset-invalid`/重复注册 `deployment:persona`，所以应记录为外部实例观察，而不是所有 Profile 的必然失败。2026-08-18 又在本机现有 `web` Profile 以禁止安装和禁止模型请求的方式通过启动复核，manifest/patch 哈希未变。成功模型、真实账单、生产第三方安装、生产 hotswap 和跨平台兼容仍未证明。
+这次真实隔离验证已经通过了有数据但失败的报告路径：`SessionQuery` 读取 1 个 Session、15 条事件，报告识别 1 个失败回合、0 Tool Call、0 Token、`¥0.0000`，模型请求以 `MISSING_CREDENTIAL` 失败。当前隔离 Profile 的 `session.create(minimal)` 已通过；但 2026-08-18 对本机现有 `web` Profile 的只读复核中，已有 blank Session 的 `session.models` 恢复也复现了 `agent-preset-invalid`/重复注册 `deployment:persona`。因此它是与 Profile/运行时装载状态相关的 DSH 上游问题，不能简单写成“所有 Profile 必然失败”，也不能归因于 Debug 插件。该复核使用禁止安装和禁止模型请求的方式启动，未发送 prompt；成功模型、真实账单、生产第三方安装、生产 hotswap 和跨平台兼容仍未证明。
 
 - 想先启动：看下面的“安装与启动”。
 - 想按傻瓜式步骤安装、启动、导出诊断和更新：阅读 [`packages/dsh-plugin-debug/DEBUG-QUICKSTART.md`](packages/dsh-plugin-debug/DEBUG-QUICKSTART.md)。

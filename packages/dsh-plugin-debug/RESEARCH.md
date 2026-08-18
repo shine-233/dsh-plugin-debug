@@ -341,9 +341,11 @@ fixture 证据，不等同于真实业务 Session 或真实历史报告证据。
 但不证明成功模型、真实账单或模型 Tool Call。
 
 此前另一个外部 DSH 实例曾返回 `agent-preset-invalid`，核心错误是
-`prompt section "deployment:persona" is already registered`。该现象应作为外部实例的历史
-运行观察保留，不能写成所有 Profile 必然失败，也不是 `dsh_agent_report` 产生的错误；临时
-overlay 没有进入仓库，也不应被当作生产修复。
+`prompt section "deployment:persona" is already registered`。2026-08-18 对本机现有
+`web` Profile 的只读复核中，已有 blank Session 的 `session.models` 恢复也复现了同类错误；
+当前隔离 Profile 的 `session.create(minimal)` 则曾通过。因此应把它标为按 Profile/运行时
+装载状态变化的上游兼容问题，不能写成所有 Profile 必然失败，也不是 `dsh_agent_report`
+产生的错误；临时 overlay 没有进入仓库，也不应被当作生产修复。
 
 ## 2026-08-18 发布后隔离与用户 Profile 复核
 
@@ -360,6 +362,8 @@ uses 均通过，95/95 Node 测试通过，`git diff --check` 通过，工作树
 | 用户现有 `web` Profile 启动 | `PASS` | Web HTTP 200，`host.describe` 成功，Host inventory 观察到 134 条，`dsh-plugin-debug` active |
 | Profile 是否被改写 | `PASS` | 启动前后 `package.json` 和 `cordis.patch.yml` SHA-256 相同；没有 `-Install` 或 `-PluginInstall` |
 | 模型/凭据边界 | `PASS` | `modelRequests=false`；没有读取、打印或上传凭据，也没有发送模型请求 |
+| Host 当前模型元数据 | `READ_ONLY` | `host.describe` 报告 `deepseek-official` / `deepseek-v4-flash`；只读取公开模型标识，没有读取凭据值 |
+| 已有 blank Session 的 `session.models` | `FAIL` | 恢复 `standard` preset 时出现 `deployment:persona` 重复注册；没有继续到 `session.prompt`，也没有用修改 Profile 的方式绕过 |
 | 进程处置 | `PASS` | 只停止本次启动且由精确 PID 回执识别的进程；loopback 端口已释放，临时 state 保留在明确的 Temp 路径作为证据 |
 
 这证明当前用户 `web` Profile 能加载 Debug 并通过启动层兼容检查；它不证明该 Profile 的

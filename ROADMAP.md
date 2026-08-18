@@ -27,5 +27,5 @@
 
 - 真正的运行时 Hot-swap：在 DSH 官方公开、稳定、带版本的生命周期合同出现前，不调用 `_dispose`、`refresh`、缓存驱逐或自动 watcher。
 - 自动安装/卸载任意插件、默认修改 Profile、无鉴权远程启停、上传原始 Session/Tool 内容或接入外部 telemetry。
-- 不承诺成功 provider/model 响应、真实 Token/费用账单、模型生成 Tool Call、生产第三方安装、生产 hotswap 或跨平台运行；这些都需要额外的运行时条件和明确授权。此前外部实例的 `agent-preset-invalid` / `deployment:persona` 重复注册只作为历史观察保留，不作为当前隔离 Profile 的普遍结论。
+- 不承诺成功 provider/model 响应、真实 Token/费用账单、模型生成 Tool Call、生产第三方安装、生产 hotswap 或跨平台运行；这些都需要额外的运行时条件和明确授权。当前隔离 Profile 的 `session.create(minimal)` 曾通过，但本机现有 `web` Profile 的只读 `session.models` 恢复也复现了 `agent-preset-invalid` / `deployment:persona` 重复注册；下一步应先把它作为按 Profile/运行时装载状态分类的上游兼容问题处理，不能归因于 Debug 插件或扩大成所有 Profile 必然失败。
 - npm registry 发布：目前路线是 GitHub source release；若改为 npm 分发，必须另做 provenance、签名、SBOM 和安装兼容性门禁。

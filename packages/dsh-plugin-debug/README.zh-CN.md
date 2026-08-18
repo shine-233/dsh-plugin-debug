@@ -70,7 +70,7 @@
 
 随后通过真实 Host 注入的 `SessionQuery` 读取到 1 个 Session、15 条事件，报告识别出 1 个失败回合、0 次 Tool Call、0 Token、`¥0.0000`；失败原因是 provider 没有凭据（`MISSING_CREDENTIAL`）。这证明了有数据的真实失败报告路径和脱敏统计，不证明成功模型、真实账单或模型生成 Tool Call。
 
-当前隔离 Profile 中 `session.create(agentPreset=minimal)` 已通过；此前另一个外部实例曾出现 `agent-preset-invalid`/`deployment:persona` 重复注册，因此该错误应记录为外部实例观察，不应写成当前所有 Profile 必然失败。即使创建成功，当前模型请求仍会因没有 provider 凭据而失败；不要为了绕过它修改真实 Profile 或读取凭据。
+当前隔离 Profile 中 `session.create(agentPreset=minimal)` 已通过；但 2026-08-18 对本机现有 `web` Profile 的只读复核中，已有 blank Session 的 `session.models` 恢复也出现了 `agent-preset-invalid`/`deployment:persona` 重复注册。因此它应记录为与 Profile/运行时装载状态相关的 DSH 上游兼容问题，不能写成所有 Profile 必然失败，也不能归因于 Debug 插件。即使创建成功，当前模型请求仍会因没有 provider 凭据而失败；不要为了绕过它修改真实 Profile 或读取凭据。
 
 建议环境：PowerShell 7（命令名 `pwsh`）、Node.js 22 或更高版本；CI 当前覆盖 Node 22/24 和 PowerShell 7 主流程。离线核心测试不需要真实 DSH；页面、浏览器和 Host API 测试需要额外的本机运行环境。PowerShell 5.1 只作为兼容性检查宿主；如果本机两者都装有，优先使用 `pwsh`。
 

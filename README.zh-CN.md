@@ -57,7 +57,7 @@ Guardian 本身是 observer-only：它观察 Tool Call、Agent/Workflow 递归�
 
 截至 2026-08-18，使用隔离临时根目录、`@deepseek-ai/dsh@0.1.0-rc.6` 和 Node 24.15.0 做过真实 Host/Web 验证：页面 readiness 为 200，Host 被识别为 DSH，inventory 正常，并且此前的隔离探针已证明上述三个工具完成真实 ToolRuntime 注册和 dispatch。本轮工作树又用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：HTTP 200、`host.describe`、`pluginInventory/list` 成功，134 条 inventory 中确认 `dsh-plugin-debug` active。随后真实 `SessionQuery` 读取 1 个 Session、15 条事件并生成了失败报告；`session.create(minimal)` 在当前隔离 Profile 通过。另对本机现有 `web` Profile 做了 `-NoInstall -NoPluginInstall` 启动复核，manifest/patch 哈希未变且测试进程已清理。这个验证没有访问或输出凭据，也没有发送模型请求。
 
-报告识别出 1 个失败回合、0 Tool Call、0 Token、`¥0.0000`，失败原因是 `MISSING_CREDENTIAL`；这证明了真实有数据的失败报告路径，不证明成功模型、真实账单或模型 Tool Call。此前另一个外部实例曾出现 `agent-preset-invalid`/`deployment:persona` 重复注册，但当前隔离 Profile 没有复现，因此不能把它写成所有 Profile 必然失败。真实生产第三方安装、生产 hotswap 和跨平台兼容仍待验证。
+报告识别出 1 个失败回合、0 Tool Call、0 Token、`¥0.0000`，失败原因是 `MISSING_CREDENTIAL`；这证明了真实有数据的失败报告路径，不证明成功模型、真实账单或模型 Tool Call。2026-08-18 对本机现有 `web` Profile 做只读复核时，已有 blank Session 的 `session.models` 恢复也复现了 `agent-preset-invalid`/`deployment:persona` 重复注册；但当前隔离 Profile 的 `session.create(minimal)` 曾通过。因此应把它记录为与 Profile/运行时装载状态相关的 DSH 上游问题，不能写成所有 Profile 必然失败，也不能归因于 Debug 插件。真实生产第三方安装、生产 hotswap 和跨平台兼容仍待验证。
 
 Host API 默认只允许 loopback 地址。若确实需要访问受信任的远端 Host，必须显式设置 `DSH_DEBUG_API_ALLOWED_HOSTS`，例如：
 
