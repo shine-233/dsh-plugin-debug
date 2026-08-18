@@ -363,9 +363,8 @@ uses 均通过，95/95 Node 测试通过，`git diff --check` 通过，工作树
 | 进程处置 | `PASS` | 只停止本次启动且由精确 PID 回执识别的进程；loopback 端口已释放，临时 state 保留在明确的 Temp 路径作为证据 |
 
 这证明当前用户 `web` Profile 能加载 Debug 并通过启动层兼容检查；它不证明该 Profile 的
-成功模型请求、真实账单、第三方插件共存或生产 hotswap。`debug`、`web` 和
-`provenance-only` 当前都链接了 Debug；没有任何一个当前用户 Profile 被安装 hotswap、
-Whale 或独立 `dsh-plugin-check` 候选。
+成功模型请求、真实账单、第三方插件共存或生产 hotswap。当前用户的其他 Profile 也没有
+安装 hotswap、Whale 或独立 `dsh-plugin-check` 候选。
 
 ### 第三方候选的可复现性复核
 
