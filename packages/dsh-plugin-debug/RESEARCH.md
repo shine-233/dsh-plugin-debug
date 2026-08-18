@@ -351,7 +351,7 @@ overlay 没有进入仓库，也不应被当作生产修复。
 `npm run check`：生成物 10 项、JavaScript 35 个文件和 3 个 workflow 的 13 个 external
 uses 均通过，95/95 Node 测试通过，`git diff --check` 通过，工作树保持干净。
 
-随后对本机已有的 `C:\Users\Zz\.dsh\profiles\web` 做了一次明确的只读启动兼容检查。使用
+随后对本机已有的用户 `web` Profile 做了一次明确的只读启动兼容检查。使用
 随机 loopback 端口、`-NoInstall -NoPluginInstall -NoBrowser -NoErrorDialog`，没有调用
 `session.prompt`、没有创建 Session、没有安装候选插件、没有读取凭据。结果如下：
 
@@ -369,7 +369,7 @@ Whale 或独立 `dsh-plugin-check` 候选。
 
 ### 第三方候选的可复现性复核
 
-继续使用 `C:\Users\Zz\AppData\Local\Temp\dsh-external-research-20260817-a` 的研究副本，
+继续使用隔离的外部研究副本，
 没有补装依赖、没有执行候选的 DSH runtime 变更：
 
 - `dsh-plugin-check` 的 `npm run typecheck` 通过，Vitest `81/81` 通过；它与 Debug 同装
