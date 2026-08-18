@@ -10,13 +10,15 @@
 - `dsh_agent_report`：只读生成有界 Session/Token/工具/风险报告；没有 Session 服务时明确返回 `UNAVAILABLE`。
 - 真实 rc.6 隔离证据：Web/Host 启动、134 条 inventory、三个工具的 ToolRuntime dispatch，以及有数据但失败的 `SessionQuery` 报告均已验证；当前隔离 Profile 的 `session.create(minimal)` 也已通过。
 - `SessionQuery` 报告实际读取 1 个 Session、15 条事件，识别 1 个失败回合、0 Tool Call、0 Token、`¥0.0000`，并以 `MISSING_CREDENTIAL` 失败闭合；这不等于成功模型或真实账单证明。
+- 2026-08-18 又在用户现有 `web` Profile 上以 `-NoInstall -NoPluginInstall` 做了无模型请求启动复核：HTTP 200、Host API、134 条 inventory 和 Debug active 通过，Profile manifest/patch 哈希未变，测试进程已精确清理。
+- 第三方边界已重新复核：`dsh-plugin-check` 81/81 测试通过但不能与 Debug 同装；Whale 研究副本缺 `zod`；Jarvan hotswap 缺发布入口；两个 hotswap 候选的严格离线预检均为 `MANUAL_REVIEW`。
 - `.github/workflows/ci.yml`、`.github/workflows/codeql.yml` 和 `.github/dependabot.yml` 已随 v0.8.4 source release 发布；CI、CodeQL、fresh-clone 和 108 文件发布边界证据均已通过。远端分支保护和安全设置仍以 GitHub 设置页/API 为准。
 - Node 22/24、PowerShell 7 主流程、5.1 兼容解析、runtime 官方 advisory audit、fresh clone 和真实 tarball→解包→package-only Standalone 门禁。
 
 ## 下一优先级
 
 1. 继续 opt-in compatibility lane：在明确获得 provider、model、费用上限和临时 Profile 授权后，验证成功模型响应、真实 Token/费用和无害模型 Tool Call；在未获授权前不发送 `session.prompt`。
-2. 在一次性隔离 Profile 中评估第三方插件安装；`dsh-plugin-check` 不与 Debug 同装，hotswap 候选只保留静态 `MANUAL_REVIEW`，不能直接安装到生产 Profile。
+2. 继续只在一次性隔离 Profile 中评估第三方插件安装；`dsh-plugin-check` 不与 Debug 同装，Whale 必须先有完整锁定依赖，hotswap 候选只保留静态 `MANUAL_REVIEW`，不能直接安装到生产 Profile。
 3. 只有 DSH 提供公开、稳定、带版本的生命周期合同后，才重新评估真实 hotswap；在此之前不调用私有 dispose/refresh/update、不驱逐模块缓存、不启动自动 watcher。
 4. 维护已发布的 SPDX/CycloneDX SBOM、runtime lockfile 漂移检查和 Node/PowerShell 质量门禁，依赖更新时重新生成并复验。
 5. 继续维护 `deepseek-harness-study` 的最小示例插件工作台和“构建→注册→卸载”实验；学习仓库仍保持文档 fork 的边界，不强行声称是官方运行镜像。

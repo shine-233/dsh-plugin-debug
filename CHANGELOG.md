@@ -11,6 +11,8 @@
 - CI 的 GitHub Actions 改为完整 40 位 commit SHA，并增加 `check:workflow-pins` 回归；包根目录的开发依赖与 pinned runtime 分开做官方 npm advisory 高危审计，避免只审计生产依赖而漏掉构建工具。
 - 上游 `dsh-whale-report` 已在 2026-08-17 重新核对到 `main` 提交 `b3de4a7d8851f63757078427ecfda52bc908961f`、版本 `0.4.0`；本包只吸收本地确定性报告引擎，不吸收其凭据/余额/网络探针或 `rm -rf lib` 构建步骤。
 - 真实隔离 Host 现在已经验证有数据的 `SessionQuery` 失败报告：1 个 Session、15 条事件、1 个失败回合、0 Tool Call、0 Token、`¥0.0000`；`session.create(minimal)` 在当前隔离 Profile 通过，但无 provider 凭据的模型请求仍返回 `MISSING_CREDENTIAL`。这不等于成功模型、真实账单或生产 Profile 兼容证明。
+- 2026-08-18 发布后文档补记：用户现有 `web` Profile 在 `-NoInstall -NoPluginInstall`、无模型请求的条件下完成真实启动复核，HTTP 200、`host.describe`、134 条 inventory 和 Debug active 均通过；Profile manifest/patch 哈希未变，启动进程已按 PID 回执清理。这是现有 Profile 的只读启动兼容证据，不是第三方生产安装或成功模型证明。
+- 同日重新运行第三方边界检查：`dsh-plugin-check` typecheck 与 81/81 测试通过，但与 Debug 同装仍会冲突；Whale 研究副本缺少声明的 `zod`；Jarvan hotswap 缺少声明入口；两个 hotswap 候选均被严格离线预检判为 `MANUAL_REVIEW`，没有执行真实切换。
 - Windows standalone 的 Known-good / Live API 测试夹具改用仅监听 loopback 的原始 TCP HTTP 实现，不再依赖 `HttpListener` 的机器级 URL ACL；这是测试基础设施修复，不会扩大插件的网络或命令执行能力。
 - 修复 GitHub CI 的 tarball exact-lib 白名单和 npm pack notice 解析，并在精确远端提交 `687dbaba3897a50ff2c797049ad9755eb76576d5` 上重新通过 GitHub CI、CodeQL、fresh clone、95/95 Node 测试、集成测试、61 文件 standalone 和 108 文件发布边界验证；本版本作为 GitHub source release 发布，不发布到 npm registry。
 

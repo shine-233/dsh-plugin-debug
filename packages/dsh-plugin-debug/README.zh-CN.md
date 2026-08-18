@@ -64,7 +64,7 @@
 
 ### 真实 DSH rc.6 验证到哪里
 
-截至 `2026-08-17`，在隔离的临时 Profile 中用 pinned `@deepseek-ai/dsh@0.1.0-rc.6` 验证到的范围包括：Web 返回 `HTTP 200`；`host.describe`、`session.list` 和 `pluginInventory/list` 可以调用；Host inventory 观察到 `dsh-plugin-debug` 为 active。本轮还用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：134 条 inventory 中确认 Debug 插件为 active；这只是临时 Profile 的启动/注册证据，不是生产 Profile 或成功模型证据。
+截至 `2026-08-18`，在隔离的临时 Profile 中用 pinned `@deepseek-ai/dsh@0.1.0-rc.6` 验证到的范围包括：Web 返回 `HTTP 200`；`host.describe`、`session.list` 和 `pluginInventory/list` 可以调用；Host inventory 观察到 `dsh-plugin-debug` 为 active。本轮还用实际 shipped `web` Profile 跑通了 `Test-DSHCompatibility.ps1 -ConfirmRealDsh -StartPinnedRuntime`：134 条 inventory 中确认 Debug 插件为 active；随后在本机现有 `web` Profile 以 `-NoInstall -NoPluginInstall` 做了只读启动复核，manifest/patch 哈希未变且测试进程已清理；这仍不是成功模型、第三方共存或生产 hotswap 证据。
 
 还验证了三个工具都能通过真实 ToolRuntime 注册和调用：`plugin_check`、`plugin_hotswap_check`、`dsh_agent_report` 的 schema 均已注册，dispatch 均返回 `isError=false`。其中热切换检查仍给出 `UNAVAILABLE`，执行标记为 `NOT_ATTEMPTED`；这符合安全设计。
 

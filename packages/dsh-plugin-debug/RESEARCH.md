@@ -345,6 +345,48 @@ fixture 证据，不等同于真实业务 Session 或真实历史报告证据。
 运行观察保留，不能写成所有 Profile 必然失败，也不是 `dsh_agent_report` 产生的错误；临时
 overlay 没有进入仓库，也不应被当作生产修复。
 
+## 2026-08-18 发布后隔离与用户 Profile 复核
+
+本次复核没有改变源码、Profile manifest、patch、远端或发布标签。先在当前 `main` 运行
+`npm run check`：生成物 10 项、JavaScript 35 个文件和 3 个 workflow 的 13 个 external
+uses 均通过，95/95 Node 测试通过，`git diff --check` 通过，工作树保持干净。
+
+随后对本机已有的 `C:\Users\Zz\.dsh\profiles\web` 做了一次明确的只读启动兼容检查。使用
+随机 loopback 端口、`-NoInstall -NoPluginInstall -NoBrowser -NoErrorDialog`，没有调用
+`session.prompt`、没有创建 Session、没有安装候选插件、没有读取凭据。结果如下：
+
+| 检查项 | 结果 | 证据和边界 |
+| --- | --- | --- |
+| 用户现有 `web` Profile 启动 | `PASS` | Web HTTP 200，`host.describe` 成功，Host inventory 观察到 134 条，`dsh-plugin-debug` active |
+| Profile 是否被改写 | `PASS` | 启动前后 `package.json` 和 `cordis.patch.yml` SHA-256 相同；没有 `-Install` 或 `-PluginInstall` |
+| 模型/凭据边界 | `PASS` | `modelRequests=false`；没有读取、打印或上传凭据，也没有发送模型请求 |
+| 进程处置 | `PASS` | 只停止本次启动且由精确 PID 回执识别的进程；loopback 端口已释放，临时 state 保留在明确的 Temp 路径作为证据 |
+
+这证明当前用户 `web` Profile 能加载 Debug 并通过启动层兼容检查；它不证明该 Profile 的
+成功模型请求、真实账单、第三方插件共存或生产 hotswap。`debug`、`web` 和
+`provenance-only` 当前都链接了 Debug；没有任何一个当前用户 Profile 被安装 hotswap、
+Whale 或独立 `dsh-plugin-check` 候选。
+
+### 第三方候选的可复现性复核
+
+继续使用 `C:\Users\Zz\AppData\Local\Temp\dsh-external-research-20260817-a` 的研究副本，
+没有补装依赖、没有执行候选的 DSH runtime 变更：
+
+- `dsh-plugin-check` 的 `npm run typecheck` 通过，Vitest `81/81` 通过；它与 Debug 同装
+  时注册同名 `plugin_check`，因此继续保留 Debug 的单一实现。
+- `dsh-whale-report` 的 `lib/index.js` 语法可解析，但研究副本没有声明的 `zod`，所以
+  没有 import 或启动它；不把静态语法通过写成运行时兼容通过。
+- Hongzhong `dsh-hotswap` 的 `index.js`/`client.js` 语法通过；Jarvan 候选的
+  `package.json.main=lib/index.js` 在仓库中不存在，且没有 `lib` 构建产物。
+- Debug 的严格 `plugin_hotswap_preflight` 对 Hongzhong 和 Jarvan 均返回
+  `verdict=MANUAL_REVIEW`、`networkAccessed=false`、`commandsExecuted=false`、
+  `executesPluginCode=false`、`targetMutated=false`、`actualHotSwap=false`。
+  Hongzhong 暴露 shell/包管理器、私有生命周期、缓存清理、patch/watcher、非原子写入、
+  缺测试和 CI；Jarvan 还暴露未鉴权控制面、缺回滚和缺核心保护。
+
+这些结果足以支持“候选不能直接进入生产 Profile”的维护结论，但不把静态 finding 当作
+漏洞利用证明，也没有调用任何候选的 POST 热切换接口。
+
 ## 未宣称完成的部分
 
 - DSH 原生 durable rewind 事件在当前实际 rc.6 上没有被验证，因此本项目不能声称可以无损删除或重写对话历史。
