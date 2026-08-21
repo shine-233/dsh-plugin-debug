@@ -4,7 +4,7 @@
 
 完整的中文操作手册在 [packages/dsh-plugin-debug/README.zh-CN.md](packages/dsh-plugin-debug/README.zh-CN.md)，维护顺序见 [ROADMAP.md](ROADMAP.md)，GitHub 首页简要说明在 [README.md](README.md)。
 
-`0.8.4` 已完成 GitHub source release 的源码、CI、CodeQL 和 fresh-clone 证据闭环：精确源码提交为
+`0.8.5` 是当前工作树版本：它把 pinned runtime 适配到 `@deepseek-ai/dsh@0.1.1-rc.2`（lockfile 全量重建并通过 lockfile 校验、完整 `npm ci` 实装、CLI 冒烟和 95/95 Node 测试）。上一个完成 GitHub source release 源码、CI、CodeQL 和 fresh-clone 证据闭环的版本仍是 `0.8.4`：精确源码提交为
 `687dbaba3897a50ff2c797049ad9755eb76576d5`，evidence commit 为
 `41bb77a6f8cd872d98a39be14d99b2f338c890f5`，发布包检查结果为 108 个文件。这个仓库不发布到 npm registry；真实有数据但失败的 SessionQuery 报告路径已验证（1 个 Session、15 条事件），但成功模型、真实 Token/费用、模型 Tool Call、生产第三方安装和跨平台兼容仍未证明。正式状态仍以 GitHub 远端 ref 和 [`RELEASE-MANIFEST.json`](RELEASE-MANIFEST.json) 为准。
 

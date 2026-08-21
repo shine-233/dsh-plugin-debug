@@ -1,5 +1,15 @@
 # 更新记录
 
+## 0.8.5（2026-08-22，DSH 0.1.1-rc.2 适配）
+
+- pinned runtime 从 `@deepseek-ai/dsh@0.1.0-rc.6` 升级到 `0.1.1-rc.2`：`tools/runtime/package.json` 与 `package-lock.json` 全量重新生成，`Start-DSH.ps1` 的安装提示与运行时描述同步。
+- 上游在 `0.1.x` 后期把大量内部包改为 `peerDependencies` 声明；本轮 lockfile 重生成时补齐了这条 peer 闭包（`dsh-invariants`、`dsh-scope`、`dsh-shell`、`react`/`react-dom` 等 29 个包），锁定条目从 487 增至 516，避免 `npm ci` 后真实启动因缺包失败。
+- 适配验证证据：`check:runtime-lock` PASS（516 条目）；scratch 目录 `npm ci` 实装 453 包成功；`node .../dsh/lib/bin.js --version` 输出 `0.1.1-rc.2`；Node 测试 95/95 通过；`npm pack --dry-run` 仍为 108 文件。这是离线/隔离层验证，不等于真实有数据 Session 或生产 Profile 兼容证明。
+- 包内 devDependency `@deepseek-ai/dsh-tools` 升到 `0.1.1-rc.2`；`peerDependencies` 范围保持 `>=0.1.0-rc.6 <0.2.0` 不变，继续兼容 rc.6 及以上。
+- `tools/Install-DSH-Agents.ps1` 的外部 Agent Provider 固定清单同步到 `0.1.1-rc.2`（16 个包均已核对存在于该版本）。
+- 测试 fixture 与 mock 中的宿主版本字符串同步到 `0.1.1-rc.2`；SPDX/CycloneDX SBOM 按 0.8.5 与新依赖树重新生成。
+- 维护者备注：npm 11 对该依赖树做标准 peer 解析会出现长时间回溯，且 `--package-lock-only` 模式不落盘传递 peer；本轮采用 legacy 基座解析 + 按官方 registry 元数据确定性补全闭包的方式重建 lockfile，并用完整 `npm ci` 复验。使用者只需正常 `npm ci`，不受影响。
+
 ## 0.8.4（2026-08-17，GitHub source release）
 
 - Agent 报告现在兼容 DSH token meter 的 `assistant/chunk` usage 样本，并按同一 `turn/step` 用最终样本替换早期样本，避免重复计 Token。
