@@ -25,7 +25,7 @@ try {
     name = 'dsh-profile-fixture'
     dependencies = [PSCustomObject]@{
       'dsh-plugin-debug' = 'link:C:/fixture/dsh-plugin-debug'
-      '@deepseek-ai/dsh-web-app' = '0.1.0-rc.6'
+      '@deepseek-ai/dsh-web-app' = '0.1.1-rc.2'
       'other-plugin' = '2.0.0'
       'ordinary-library' = '1.2.3'
     }

@@ -31,7 +31,7 @@ try {
     name = $profile
     dependencies = [PSCustomObject]@{
       'dsh-plugin-fixture' = 'link:C:/fixture/plugin'
-      '@deepseek-ai/dsh-web-app' = '0.1.0-rc.6'
+      '@deepseek-ai/dsh-web-app' = '0.1.1-rc.2'
     }
   }
   $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $profileRoot 'package.json') -Encoding UTF8

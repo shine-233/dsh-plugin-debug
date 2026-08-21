@@ -672,7 +672,7 @@ test('runtime diagnostics use read-only DSH snapshots and omit tool arguments/ou
       if (name === 'connection') return {
         hostDescription: {
           getSnapshot() {
-            return { version: '0.1.0-rc.6', cwd: 'C:/secret/workspace', provider: 'picpi', model: 'gpt-5.6-sol', attachedSessions: 1, canOpenPath: true }
+            return { version: '0.1.1-rc.2', cwd: 'C:/secret/workspace', provider: 'picpi', model: 'gpt-5.6-sol', attachedSessions: 1, canOpenPath: true }
           },
           subscribe(handler) { hostListener.add(handler); return () => hostListener.delete(handler) },
         },

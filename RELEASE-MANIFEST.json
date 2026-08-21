@@ -1,34 +1,34 @@
 {
   "schemaVersion": 1,
   "repositoryRole": "dsh-publication-release",
-  "status": "published",
-  "publication": {
-    "githubOwner": "shine-233",
-    "repositoryName": "dsh-plugin-debug",
-    "visibility": "public",
-    "copyrightHolder": "shine-233",
-    "remoteConfigured": true,
-    "pushPerformed": true,
-    "remoteUrl": "https://github.com/shine-233/dsh-plugin-debug.git",
-    "defaultBranch": "main",
-    "publishedCommit": "687dbaba3897a50ff2c797049ad9755eb76576d5"
-  },
-  "verification": {
-    "sourceSnapshotComparedAt": "2026-08-17",
-    "sourceSnapshotScope": "remote 0.8.4 source commit verified from exact fresh clone",
-    "sourceCommit": "687dbaba3897a50ff2c797049ad9755eb76576d5",
-    "workingTreeState": "clean",
-    "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
-    "packageFileCount": 108,
-    "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts",
-    "publicationVerifierPassedAt": "2026-08-17T11:26:27Z",
-    "freshCloneVerifiedAt": "2026-08-17T11:26:27Z",
+    "status": "candidate",
+    "publication": {
+      "githubOwner": "shine-233",
+      "repositoryName": "dsh-plugin-debug",
+      "visibility": "public",
+      "copyrightHolder": "shine-233",
+      "remoteConfigured": true,
+      "pushPerformed": false,
+      "remoteUrl": "https://github.com/shine-233/dsh-plugin-debug.git",
+      "defaultBranch": "main",
+      "publishedCommit": ""
+    },
+    "verification": {
+      "sourceSnapshotComparedAt": "2026-08-22",
+      "sourceSnapshotScope": "0.8.5 candidate adapts pinned runtime to @deepseek-ai/dsh@0.1.1-rc.2; local gates passed (runtime-lock 516 entries, scratch npm ci, dsh --version smoke, 95/95 Node tests, npm pack 108 files); fresh-clone and CI evidence for 0.8.5 not yet rerun. The UTC timestamps below belong to the 0.8.4 baseline verification, not to this candidate.",
+      "sourceCommit": "",
+      "workingTreeState": "pending fresh-clone re-verification",
+      "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
+      "packageFileCount": 108,
+      "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts",
+      "publicationVerifierPassedAt": "2026-08-17T11:26:27Z",
+      "freshCloneVerifiedAt": "2026-08-17T11:26:27Z",
     "sbom": {
       "spdxVersion": "2.3",
       "spdxPath": "packages/dsh-plugin-debug/sbom/dsh-plugin-debug.spdx.json",
       "cycloneDxVersion": "1.5",
       "cycloneDxPath": "packages/dsh-plugin-debug/sbom/dsh-plugin-debug.cdx.json",
-      "componentCount": 584,
+      "componentCount": 512,
       "deterministic": true
     }
   },
@@ -42,7 +42,7 @@
       "id": "dsh-plugin-debug",
       "path": "packages/dsh-plugin-debug",
       "kind": "dsh-debug-plugin",
-      "version": "0.8.4",
+      "version": "0.8.5",
       "standaloneInstall": true,
       "includes": ["runtime-provenance", "host-diagnostics", "resource-pressure", "incident-capture-and-correlation", "recovery", "constrained-self-repair", "crash-guard", "workbench", "one-click-launcher", "startup-incident-receipt", "trace-eval-profile-autopsy", "metadata-only-repro-export", "read-only-plugin-bisect-plan", "diagnostics-diff", "plugin-preflight", "plugin-repository-health-check", "plugin-hotswap-capability-check", "plugin-hotswap-source-preflight", "deterministic-agent-report", "offline-redacted-agent-report", "dependency-graph", "trace-loop-analysis", "trace-recursion-analysis", "observer-only-task-guardian", "bounded-client-breadcrumbs"],
       "license": "MIT"

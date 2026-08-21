@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-debug",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "A single DeepSeek Harness debug plugin for diagnostics, recovery, trace inspection, and observer-only task protection",
   "author": "shine-233",
   "repository": {
@@ -123,7 +123,7 @@
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.6"
+    "@deepseek-ai/dsh-tools": "0.1.1-rc.2"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {

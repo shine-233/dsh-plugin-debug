@@ -67,28 +67,28 @@ try {
   }
   $node = $nodeCommand.Source
   $packages = @(
-    '@deepseek-ai/dsh-subagent-acp@0.1.0-rc.6',
-    '@deepseek-ai/dsh-subagent-codex@0.1.0-rc.6',
+    '@deepseek-ai/dsh-subagent-acp@0.1.1-rc.2',
+    '@deepseek-ai/dsh-subagent-codex@0.1.1-rc.2',
     # The two Provider packages intentionally declare their DSH runtime
     # dependencies as peers. A standalone npm DSH install does not expose
     # every peer from its own app package, so keep this closure explicit in
     # the profile rather than relying on pnpm's auto-peer heuristics.
-    '@deepseek-ai/dsh-agent@0.1.0-rc.6',
-    '@deepseek-ai/dsh-invariants@0.1.0-rc.6',
-    '@deepseek-ai/dsh-llm@0.1.0-rc.6',
-    '@deepseek-ai/dsh-sdk-protocol@0.1.0-rc.6',
-    '@deepseek-ai/dsh-session@0.1.0-rc.6',
-    '@deepseek-ai/dsh-subagent@0.1.0-rc.6',
-    '@deepseek-ai/dsh-subprocess@0.1.0-rc.6',
-    '@deepseek-ai/dsh-timeout@0.1.0-rc.6',
+    '@deepseek-ai/dsh-agent@0.1.1-rc.2',
+    '@deepseek-ai/dsh-invariants@0.1.1-rc.2',
+    '@deepseek-ai/dsh-llm@0.1.1-rc.2',
+    '@deepseek-ai/dsh-sdk-protocol@0.1.1-rc.2',
+    '@deepseek-ai/dsh-session@0.1.1-rc.2',
+    '@deepseek-ai/dsh-subagent@0.1.1-rc.2',
+    '@deepseek-ai/dsh-subprocess@0.1.1-rc.2',
+    '@deepseek-ai/dsh-timeout@0.1.1-rc.2',
     '@deepseek-ai/cordis@4.0.1',
     'zod@4.4.3',
-    '@deepseek-ai/dsh-attachment@0.1.0-rc.6',
-    '@deepseek-ai/dsh-brand@0.1.0-rc.6',
-    '@deepseek-ai/dsh-scope@0.1.0-rc.6',
-    '@deepseek-ai/dsh-system-prompt@0.1.0-rc.6',
-    '@deepseek-ai/dsh-tools@0.1.0-rc.6',
-    '@deepseek-ai/dsh-typert-protocol@0.1.0-rc.6'
+    '@deepseek-ai/dsh-attachment@0.1.1-rc.2',
+    '@deepseek-ai/dsh-brand@0.1.1-rc.2',
+    '@deepseek-ai/dsh-scope@0.1.1-rc.2',
+    '@deepseek-ai/dsh-system-prompt@0.1.1-rc.2',
+    '@deepseek-ai/dsh-tools@0.1.1-rc.2',
+    '@deepseek-ai/dsh-typert-protocol@0.1.1-rc.2'
   )
   Add-Content -LiteralPath $AgentsLog -Value "安装 DSH 外部 Agent Provider：$($packages -join ', ')" -Encoding UTF8
   # Initialize the shipped Web profile without starting a server. We use

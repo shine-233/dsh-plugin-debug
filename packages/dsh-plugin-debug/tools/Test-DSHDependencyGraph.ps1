@@ -59,11 +59,11 @@ try {
     manifest = [ordered]@{
       name = 'fixture-profile'
       version = '1.0.0'
-      dependencies = [ordered]@{ 'good-a' = '1.0.0'; '@deepseek-ai/dsh-tools' = '0.1.0-rc.6' }
+      dependencies = [ordered]@{ 'good-a' = '1.0.0'; '@deepseek-ai/dsh-tools' = '0.1.1-rc.2' }
     }
     packages = [ordered]@{
       'good-a' = [ordered]@{ name = 'good-a'; version = '1.0.0' }
-      '@deepseek-ai/dsh-tools' = [ordered]@{ name = '@deepseek-ai/dsh-tools'; version = '0.1.0-rc.6' }
+      '@deepseek-ai/dsh-tools' = [ordered]@{ name = '@deepseek-ai/dsh-tools'; version = '0.1.1-rc.2' }
     }
   })
   Write-DshDependencyManifest -Path $badInputPath -Value ([ordered]@{

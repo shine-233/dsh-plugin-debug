@@ -1004,7 +1004,7 @@ function Resolve-DshInvocation {
     return [PSCustomObject]@{
       FilePath = $NodePath
       PrefixArgs = @($runtimeEntry)
-      Description = "pinned npm runtime @deepseek-ai/dsh@0.1.0-rc.6"
+      Description = "pinned npm runtime @deepseek-ai/dsh@0.1.1-rc.2"
     }
   }
 
@@ -1037,7 +1037,7 @@ function Ensure-DshRuntime {
       throw "启动器缺少固定 runtime lockfile，拒绝重新解析依赖：$runtimeLock"
     }
     Ensure-Directory $LogDir
-    Write-LauncherLog '本机没有可用的 dsh，开始按 package-lock.json 精确安装 @deepseek-ai/dsh@0.1.0-rc.6。首次启动可能需要几十秒。'
+    Write-LauncherLog '本机没有可用的 dsh，开始按 package-lock.json 精确安装 @deepseek-ai/dsh@0.1.1-rc.2。首次启动可能需要几十秒。'
     # Keep first-run failures bounded: the launcher must not sit indefinitely
     # in a hidden npm process when a registry mirror or one package is stuck.
     & $npmPath ci --prefix $RuntimeDir --no-audit --no-fund --omit=dev --ignore-scripts --progress=false --fetch-retries=1 --fetch-timeout=30000 --loglevel=warn *> $InstallLog
