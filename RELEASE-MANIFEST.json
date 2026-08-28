@@ -14,15 +14,15 @@
     "publishedCommit": "c21606f82850c9f27a8d94c3cb7f1932a8606a9b"
   },
   "verification": {
-    "sourceSnapshotComparedAt": "2026-08-22",
-    "sourceSnapshotScope": "remote 0.8.5 source commit verified from exact fresh clone; real isolated Host/Web compatibility PASS against @deepseek-ai/dsh@0.1.1-rc.2 with dsh-plugin-debug observed active in a 140-entry inventory",
-    "sourceCommit": "c21606f82850c9f27a8d94c3cb7f1932a8606a9b",
+    "sourceSnapshotComparedAt": "2026-08-28",
+    "sourceSnapshotScope": "research-bridge increment verified on top of 0.8.5: deterministic request/evidence/result contract tool with offline fixture suite (PASS, zero network access), standalone inventory registered, npm pack 114 files; real isolated Host/Web compatibility PASS against @deepseek-ai/dsh@0.1.1-rc.2 baseline unchanged",
+    "sourceCommit": "65e16d5f4801649c1d714e7b822955d4d92e1b11",
     "workingTreeState": "clean",
     "dependencyLicenseReport": "DEPENDENCY-LICENSE-REPORT.md",
-    "packageFileCount": 108,
+    "packageFileCount": 114,
     "packageFileCountMethod": "npm pack --dry-run --json --ignore-scripts",
-    "publicationVerifierPassedAt": "2026-08-21T17:31:23Z",
-    "freshCloneVerifiedAt": "2026-08-21T17:31:23Z",
+    "publicationVerifierPassedAt": "2026-08-28T13:04:32Z",
+    "freshCloneVerifiedAt": "2026-08-28T13:04:32Z",
     "sbom": {
       "spdxVersion": "2.3",
       "spdxPath": "packages/dsh-plugin-debug/sbom/dsh-plugin-debug.spdx.json",
