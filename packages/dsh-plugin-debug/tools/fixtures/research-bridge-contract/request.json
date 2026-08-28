@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "dsh-research-diagnostic-request",
+  "requestId": "contract-replay-001",
+  "course": {
+    "siteId": "dsh-study",
+    "courseId": "deepseek-harness",
+    "lessonId": "debug-bridge-v1",
+    "questionId": "contract-replay"
+  },
+  "question": {
+    "title": "回放网站与 Debug 对同一份协议输入的解释",
+    "requiredSourceKinds": [
+      "diagnostics",
+      "trace",
+      "pointer"
+    ],
+    "requestedChecks": [
+      "coverage",
+      "privacy",
+      "integrity"
+    ]
+  },
+  "safety": {
+    "inputMode": "explicit-file-only",
+    "networkAccessed": false,
+    "commandsExecuted": false,
+    "targetMutated": false,
+    "uploads": false
+  }
+}

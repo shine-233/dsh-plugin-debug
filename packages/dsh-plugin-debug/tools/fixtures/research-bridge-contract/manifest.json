@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "kind": "dsh-debug-repro-manifest",
+  "artifacts": [
+    {
+      "name": "repro.json",
+      "sha256": "158a02967a4734ed93f48763481d02414a9b9c23c0994f451d3196572f8b7dd9"
+    }
+  ]
+}

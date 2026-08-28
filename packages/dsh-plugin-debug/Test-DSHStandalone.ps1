@@ -229,6 +229,8 @@ $expected = @(
   'DSH-ResourcePressure.psm1',
   'DSH-Repro.ps1',
   'Test-DSHRepro.ps1',
+  'DSH-ResearchBridge.ps1',
+  'Test-DSHResearchBridge.ps1',
   'Test-DSHResourcePressure.ps1',
   'Test-DSHIncidentRuntimeEvidence.ps1',
   'Test-DSHCrashGuard.ps1',
@@ -741,6 +743,11 @@ fs.cpSync(source, installedRoot, { recursive: true });
 
   $reproFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHRepro.ps1') -Arguments @{}
   Assert-Standalone ($reproFixture.exitCode -eq 0 -and $reproFixture.value.result -eq 'PASS' -and $reproFixture.value.offline -eq $true -and $reproFixture.value.networkAccessed -eq $false) "repro export fixture did not return PASS: $($reproFixture.text)"
+  $fixtureChecks++
+
+  $researchBridgeFixture = Invoke-PowerShellJson -ScriptPath (Join-Path $toolRoot 'Test-DSHResearchBridge.ps1') -Arguments @{}
+  Assert-Standalone ($researchBridgeFixture.exitCode -eq 0 -and $researchBridgeFixture.value.result -eq 'PASS' -and $researchBridgeFixture.value.offline -eq $true -and $researchBridgeFixture.value.networkAccessed -eq $false) "research bridge fixture did not return PASS: $($researchBridgeFixture.text)"
+  Assert-Standalone ($researchBridgeFixture.value.inputChanged -eq $false -and $researchBridgeFixture.value.outputCollisionRejected -eq $true -and $researchBridgeFixture.value.privacyContractChecked -eq $true) 'research bridge fixture did not preserve its explicit-file privacy boundary'
   $fixtureChecks++
 
   $bisectInputPath = Join-Path $toolRoot 'fixtures\plugin-bisect-plan.json'

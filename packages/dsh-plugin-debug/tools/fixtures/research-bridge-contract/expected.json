@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "requestId": "contract-replay-001",
+  "status": "COMPLETE",
+  "sourceKinds": [
+    "diagnostics",
+    "pointer",
+    "trace"
+  ],
+  "missingKinds": [],
+  "integrity": "verified",
+  "trust": "declared-metadata-only",
+  "checks": [
+    {
+      "checkId": "coverage",
+      "status": "PASS",
+      "findingCodes": [
+        "REQUIRED_EVIDENCE_PRESENT"
+      ]
+    },
+    {
+      "checkId": "privacy",
+      "status": "PASS",
+      "findingCodes": [
+        "EVIDENCE_PRIVACY_DECLARATION_VALID"
+      ]
+    },
+    {
+      "checkId": "integrity",
+      "status": "PASS",
+      "findingCodes": [
+        "EVIDENCE_MANIFEST_VERIFIED"
+      ]
+    }
+  ]
+}

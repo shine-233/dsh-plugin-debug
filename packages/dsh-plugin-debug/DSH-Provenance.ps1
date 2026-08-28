@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('doctor', 'start', 'diagnostics', 'plugin-health', 'snapshot', 'restore', 'workspace-list', 'workspace-snapshot', 'workspace-restore', 'session-history', 'session-fork', 'known-good-list', 'known-good-save', 'known-good-restore', 'known-good-fixture', 'plugin-enable', 'plugin-disable', 'repair-plan', 'repair-assist', 'self-repair', 'repair-apply', 'repair-revert', 'plugin-bisect-plan', 'plugin-dependency-graph', 'plugin-preflight', 'diagnostics-diff', 'trace-contract', 'trace-eval', 'trace-live', 'trace-baseline', 'trace-profile', 'trace-loop', 'trace-recursion', 'trace-autopsy', 'guardian-status', 'live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'trace-recursion-fixture', 'guardian-status-fixture', 'crash-fixture', 'runtime-supervisor-fixture', 'incident-capture', 'incident-correlation', 'repro-export', 'context-doctor', 'security-audit', 'session-health', 'fail-log', 'provenance', 'pointer-evidence')]
+  [ValidateSet('doctor', 'start', 'diagnostics', 'plugin-health', 'snapshot', 'restore', 'workspace-list', 'workspace-snapshot', 'workspace-restore', 'session-history', 'session-fork', 'known-good-list', 'known-good-save', 'known-good-restore', 'known-good-fixture', 'plugin-enable', 'plugin-disable', 'repair-plan', 'repair-assist', 'self-repair', 'repair-apply', 'repair-revert', 'plugin-bisect-plan', 'plugin-dependency-graph', 'plugin-preflight', 'diagnostics-diff', 'trace-contract', 'trace-eval', 'trace-live', 'trace-baseline', 'trace-profile', 'trace-loop', 'trace-recursion', 'trace-autopsy', 'guardian-status', 'live-api-fixture', 'trace-autopsy-fixture', 'trace-loop-fixture', 'trace-recursion-fixture', 'guardian-status-fixture', 'crash-fixture', 'runtime-supervisor-fixture', 'incident-capture', 'incident-correlation', 'repro-export', 'research-bridge', 'context-doctor', 'security-audit', 'session-health', 'fail-log', 'provenance', 'pointer-evidence')]
   [string]$Action,
   [string]$Profile = 'debug',
   [int]$Port = 3081,
@@ -24,6 +24,9 @@ param(
   [string]$BaselinePath = '',
   [string]$IncidentPath = '',
   [string]$ReproPath = '',
+  [string]$ResearchRequestPath = '',
+  [string]$ResearchEvidencePath = '',
+  [string]$ResearchResultPath = '',
   [string]$Root = '',
   [string]$DiagnosticsPath = '',
   [string]$CorrelationKey = '',
@@ -320,6 +323,20 @@ try {
     }
     $LASTEXITCODE = 0
     & $reproScript @reproArguments
+    $nestedSucceeded = $?
+    exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
+  }
+  if ($Action -eq 'research-bridge') {
+    if ([string]::IsNullOrWhiteSpace($ResearchRequestPath)) { throw '-ResearchRequestPath is required for research-bridge' }
+    $bridgeScript = Join-Path $packageRoot 'tools\DSH-ResearchBridge.ps1'
+    $bridgeArguments = @{
+      RequestPath = $ResearchRequestPath
+      EvidencePath = $ResearchEvidencePath
+      OutputPath = $ResearchResultPath
+      Force = $Force
+    }
+    $LASTEXITCODE = 0
+    & $bridgeScript @bridgeArguments
     $nestedSucceeded = $?
     exit (Get-NestedExitCode -InvocationSucceeded $nestedSucceeded)
   }

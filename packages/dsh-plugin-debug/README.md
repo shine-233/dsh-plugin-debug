@@ -241,6 +241,84 @@ ToolRuntime 对外返回的是一个字符串（`output.schema.type=string`）�
 
 吸收的是确定性统计、可读 Markdown 报告和“风险/异常/成本都要有覆盖说明”的产品形状，不是把上游项目作为运行时依赖。没有复制或启用以下能力：余额探针、凭据/密钥读取、`DEEPSEEK_API_KEY` 或其他秘密读取、联网请求或联网抓价格、完整 Web UI、外部运行时依赖，以及 Unix-only 的 `rm -rf lib` 构建脚本。Debug 自己的构建脚本使用 Node 文件 API；报告中的危险命令文本是惰性输入，不会执行。
 
+## 研究课程离线桥接（`research-bridge`）
+
+`research-bridge` 是一个可选的 JSON 文件交接动作。研究网站可以独立生成一个“需要哪些诊断证据”的 request；Debug 工具可以独立检查这个 request，按需读取用户明确指定的脱敏 `repro.json`，再把结果写成 result。两边都不需要对方常驻运行，也不存在默认网站连接、本机 HTTP/WebSocket、loopback、Cookie、localStorage、共享数据库或自动 PowerShell 启动。
+
+```powershell
+.\Debug-DSH.ps1 `
+  -Action research-bridge `
+  -ResearchRequestPath .\diagnostic-request.json `
+  -ResearchEvidencePath .\repro-export\repro.json `
+  -ResearchResultPath .\diagnostic-result.json
+```
+
+`-ResearchRequestPath` 是唯一必填项。省略 `-ResearchEvidencePath` 时返回 `UNAVAILABLE`，提示用户先显式运行 `repro-export`；省略 `-ResearchResultPath` 时只把 result JSON 写到 stdout。已有结果文件默认不会被覆盖，需要替换时必须显式传 `-Force`；即使传了 `-Force`，结果路径也不能和 request 或 evidence 路径相同。
+
+request 的固定协议是 `schemaVersion=1`、`kind=dsh-research-diagnostic-request`，并要求课程定位、问题、所需 evidence kind 和失败即停止的安全声明：
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "dsh-research-diagnostic-request",
+  "requestId": "course-context-001",
+  "course": {
+    "siteId": "dsh-study",
+    "courseId": "deepseek-harness",
+    "lessonId": "debug-bridge-v1",
+    "questionId": "evidence-coverage"
+  },
+  "question": {
+    "title": "检查上下文诊断证据是否完整",
+    "requiredSourceKinds": ["diagnostics", "trace"],
+    "requestedChecks": ["coverage", "privacy"]
+  },
+  "safety": {
+    "inputMode": "explicit-file-only",
+    "networkAccessed": false,
+    "commandsExecuted": false,
+    "targetMutated": false,
+    "uploads": false
+  }
+}
+```
+
+桥接只接受 `repro-export` 生成的 metadata-only 契约：`kind=dsh-debug-repro`、`schemaVersion=1`、`rawPayloadStored=false`，且 Tool 参数、Tool result 正文、Session/Workspace/环境变量内容、凭据、绝对路径和网络访问的 privacy 字段都必须为 `false`。它不会为了补齐证据去扫描目录、Profile、Session、浏览器或系统，也不会接受原始日志、原始 Session 或任意 Tool result 代替 repro。若同目录存在 `manifest.json`，桥接会核对 `repro.json` 的 SHA-256；manifest 损坏或哈希不一致会 `FAIL`，manifest 缺失则明确输出 `integrity=absent` 和 warning，不能说完整性已验证。
+
+result 使用 `schemaVersion=1`、`kind=dsh-research-diagnostic-result`，状态语义如下：
+
+| 状态 | 含义 | 退出码 |
+| --- | --- | --- |
+| `COMPLETE` | repro 合法且存在；全部所需 evidence kind 存在，并且 request 的每一项 `requestedChecks` 都是 `PASS` | `0` |
+| `PARTIAL` | repro 合法且有脱敏证据，但缺少 kind，或某项请求检查是 `PARTIAL`、`WARN` 或 `UNAVAILABLE` | `0` |
+| `UNAVAILABLE` | request 合法，但没有显式提供 evidence | `0` |
+| `FAIL` | request、repro、privacy、manifest 或输出路径不符合协议 | 非 `0` |
+
+`requestedChecks` 当前只接受 `coverage`、`privacy`、`integrity`；未知或重复检查会 fail-closed，不会默默变成 `PASS`。result 会额外回传逐项 `checks`：
+
+```json
+[
+  { "checkId": "coverage", "status": "PASS", "findingCodes": ["REQUIRED_EVIDENCE_PRESENT"] },
+  { "checkId": "privacy", "status": "PASS", "findingCodes": ["EVIDENCE_PRIVACY_DECLARATION_VALID"] },
+  { "checkId": "integrity", "status": "PASS", "findingCodes": ["EVIDENCE_MANIFEST_VERIFIED"] }
+]
+```
+
+旧的 v1 result 如果没有 `checks` 仍可被网站导入，但网站会把它标成 legacy，不会把旧的总状态解释成每项检查都通过。`evidence.trust` 固定为 `declared-metadata-only`。这只证明“所给脱敏 artifact 声明覆盖了哪些证据以及哈希是否可核对”，不证明原始 DSH 确实运行过、不证明教学模型等于真实 trace，也不证明问题已经修复。离线回归可运行：
+
+```powershell
+.\tools\Test-DSHResearchBridge.ps1
+```
+
+两个仓库的 canonical fixture 还可以做一次开发期跨仓库回放；它会比较两边的 request/repro/manifest/expected 副本，让 Debug 实际读取课程仓库的同一份输入，再由课程 JS 导入 result：
+
+```powershell
+Set-Location C:\path\to\deepseek-harness-study
+pnpm run study-bridge:contract-replay -- --debug-root C:\path\to\dsh-open-source\packages\dsh-plugin-debug
+```
+
+这只是开发期契约回放，不是网站运行时连接 Debug，也不表示真实 DSH Session 已被验证。
+
 ## 已验证的证据层级与 rc.6 限制
 
 下面三层证据必须分开看，不能把其中一层的绿色结果扩大解释成另外两层已经通过：

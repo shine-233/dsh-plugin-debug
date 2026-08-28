@@ -288,6 +288,58 @@ dsh_agent_report(
 
 因此，这个功能可以吸收并使用，但它是“本地只读 Agent 报告”，不是账单系统、命令审计的执行证明，也不是把上游完整插件作为运行时依赖安装进来。
 
+## 研究网站与 Debug 的离线文件协作
+
+`research-bridge` 让课程网站和 Debug 工具通过两个版本化 JSON 文件协作，但不把它们绑成一个必须同时在线的系统：网站独立生成 diagnostic request、下载到用户选择的位置；Debug 独立读取这个 request 和用户明确指定的脱敏 `repro.json`，输出 diagnostic result；网站之后可以由用户手动导入 result。任何一步都不会自动连接本机、启动 PowerShell、扫描 Profile/Session、读取浏览器状态或上传数据。
+
+```powershell
+.\Debug-DSH.ps1 `
+  -Action research-bridge `
+  -ResearchRequestPath .\diagnostic-request.json `
+  -ResearchEvidencePath .\repro-export\repro.json `
+  -ResearchResultPath .\diagnostic-result.json
+```
+
+request 必须是 `schemaVersion=1`、`kind=dsh-research-diagnostic-request`，包含合法 `requestId`、四级课程定位、问题标题、`requiredSourceKinds`，以及下面这组安全声明：
+
+```json
+{
+  "inputMode": "explicit-file-only",
+  "networkAccessed": false,
+  "commandsExecuted": false,
+  "targetMutated": false,
+  "uploads": false
+}
+```
+
+可请求的 evidence kind 是 `incident`、`trace`、`pointer`、`diagnostics`、`receipt` 和 `unknown`。桥接只接受 `repro-export` 的 `dsh-debug-repro` v1 metadata-only 输出；`rawPayloadStored` 及 Tool 参数、Tool result 正文、Session/Workspace/环境内容、凭据、绝对路径、网络访问的 privacy 声明必须全部为 `false`。它不会接受未脱敏的 Session、日志或 Tool result，也不会在 evidence 缺失时自行寻找数据。
+
+result 是 `dsh-research-diagnostic-result` v1：
+
+- `COMPLETE`：repro 合法且存在，所需 kind 都存在，并且每一项 `requestedChecks` 都是 `PASS`；
+- `PARTIAL`：repro 合法，但缺少至少一种所需 kind，或某项请求检查是 `PARTIAL`、`WARN` 或 `UNAVAILABLE`；
+- `UNAVAILABLE`：request 合法，用户没有提供 evidence；
+- `FAIL`：schema、kind、privacy、manifest、文件边界或输出路径被拒绝。
+
+当前 `requestedChecks` 只接受 `coverage`、`privacy`、`integrity`；未知或重复检查会 fail-closed，不会默默返回 `PASS`。result 会带逐项 `checks` 数组，每项包含 `checkId`、`status` 和 `findingCodes`。`integrity` 请求在 manifest 缺失时是 `WARN`，因此总状态为 `PARTIAL`；没有请求 `integrity` 时，缺失 manifest 仍会作为 warning 展示，但不单独阻止 coverage/privacy 的 `COMPLETE`。
+
+`COMPLETE`、`PARTIAL`、`UNAVAILABLE` 的退出码为 0；`FAIL` 为非零。省略 `-ResearchResultPath` 时 result 只输出到 stdout；已有文件需要显式 `-Force`，但 request/evidence 无论如何都不能被结果覆盖。同目录 `manifest.json` 存在时会核对 `repro.json` 的 SHA-256；缺失时是 `integrity=absent` warning，不是“已验证”，损坏或不匹配则直接 `FAIL`。
+
+`evidence.trust` 永远是 `declared-metadata-only`：它说明检查的是脱敏 artifact 的声明和覆盖范围，不说明原始运行时事实为真，不说明课程中的简化模型是真实 trace，也不说明故障已经修复。独立测试覆盖 PowerShell 7 与 Windows PowerShell 5.1、四种状态、privacy、manifest、输入不变和路径碰撞：
+
+```powershell
+.\tools\Test-DSHResearchBridge.ps1
+```
+
+两个仓库还保留一套逐字节一致的 canonical fixture。开发期可以从课程仓库运行跨仓库回放：
+
+```powershell
+Set-Location C:\path\to\deepseek-harness-study
+pnpm run study-bridge:contract-replay -- --debug-root C:\path\to\dsh-open-source\packages\dsh-plugin-debug
+```
+
+回放会让 Debug 实际读取课程仓库 fixture，再由课程 JS 校验 result；它不是网站运行时连接，也不是真实 DSH Session 证明。旧的 v1 result 如果没有 `checks` 仍可导入，但网站会标成 legacy，不会把旧总状态解释成每项检查都通过。
+
 ## 静态预检和依赖图
 
 静态插件预检只读取指定目录中的 `.js`、`.mjs`、`.cjs` 文件，检查静态 `inject` 声明与 `ctx.*` 服务使用是否一致。它不会 import、require 或执行目标插件；动态 `ctx[...]`、动态 inject 以及超出文件/大小上限的输入会返回 `MANUAL_REVIEW`：

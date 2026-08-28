@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "kind": "dsh-debug-repro",
+  "sourceCount": 3,
+  "sourceKinds": [
+    "diagnostics",
+    "trace",
+    "pointer"
+  ],
+  "sources": [
+    {
+      "sourceKind": "diagnostics",
+      "evidence": {
+        "status": "PASS",
+        "result": "PASS"
+      }
+    },
+    {
+      "sourceKind": "trace",
+      "evidence": {
+        "status": "PASS",
+        "result": "PASS"
+      }
+    },
+    {
+      "sourceKind": "pointer",
+      "evidence": {
+        "status": "PASS",
+        "result": "PASS"
+      }
+    }
+  ],
+  "rawPayloadStored": false,
+  "privacy": {
+    "toolArgumentsStored": false,
+    "toolResultBodiesStored": false,
+    "sessionContentStored": false,
+    "workspaceContentStored": false,
+    "envContentsStored": false,
+    "credentialsStored": false,
+    "absolutePathsStored": false,
+    "networkAccessed": false
+  }
+}

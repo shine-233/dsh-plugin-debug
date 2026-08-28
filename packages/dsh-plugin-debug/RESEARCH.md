@@ -44,6 +44,35 @@ community tool's raw paths, shell operations, dependency installation, or
 process cleanup. This is an absorption of the operational idea, not a copied
 implementation or runtime dependency.
 
+### 2026-08-19 research-course handoff boundary
+
+The study-site work added a second, narrower handoff seam:
+`tools/DSH-ResearchBridge.ps1`. The interface is deliberately file-based.
+A course produces a versioned diagnostic request; this package validates that
+request and, only when the user names one explicit `dsh-debug-repro` v1 file,
+projects evidence coverage into a versioned diagnostic result. The course and
+Debug package remain useful independently, and neither side needs a local HTTP
+server, WebSocket, browser credential, shared database, watcher, or automatic
+PowerShell launch.
+
+The bridge does not turn course claims into runtime evidence. Its trust value
+is fixed at `declared-metadata-only`: source kinds and source statuses are
+allowlisted projections from the already-redacted repro artifact. Raw Session
+content, Tool arguments/results, workspace content, environment values,
+credentials, absolute paths, and network access must all be declared absent.
+Missing evidence returns `UNAVAILABLE`; incomplete coverage returns `PARTIAL`;
+invalid privacy or manifest integrity returns `FAIL`. A sibling repro manifest
+is hash-verified when present, while a missing manifest remains an explicit
+`integrity=absent` warning rather than an integrity claim.
+
+This seam follows the source-pack/citation lesson from the course research but
+does not copy a third-party article, Skill, website, image, or implementation.
+It also rejects the tempting wider designs: the website does not call a
+loopback Debug API, Debug does not scan the site or the user's machine, and no
+ordinary diagnostic or repro action triggers the bridge. The current evidence
+is the deterministic PowerShell fixture on synthetic files, not a claim that
+a production DSH run or the public course website has exercised the handoff.
+
 Adjacent public repositories were also checked: `dsh-clawshell` contains
 error/metric/fiber insight and repair escalation code; `ClawShell` contains
 health checks and self-repair experiments; `wukong-optimized-ClawShell`
