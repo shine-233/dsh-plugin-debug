@@ -8809,10 +8809,10 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-Package-pkg-npm-fast-uri-3.1.5",
+      "SPDXID": "SPDXRef-Package-pkg-npm-fast-uri-3.1.7",
       "name": "fast-uri",
-      "versionInfo": "3.1.5",
-      "downloadLocation": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.5.tgz",
+      "versionInfo": "3.1.7",
+      "downloadLocation": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.7.tgz",
       "filesAnalyzed": false,
       "licenseConcluded": "BSD-3-Clause",
       "licenseDeclared": "BSD-3-Clause",
@@ -8821,13 +8821,13 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:npm/fast-uri@3.1.5"
+          "referenceLocator": "pkg:npm/fast-uri@3.1.7"
         }
       ],
       "checksums": [
         {
           "algorithm": "SHA512",
-          "checksumValue": "gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw=="
+          "checksumValue": "dOvZVzjdZdz7phd9v6jCbwxrBW3fK6n8Rc0CtdmM4bumzMnxywBYhuph6J819RRw/ku+rLbelwfMunktuzVVHg=="
         }
       ]
     },
@@ -20975,7 +20975,7 @@
     {
       "spdxElementId": "SPDXRef-Package-pkg-npm-ajv-8.20.0",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-Package-pkg-npm-fast-uri-3.1.5"
+      "relatedSpdxElement": "SPDXRef-Package-pkg-npm-fast-uri-3.1.7"
     },
     {
       "spdxElementId": "SPDXRef-Package-pkg-npm-ajv-8.20.0",
